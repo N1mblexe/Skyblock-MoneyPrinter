@@ -1,0 +1,147 @@
+/* craft view styles */
+.craft-view {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.craft-intro {
+  margin: 0;
+}
+.craft-filters .filters {
+  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
+}
+.craft-search {
+  grid-column: span 2;
+}
+@media (max-width: 480px) {
+  .craft-search {
+    grid-column: auto;
+  }
+}
+.craft-kind {
+  align-self: start;
+  min-height: 36px;
+  width: max-content;
+}
+.craft-state[hidden],
+.craft-table[hidden] {
+  display: none;
+}
+
+/* output cell */
+.craft-badges {
+  display: block;
+  margin-top: 3px;
+}
+.badge.craft-forge {
+  background: var(--violet-soft);
+  color: var(--violet);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.craft-inputs,
+.craft-req,
+.craft-unpriced-ids,
+.craft-via {
+  display: block;
+  font-weight: 400;
+  line-height: 1.35;
+}
+.craft-inputs {
+  font-size: 0.76rem;
+  color: var(--muted);
+  margin-top: 2px;
+  max-width: 42ch;
+}
+.craft-req {
+  font-style: italic;
+}
+.craft-unpriced-ids {
+  color: var(--warn);
+}
+tr.craft-unpriced > td {
+  color: var(--muted);
+}
+tr.craft-unpriced > td .badge,
+tr.craft-unpriced > td a {
+  opacity: 0.75;
+}
+
+/* detail toggle (not a button: the whole row toggles) */
+.craft-tog {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--accent);
+}
+.craft-chev {
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+tr.open .craft-chev {
+  transform: rotate(180deg);
+}
+
+/* detail panel */
+.craft-detail {
+  max-width: 900px;
+}
+.craft-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+.craft-steps b {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.craft-ing-title {
+  margin: 0;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.craft-ing-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.craft-ing tbody tr:last-child > td {
+  border-bottom: none;
+}
+.craft-ing th {
+  position: static;
+}
+.craft-ing .name-cell {
+  min-width: 180px;
+}
+.craft-via {
+  color: var(--violet);
+  margin-top: 2px;
+}
+.craft-bott-row > td {
+  background: var(--bad-soft);
+}
+.craft-npc-limit {
+  color: var(--info);
+}
+
+/* let the long numeric headers wrap so more columns fit without side-scrolling */
+.craft-table .tbl-wrap > table > thead th {
+  white-space: normal;
+  vertical-align: bottom;
+  min-width: 5.5em;
+}
+.craft-table .tbl-wrap > table > thead th.num .th-btn {
+  text-align: right;
+  justify-content: flex-end;
+}
+.craft-table .tbl-wrap > table > thead th.name-cell {
+  min-width: 200px;
+}

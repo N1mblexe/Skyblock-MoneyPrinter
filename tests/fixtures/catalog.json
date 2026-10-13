@@ -1,0 +1,406 @@
+{
+ "v": 1,
+ "generatedAt": "2026-10-14T00:00:00Z",
+ "items": {
+  "BONE": {
+   "n": "Bone",
+   "bz": 1
+  },
+  "COAL": {
+   "n": "Coal",
+   "bz": 1,
+   "ns": 2
+  },
+  "DIAMOND": {
+   "n": "Diamond",
+   "bz": 1,
+   "ns": 8
+  },
+  "ENCHANTED_BREAD": {
+   "n": "Enchanted Bread",
+   "bz": 1
+  },
+  "ENCHANTED_COAL": {
+   "n": "Enchanted Coal",
+   "bz": 1,
+   "ns": 320
+  },
+  "ENCHANTED_DIAMOND": {
+   "n": "Enchanted Diamond",
+   "bz": 1,
+   "ns": 1280
+  },
+  "ENCHANTED_GOLD": {
+   "n": "Enchanted Gold",
+   "bz": 1,
+   "ns": 480
+  },
+  "ENCHANTED_GOLD_BLOCK": {
+   "n": "Enchanted Gold Block",
+   "bz": 1,
+   "ns": 102400
+  },
+  "ENCHANTED_HAY_BLOCK": {
+   "n": "Enchanted Hay Block",
+   "bz": 1
+  },
+  "ENCHANTED_IRON": {
+   "n": "Enchanted Iron",
+   "bz": 1,
+   "ns": 480
+  },
+  "ENCHANTED_MELON": {
+   "n": "Enchanted Melon",
+   "bz": 1,
+   "ns": 160
+  },
+  "ENCHANTED_MELON_BLOCK": {
+   "n": "Enchanted Melon Block",
+   "bz": 1
+  },
+  "ENCHANTED_MITHRIL": {
+   "n": "Enchanted Mithril",
+   "bz": 1
+  },
+  "ENCHANTED_PAPER": {
+   "n": "Enchanted Paper",
+   "bz": 1
+  },
+  "ENCHANTED_SUGAR": {
+   "n": "Enchanted Sugar",
+   "bz": 1,
+   "ns": 640
+  },
+  "ENCHANTED_SUGAR_CANE": {
+   "n": "Enchanted Sugar Cane",
+   "bz": 1
+  },
+  "ENCHANTMENT_CAYENNE_3": {
+   "n": "Enchantment Cayenne 3",
+   "bz": 1
+  },
+  "ENCHANTMENT_LIFE_STEAL_2": {
+   "n": "Life Steal II",
+   "bz": 1
+  },
+  "ENCHANTMENT_ULTIMATE_WISE_1": {
+   "n": "Ultimate Wise I",
+   "bz": 1
+  },
+  "END_STONE_SHULKER": {
+   "n": "End Stone Shulker",
+   "bz": 1
+  },
+  "GOLD_INGOT": {
+   "n": "Gold Ingot",
+   "bz": 1,
+   "ns": 3
+  },
+  "HAY_BLOCK": {
+   "n": "Hay Block",
+   "bz": 1
+  },
+  "INK_SACK:4": {
+   "n": "Lapis Lazuli",
+   "bz": 1
+  },
+  "IRON_INGOT": {
+   "n": "Iron Ingot",
+   "bz": 1,
+   "ns": 3
+  },
+  "JALAPENO_BOOK": {
+   "n": "Jalape\u00f1o Book",
+   "bz": 1
+  },
+  "LOG:1": {
+   "n": "Spruce Log",
+   "bz": 1
+  },
+  "MELON": {
+   "n": "Melon",
+   "bz": 1,
+   "ns": 2,
+   "nb": 2.5
+  },
+  "MITHRIL_ORE": {
+   "n": "Mithril Ore",
+   "bz": 1
+  },
+  "REFINED_MITHRIL": {
+   "n": "Refined Mithril",
+   "bz": 1
+  },
+  "SHARD_BEEHEEMOTH": {
+   "n": "Beeheemoth Shard",
+   "bz": 1
+  },
+  "SHARD_SALMON": {
+   "n": "Salmon Shard",
+   "bz": 1
+  },
+  "SHARD_WIKI_TIKI": {
+   "n": "Wiki Tiki Shard",
+   "bz": 1
+  },
+  "SPIDER_EYE": {
+   "n": "Spider Eye",
+   "bz": 1
+  },
+  "SUGAR_CANE": {
+   "n": "Sugar Cane",
+   "bz": 1,
+   "ns": 4
+  },
+  "WHEAT": {
+   "n": "Wheat",
+   "bz": 1,
+   "ns": 6,
+   "nb": 2.33
+  },
+  "PAPER": {
+   "n": "Paper"
+  },
+  "STICK": {
+   "n": "Stick",
+   "nb": 1
+  },
+  "MYSTERY_DUST": {
+   "n": "Mystery Dust"
+  },
+  "CYCLE_A": {
+   "n": "Cycle A"
+  },
+  "CYCLE_B": {
+   "n": "Cycle B"
+  }
+ },
+ "recipes": [
+  {
+   "o": "ENCHANTED_GOLD",
+   "c": 1,
+   "i": [
+    [
+     "GOLD_INGOT",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_GOLD_BLOCK",
+   "c": 1,
+   "i": [
+    [
+     "ENCHANTED_GOLD",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_MELON",
+   "c": 1,
+   "i": [
+    [
+     "MELON",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_MELON_BLOCK",
+   "c": 1,
+   "i": [
+    [
+     "ENCHANTED_MELON",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_COAL",
+   "c": 1,
+   "i": [
+    [
+     "COAL",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_DIAMOND",
+   "c": 1,
+   "i": [
+    [
+     "DIAMOND",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_IRON",
+   "c": 1,
+   "i": [
+    [
+     "IRON_INGOT",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_SUGAR",
+   "c": 1,
+   "i": [
+    [
+     "SUGAR_CANE",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_SUGAR_CANE",
+   "c": 1,
+   "i": [
+    [
+     "ENCHANTED_SUGAR",
+     160
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "HAY_BLOCK",
+   "c": 1,
+   "i": [
+    [
+     "WHEAT",
+     9
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_HAY_BLOCK",
+   "c": 1,
+   "i": [
+    [
+     "HAY_BLOCK",
+     144
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_BREAD",
+   "c": 1,
+   "i": [
+    [
+     "WHEAT",
+     60
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "PAPER",
+   "c": 3,
+   "i": [
+    [
+     "SUGAR_CANE",
+     3
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_PAPER",
+   "c": 1,
+   "i": [
+    [
+     "PAPER",
+     64
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "REFINED_MITHRIL",
+   "c": 1,
+   "i": [
+    [
+     "ENCHANTED_MITHRIL",
+     160
+    ]
+   ],
+   "k": "forge",
+   "d": 21600,
+   "r": "HOTM 2"
+  },
+  {
+   "o": "ENCHANTED_BREAD",
+   "c": 1,
+   "i": [
+    [
+     "WHEAT",
+     59
+    ],
+    [
+     "STICK",
+     1
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTMENT_ULTIMATE_WISE_1",
+   "c": 1,
+   "i": [
+    [
+     "MYSTERY_DUST",
+     1
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "CYCLE_A",
+   "c": 1,
+   "i": [
+    [
+     "CYCLE_B",
+     1
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "CYCLE_B",
+   "c": 1,
+   "i": [
+    [
+     "CYCLE_A",
+     1
+    ]
+   ],
+   "k": "craft"
+  },
+  {
+   "o": "ENCHANTED_COAL",
+   "c": 1,
+   "i": [
+    [
+     "CYCLE_A",
+     2
+    ]
+   ],
+   "k": "craft"
+  }
+ ]
+}

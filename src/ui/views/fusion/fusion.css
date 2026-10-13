@@ -1,0 +1,139 @@
+/* fusion view styles (owner: fusion view) */
+.fusion-view {
+  display: grid;
+  gap: 14px;
+}
+.fu-top > h2 {
+  margin: 0 0 4px;
+}
+.fu-top > p {
+  margin: 0;
+  max-width: 75ch;
+}
+.fu-actions {
+  flex-wrap: nowrap;
+}
+.fu-actions .fu-quick {
+  width: auto;
+  max-width: 100%;
+  min-width: 0;
+  flex: 0 1 260px;
+}
+.fu-actions .fu-add {
+  flex: none;
+}
+.fu-list {
+  display: grid;
+  gap: 12px;
+}
+.fu-empty p {
+  margin: 4px 0;
+}
+
+/* one recipe card */
+.fu-row {
+  gap: 12px;
+}
+.fu-row-missing {
+  border-color: var(--bad);
+}
+.fu-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.fu-head .fu-title {
+  margin: 0;
+}
+
+/* A × qa + B × qb → OUT × qo */
+.fu-eq {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+}
+.fu-term {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 76px;
+  gap: 6px 8px;
+  min-width: 0;
+}
+.fu-term-out .fu-item {
+  border-color: var(--accent);
+}
+.fu-qty {
+  width: 100%;
+}
+.fu-op {
+  font-family: var(--f-display);
+  font-size: 1.6rem;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--muted);
+  align-self: start;
+  padding-top: 26px;
+}
+.fu-unit {
+  grid-column: 1 / -1;
+  min-height: 2.6em;
+  color: var(--muted);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.fu-unit .fu-name {
+  color: var(--ink);
+}
+.fu-unit .fu-name a {
+  color: inherit;
+}
+.fu-unit .fu-price {
+  text-align: left;
+}
+
+/* results strip */
+.fu-res {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px 12px;
+  padding: 10px 12px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.fu-stat {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.fu-k {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.fu-v {
+  text-align: left;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.fu-msg {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+@media (max-width: 760px) {
+  .fu-eq {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .fu-op {
+    padding: 0;
+    text-align: center;
+  }
+  .fu-res {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

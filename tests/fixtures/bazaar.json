@@ -1,0 +1,2063 @@
+{
+ "success": true,
+ "lastUpdated": 1791932482849,
+ "products": {
+  "ENCHANTED_MELON": {
+   "product_id": "ENCHANTED_MELON",
+   "sell_summary": [
+    {
+     "amount": 14087,
+     "pricePerUnit": 302,
+     "orders": 1
+    },
+    {
+     "amount": 92051,
+     "pricePerUnit": 301.9,
+     "orders": 3
+    },
+    {
+     "amount": 71680,
+     "pricePerUnit": 301.8,
+     "orders": 1
+    },
+    {
+     "amount": 350543,
+     "pricePerUnit": 301.7,
+     "orders": 6
+    },
+    {
+     "amount": 1044,
+     "pricePerUnit": 300.8,
+     "orders": 2
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 294,
+     "pricePerUnit": 324.7,
+     "orders": 1
+    },
+    {
+     "amount": 238,
+     "pricePerUnit": 324.8,
+     "orders": 1
+    },
+    {
+     "amount": 45917,
+     "pricePerUnit": 325,
+     "orders": 90
+    },
+    {
+     "amount": 86,
+     "pricePerUnit": 335.3,
+     "orders": 2
+    },
+    {
+     "amount": 26969,
+     "pricePerUnit": 336.6,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_MELON",
+    "sellPrice": 301.77753202182726,
+    "sellVolume": 16132207,
+    "sellMovingWeek": 215043264,
+    "sellOrders": 319,
+    "buyPrice": 831.2289413652597,
+    "buyVolume": 11533277,
+    "buyMovingWeek": 6005159,
+    "buyOrders": 274
+   }
+  },
+  "ENCHANTED_MELON_BLOCK": {
+   "product_id": "ENCHANTED_MELON_BLOCK",
+   "sell_summary": [
+    {
+     "amount": 606,
+     "pricePerUnit": 50233.6,
+     "orders": 1
+    },
+    {
+     "amount": 661,
+     "pricePerUnit": 50233.5,
+     "orders": 1
+    },
+    {
+     "amount": 949,
+     "pricePerUnit": 50232.9,
+     "orders": 1
+    },
+    {
+     "amount": 7,
+     "pricePerUnit": 50232.8,
+     "orders": 1
+    },
+    {
+     "amount": 705,
+     "pricePerUnit": 50232.7,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 28,
+     "pricePerUnit": 54209.7,
+     "orders": 1
+    },
+    {
+     "amount": 66,
+     "pricePerUnit": 54209.8,
+     "orders": 2
+    },
+    {
+     "amount": 311,
+     "pricePerUnit": 54209.9,
+     "orders": 1
+    },
+    {
+     "amount": 20,
+     "pricePerUnit": 54210,
+     "orders": 1
+    },
+    {
+     "amount": 215,
+     "pricePerUnit": 54210.2,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_MELON_BLOCK",
+    "sellPrice": 50231.85206875258,
+    "sellVolume": 389441,
+    "sellMovingWeek": 2951344,
+    "sellOrders": 78,
+    "buyPrice": 54211.11086480568,
+    "buyVolume": 156224,
+    "buyMovingWeek": 908904,
+    "buyOrders": 360
+   }
+  },
+  "MELON": {
+   "product_id": "MELON",
+   "sell_summary": [
+    {
+     "amount": 40785,
+     "pricePerUnit": 0.7,
+     "orders": 1
+    },
+    {
+     "amount": 51101,
+     "pricePerUnit": 0.6,
+     "orders": 1
+    },
+    {
+     "amount": 550873,
+     "pricePerUnit": 0.5,
+     "orders": 8
+    },
+    {
+     "amount": 42461,
+     "pricePerUnit": 0.4,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 40239,
+     "pricePerUnit": 4.9,
+     "orders": 1
+    },
+    {
+     "amount": 80374,
+     "pricePerUnit": 5,
+     "orders": 2
+    },
+    {
+     "amount": 43414,
+     "pricePerUnit": 5.1,
+     "orders": 1
+    },
+    {
+     "amount": 60293,
+     "pricePerUnit": 5.2,
+     "orders": 1
+    },
+    {
+     "amount": 44305,
+     "pricePerUnit": 5.3,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "MELON",
+    "sellPrice": 0.7,
+    "sellVolume": 685398,
+    "sellMovingWeek": 489269278,
+    "sellOrders": 11,
+    "buyPrice": 5.248223784874074,
+    "buyVolume": 21230982,
+    "buyMovingWeek": 20358935,
+    "buyOrders": 339
+   }
+  },
+  "JALAPENO_BOOK": {
+   "product_id": "JALAPENO_BOOK",
+   "sell_summary": [
+    {
+     "amount": 1,
+     "pricePerUnit": 20540006.4,
+     "orders": 1
+    },
+    {
+     "amount": 1,
+     "pricePerUnit": 20540006.3,
+     "orders": 1
+    },
+    {
+     "amount": 1,
+     "pricePerUnit": 20540006.2,
+     "orders": 1
+    },
+    {
+     "amount": 3,
+     "pricePerUnit": 20540005.3,
+     "orders": 1
+    },
+    {
+     "amount": 1,
+     "pricePerUnit": 20540005.1,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 9,
+     "pricePerUnit": 30799982.8,
+     "orders": 1
+    },
+    {
+     "amount": 3,
+     "pricePerUnit": 30799982.9,
+     "orders": 1
+    },
+    {
+     "amount": 2,
+     "pricePerUnit": 30799983.3,
+     "orders": 1
+    },
+    {
+     "amount": 9,
+     "pricePerUnit": 30799983.5,
+     "orders": 2
+    },
+    {
+     "amount": 2,
+     "pricePerUnit": 30799983.6,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "JALAPENO_BOOK",
+    "sellPrice": 20540006.35,
+    "sellVolume": 56,
+    "sellMovingWeek": 3,
+    "sellOrders": 30,
+    "buyPrice": 30799982.799999997,
+    "buyVolume": 93,
+    "buyMovingWeek": 42,
+    "buyOrders": 16
+   }
+  },
+  "LOG:1": {
+   "product_id": "LOG:1",
+   "sell_summary": [
+    {
+     "amount": 66623,
+     "pricePerUnit": 0.3,
+     "orders": 1
+    },
+    {
+     "amount": 6981,
+     "pricePerUnit": 0.2,
+     "orders": 1
+    },
+    {
+     "amount": 212143,
+     "pricePerUnit": 0.1,
+     "orders": 3
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 50899,
+     "pricePerUnit": 37.1,
+     "orders": 1
+    },
+    {
+     "amount": 62778,
+     "pricePerUnit": 37.2,
+     "orders": 1
+    },
+    {
+     "amount": 88026,
+     "pricePerUnit": 37.3,
+     "orders": 2
+    },
+    {
+     "amount": 651,
+     "pricePerUnit": 37.4,
+     "orders": 1
+    },
+    {
+     "amount": 26765,
+     "pricePerUnit": 37.7,
+     "orders": 2
+    }
+   ],
+   "quick_status": {
+    "productId": "LOG:1",
+    "sellPrice": 0.3,
+    "sellVolume": 285747,
+    "sellMovingWeek": 7488033,
+    "sellOrders": 5,
+    "buyPrice": 37.15522489157877,
+    "buyVolume": 3446030,
+    "buyMovingWeek": 2096557,
+    "buyOrders": 467
+   }
+  },
+  "INK_SACK:4": {
+   "product_id": "INK_SACK:4",
+   "sell_summary": [
+    {
+     "amount": 413659,
+     "pricePerUnit": 0.7,
+     "orders": 7
+    },
+    {
+     "amount": 1084082,
+     "pricePerUnit": 0.6,
+     "orders": 22
+    },
+    {
+     "amount": 358400,
+     "pricePerUnit": 0.5,
+     "orders": 20
+    },
+    {
+     "amount": 358400,
+     "pricePerUnit": 0.1,
+     "orders": 8
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 47815,
+     "pricePerUnit": 8.8,
+     "orders": 1
+    },
+    {
+     "amount": 35706,
+     "pricePerUnit": 9,
+     "orders": 1
+    },
+    {
+     "amount": 44610,
+     "pricePerUnit": 9.8,
+     "orders": 1
+    },
+    {
+     "amount": 71168,
+     "pricePerUnit": 10,
+     "orders": 3
+    },
+    {
+     "amount": 12078,
+     "pricePerUnit": 11.8,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "INK_SACK:4",
+    "sellPrice": 0.7,
+    "sellVolume": 4566615,
+    "sellMovingWeek": 132526309,
+    "sellOrders": 66,
+    "buyPrice": 9.88068229437302,
+    "buyVolume": 11917811,
+    "buyMovingWeek": 2474430,
+    "buyOrders": 430
+   }
+  },
+  "ENCHANTMENT_LIFE_STEAL_2": {
+   "product_id": "ENCHANTMENT_LIFE_STEAL_2",
+   "sell_summary": [],
+   "buy_summary": [],
+   "quick_status": {
+    "productId": "ENCHANTMENT_LIFE_STEAL_2",
+    "sellPrice": 0,
+    "sellVolume": 0,
+    "sellMovingWeek": 0,
+    "sellOrders": 0,
+    "buyPrice": 0,
+    "buyVolume": 0,
+    "buyMovingWeek": 0,
+    "buyOrders": 0
+   }
+  },
+  "ENCHANTMENT_ULTIMATE_WISE_1": {
+   "product_id": "ENCHANTMENT_ULTIMATE_WISE_1",
+   "sell_summary": [
+    {
+     "amount": 11,
+     "pricePerUnit": 17737.1,
+     "orders": 1
+    },
+    {
+     "amount": 208,
+     "pricePerUnit": 17737,
+     "orders": 1
+    },
+    {
+     "amount": 13,
+     "pricePerUnit": 17736.8,
+     "orders": 1
+    },
+    {
+     "amount": 4,
+     "pricePerUnit": 17728.4,
+     "orders": 1
+    },
+    {
+     "amount": 53,
+     "pricePerUnit": 17724.3,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 1,
+     "pricePerUnit": 21566.9,
+     "orders": 1
+    },
+    {
+     "amount": 2,
+     "pricePerUnit": 21567,
+     "orders": 1
+    },
+    {
+     "amount": 1,
+     "pricePerUnit": 21991.4,
+     "orders": 1
+    },
+    {
+     "amount": 1,
+     "pricePerUnit": 21991.5,
+     "orders": 1
+    },
+    {
+     "amount": 1,
+     "pricePerUnit": 21991.7,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTMENT_ULTIMATE_WISE_1",
+    "sellPrice": 17061.026528040326,
+    "sellVolume": 74571,
+    "sellMovingWeek": 90773,
+    "sellOrders": 1011,
+    "buyPrice": 24454.01686746988,
+    "buyVolume": 3156,
+    "buyMovingWeek": 11958,
+    "buyOrders": 583
+   }
+  },
+  "ENCHANTED_MITHRIL": {
+   "product_id": "ENCHANTED_MITHRIL",
+   "sell_summary": [
+    {
+     "amount": 16845,
+     "pricePerUnit": 1313,
+     "orders": 2
+    },
+    {
+     "amount": 499865,
+     "pricePerUnit": 1312.9,
+     "orders": 7
+    },
+    {
+     "amount": 8715,
+     "pricePerUnit": 1312.7,
+     "orders": 1
+    },
+    {
+     "amount": 368,
+     "pricePerUnit": 1312.6,
+     "orders": 1
+    },
+    {
+     "amount": 167,
+     "pricePerUnit": 1312.5,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 314,
+     "pricePerUnit": 1399.8,
+     "orders": 1
+    },
+    {
+     "amount": 128,
+     "pricePerUnit": 1399.9,
+     "orders": 1
+    },
+    {
+     "amount": 1413,
+     "pricePerUnit": 1409.7,
+     "orders": 2
+    },
+    {
+     "amount": 992,
+     "pricePerUnit": 1409.9,
+     "orders": 1
+    },
+    {
+     "amount": 4932,
+     "pricePerUnit": 1410,
+     "orders": 3
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_MITHRIL",
+    "sellPrice": 1312.919444765093,
+    "sellVolume": 2883382,
+    "sellMovingWeek": 31521302,
+    "sellOrders": 133,
+    "buyPrice": 1415.4487669461018,
+    "buyVolume": 6338077,
+    "buyMovingWeek": 15864555,
+    "buyOrders": 1830
+   }
+  },
+  "REFINED_MITHRIL": {
+   "product_id": "REFINED_MITHRIL",
+   "sell_summary": [
+    {
+     "amount": 13,
+     "pricePerUnit": 527913.4,
+     "orders": 1
+    },
+    {
+     "amount": 4,
+     "pricePerUnit": 527913.3,
+     "orders": 1
+    },
+    {
+     "amount": 75,
+     "pricePerUnit": 527913.2,
+     "orders": 1
+    },
+    {
+     "amount": 26,
+     "pricePerUnit": 527913.1,
+     "orders": 1
+    },
+    {
+     "amount": 32,
+     "pricePerUnit": 527913,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 6,
+     "pricePerUnit": 545120.3,
+     "orders": 1
+    },
+    {
+     "amount": 7,
+     "pricePerUnit": 545120.4,
+     "orders": 1
+    },
+    {
+     "amount": 28,
+     "pricePerUnit": 545120.5,
+     "orders": 1
+    },
+    {
+     "amount": 5,
+     "pricePerUnit": 545120.6,
+     "orders": 2
+    },
+    {
+     "amount": 6,
+     "pricePerUnit": 545120.7,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "REFINED_MITHRIL",
+    "sellPrice": 527572.9353276353,
+    "sellVolume": 34377,
+    "sellMovingWeek": 79913,
+    "sellOrders": 451,
+    "buyPrice": 549064.5387755102,
+    "buyVolume": 9698,
+    "buyMovingWeek": 100555,
+    "buyOrders": 70
+   }
+  },
+  "MITHRIL_ORE": {
+   "product_id": "MITHRIL_ORE",
+   "sell_summary": [
+    {
+     "amount": 68435,
+     "pricePerUnit": 5.5,
+     "orders": 1
+    },
+    {
+     "amount": 67319,
+     "pricePerUnit": 5.4,
+     "orders": 1
+    },
+    {
+     "amount": 32738,
+     "pricePerUnit": 5.3,
+     "orders": 1
+    },
+    {
+     "amount": 1868743,
+     "pricePerUnit": 5.2,
+     "orders": 27
+    },
+    {
+     "amount": 1491680,
+     "pricePerUnit": 5.1,
+     "orders": 24
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 191407,
+     "pricePerUnit": 9.2,
+     "orders": 4
+    },
+    {
+     "amount": 825,
+     "pricePerUnit": 9.3,
+     "orders": 2
+    },
+    {
+     "amount": 125,
+     "pricePerUnit": 9.4,
+     "orders": 1
+    },
+    {
+     "amount": 128,
+     "pricePerUnit": 9.5,
+     "orders": 1
+    },
+    {
+     "amount": 380,
+     "pricePerUnit": 9.6,
+     "orders": 2
+    }
+   ],
+   "quick_status": {
+    "productId": "MITHRIL_ORE",
+    "sellPrice": 5.2673599484868,
+    "sellVolume": 11735165,
+    "sellMovingWeek": 755751105,
+    "sellOrders": 182,
+    "buyPrice": 12.228228709685672,
+    "buyVolume": 39419763,
+    "buyMovingWeek": 3562512,
+    "buyOrders": 622
+   }
+  },
+  "GOLD_INGOT": {
+   "product_id": "GOLD_INGOT",
+   "sell_summary": [
+    {
+     "amount": 61587,
+     "pricePerUnit": 0.1,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 8354,
+     "pricePerUnit": 6,
+     "orders": 1
+    },
+    {
+     "amount": 1152,
+     "pricePerUnit": 6.1,
+     "orders": 1
+    },
+    {
+     "amount": 1152,
+     "pricePerUnit": 6.2,
+     "orders": 1
+    },
+    {
+     "amount": 60224,
+     "pricePerUnit": 6.3,
+     "orders": 1
+    },
+    {
+     "amount": 1087,
+     "pricePerUnit": 6.4,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "GOLD_INGOT",
+    "sellPrice": 0.1,
+    "sellVolume": 61696,
+    "sellMovingWeek": 299065671,
+    "sellOrders": 1,
+    "buyPrice": 6.7792176716672445,
+    "buyVolume": 8307467,
+    "buyMovingWeek": 8125775,
+    "buyOrders": 176
+   }
+  },
+  "ENCHANTED_GOLD": {
+   "product_id": "ENCHANTED_GOLD",
+   "sell_summary": [
+    {
+     "amount": 44612,
+     "pricePerUnit": 455.9,
+     "orders": 1
+    },
+    {
+     "amount": 55640,
+     "pricePerUnit": 455.8,
+     "orders": 1
+    },
+    {
+     "amount": 54113,
+     "pricePerUnit": 455.5,
+     "orders": 1
+    },
+    {
+     "amount": 24936,
+     "pricePerUnit": 455.4,
+     "orders": 1
+    },
+    {
+     "amount": 68333,
+     "pricePerUnit": 455.2,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 676,
+     "pricePerUnit": 504.1,
+     "orders": 1
+    },
+    {
+     "amount": 851,
+     "pricePerUnit": 509.5,
+     "orders": 1
+    },
+    {
+     "amount": 481,
+     "pricePerUnit": 509.6,
+     "orders": 1
+    },
+    {
+     "amount": 40,
+     "pricePerUnit": 509.7,
+     "orders": 1
+    },
+    {
+     "amount": 12228,
+     "pricePerUnit": 509.8,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_GOLD",
+    "sellPrice": 454.85659206432206,
+    "sellVolume": 22725402,
+    "sellMovingWeek": 34928677,
+    "sellOrders": 648,
+    "buyPrice": 520.5251569019812,
+    "buyVolume": 24091596,
+    "buyMovingWeek": 4538179,
+    "buyOrders": 520
+   }
+  },
+  "ENCHANTED_GOLD_BLOCK": {
+   "product_id": "ENCHANTED_GOLD_BLOCK",
+   "sell_summary": [
+    {
+     "amount": 427,
+     "pricePerUnit": 76902.1,
+     "orders": 1
+    },
+    {
+     "amount": 1024,
+     "pricePerUnit": 76902,
+     "orders": 1
+    },
+    {
+     "amount": 1024,
+     "pricePerUnit": 76901.9,
+     "orders": 1
+    },
+    {
+     "amount": 1958,
+     "pricePerUnit": 76901.8,
+     "orders": 1
+    },
+    {
+     "amount": 19565,
+     "pricePerUnit": 76901.7,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 63,
+     "pricePerUnit": 77262,
+     "orders": 2
+    },
+    {
+     "amount": 267,
+     "pricePerUnit": 77262.1,
+     "orders": 1
+    },
+    {
+     "amount": 136,
+     "pricePerUnit": 77262.3,
+     "orders": 1
+    },
+    {
+     "amount": 15,
+     "pricePerUnit": 77262.5,
+     "orders": 1
+    },
+    {
+     "amount": 1737,
+     "pricePerUnit": 77262.8,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_GOLD_BLOCK",
+    "sellPrice": 76902.0294279807,
+    "sellVolume": 71502,
+    "sellMovingWeek": 741667,
+    "sellOrders": 11,
+    "buyPrice": 77263.10216428922,
+    "buyVolume": 191625,
+    "buyMovingWeek": 375953,
+    "buyOrders": 318
+   }
+  },
+  "ENCHANTED_COAL": {
+   "product_id": "ENCHANTED_COAL",
+   "sell_summary": [
+    {
+     "amount": 263597,
+     "pricePerUnit": 1272.1,
+     "orders": 4
+    },
+    {
+     "amount": 34483,
+     "pricePerUnit": 1272,
+     "orders": 1
+    },
+    {
+     "amount": 29852,
+     "pricePerUnit": 1271.9,
+     "orders": 1
+    },
+    {
+     "amount": 15240,
+     "pricePerUnit": 1271.8,
+     "orders": 1
+    },
+    {
+     "amount": 69791,
+     "pricePerUnit": 1271.7,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 4308,
+     "pricePerUnit": 1347.2,
+     "orders": 5
+    },
+    {
+     "amount": 3523,
+     "pricePerUnit": 1347.4,
+     "orders": 3
+    },
+    {
+     "amount": 804,
+     "pricePerUnit": 1347.6,
+     "orders": 1
+    },
+    {
+     "amount": 1984,
+     "pricePerUnit": 1347.7,
+     "orders": 1
+    },
+    {
+     "amount": 721,
+     "pricePerUnit": 1347.8,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_COAL",
+    "sellPrice": 1271.5055011323836,
+    "sellVolume": 38618324,
+    "sellMovingWeek": 70270369,
+    "sellOrders": 874,
+    "buyPrice": 1465.9327190237914,
+    "buyVolume": 48473133,
+    "buyMovingWeek": 6109865,
+    "buyOrders": 1709
+   }
+  },
+  "COAL": {
+   "product_id": "COAL",
+   "sell_summary": [
+    {
+     "amount": 154003,
+     "pricePerUnit": 4.9,
+     "orders": 3
+    },
+    {
+     "amount": 116201,
+     "pricePerUnit": 4.8,
+     "orders": 2
+    },
+    {
+     "amount": 23800,
+     "pricePerUnit": 4.7,
+     "orders": 1
+    },
+    {
+     "amount": 1022860,
+     "pricePerUnit": 4.6,
+     "orders": 15
+    },
+    {
+     "amount": 402649,
+     "pricePerUnit": 4.5,
+     "orders": 6
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 59316,
+     "pricePerUnit": 7.2,
+     "orders": 1
+    },
+    {
+     "amount": 9166,
+     "pricePerUnit": 7.3,
+     "orders": 1
+    },
+    {
+     "amount": 57472,
+     "pricePerUnit": 7.4,
+     "orders": 1
+    },
+    {
+     "amount": 24800,
+     "pricePerUnit": 7.5,
+     "orders": 1
+    },
+    {
+     "amount": 8990,
+     "pricePerUnit": 7.7,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "COAL",
+    "sellPrice": 4.883527762053285,
+    "sellVolume": 12353177,
+    "sellMovingWeek": 788155512,
+    "sellOrders": 184,
+    "buyPrice": 8.72830717726329,
+    "buyVolume": 220241441,
+    "buyMovingWeek": 6905689,
+    "buyOrders": 3109
+   }
+  },
+  "ENCHANTED_DIAMOND": {
+   "product_id": "ENCHANTED_DIAMOND",
+   "sell_summary": [
+    {
+     "amount": 386,
+     "pricePerUnit": 1244.1,
+     "orders": 1
+    },
+    {
+     "amount": 66712,
+     "pricePerUnit": 1244,
+     "orders": 1
+    },
+    {
+     "amount": 142495,
+     "pricePerUnit": 1243.9,
+     "orders": 2
+    },
+    {
+     "amount": 7571,
+     "pricePerUnit": 1232,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 31,
+     "pricePerUnit": 1322.6,
+     "orders": 1
+    },
+    {
+     "amount": 234,
+     "pricePerUnit": 1322.7,
+     "orders": 2
+    },
+    {
+     "amount": 741,
+     "pricePerUnit": 1322.8,
+     "orders": 2
+    },
+    {
+     "amount": 132,
+     "pricePerUnit": 1322.9,
+     "orders": 1
+    },
+    {
+     "amount": 237,
+     "pricePerUnit": 1323,
+     "orders": 2
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_DIAMOND",
+    "sellPrice": 1244.0005752779516,
+    "sellVolume": 528284,
+    "sellMovingWeek": 23674466,
+    "sellOrders": 15,
+    "buyPrice": 1334.4530207409143,
+    "buyVolume": 4452276,
+    "buyMovingWeek": 5236407,
+    "buyOrders": 505
+   }
+  },
+  "DIAMOND": {
+   "product_id": "DIAMOND",
+   "sell_summary": [
+    {
+     "amount": 24315,
+     "pricePerUnit": 5.2,
+     "orders": 1
+    },
+    {
+     "amount": 281016,
+     "pricePerUnit": 5,
+     "orders": 4
+    },
+    {
+     "amount": 571121,
+     "pricePerUnit": 4,
+     "orders": 8
+    },
+    {
+     "amount": 58241,
+     "pricePerUnit": 3.1,
+     "orders": 1
+    },
+    {
+     "amount": 50201,
+     "pricePerUnit": 3,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 31077,
+     "pricePerUnit": 9,
+     "orders": 1
+    },
+    {
+     "amount": 191419,
+     "pricePerUnit": 9.1,
+     "orders": 23
+    },
+    {
+     "amount": 485,
+     "pricePerUnit": 10.3,
+     "orders": 8
+    },
+    {
+     "amount": 31,
+     "pricePerUnit": 10.4,
+     "orders": 2
+    },
+    {
+     "amount": 224,
+     "pricePerUnit": 10.5,
+     "orders": 25
+    }
+   ],
+   "quick_status": {
+    "productId": "DIAMOND",
+    "sellPrice": 5.03014553912405,
+    "sellVolume": 5206967,
+    "sellMovingWeek": 116914498,
+    "sellOrders": 79,
+    "buyPrice": 9.567868514086209,
+    "buyVolume": 20731533,
+    "buyMovingWeek": 2559272,
+    "buyOrders": 438
+   }
+  },
+  "ENCHANTED_IRON": {
+   "product_id": "ENCHANTED_IRON",
+   "sell_summary": [
+    {
+     "amount": 124,
+     "pricePerUnit": 460.9,
+     "orders": 1
+    },
+    {
+     "amount": 12902,
+     "pricePerUnit": 460.8,
+     "orders": 2
+    },
+    {
+     "amount": 39063,
+     "pricePerUnit": 460.3,
+     "orders": 1
+    },
+    {
+     "amount": 69670,
+     "pricePerUnit": 460.2,
+     "orders": 1
+    },
+    {
+     "amount": 1119,
+     "pricePerUnit": 459.5,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 866,
+     "pricePerUnit": 567.9,
+     "orders": 1
+    },
+    {
+     "amount": 1137,
+     "pricePerUnit": 568,
+     "orders": 1
+    },
+    {
+     "amount": 87,
+     "pricePerUnit": 568.4,
+     "orders": 1
+    },
+    {
+     "amount": 1606,
+     "pricePerUnit": 568.5,
+     "orders": 2
+    },
+    {
+     "amount": 576,
+     "pricePerUnit": 568.7,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_IRON",
+    "sellPrice": 460.42527405018336,
+    "sellVolume": 2293672,
+    "sellMovingWeek": 4037149,
+    "sellOrders": 101,
+    "buyPrice": 570.6838678446086,
+    "buyVolume": 2410316,
+    "buyMovingWeek": 3765938,
+    "buyOrders": 1387
+   }
+  },
+  "IRON_INGOT": {
+   "product_id": "IRON_INGOT",
+   "sell_summary": [
+    {
+     "amount": 1047962,
+     "pricePerUnit": 0.1,
+     "orders": 15
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 13479,
+     "pricePerUnit": 3.4,
+     "orders": 1
+    },
+    {
+     "amount": 71679,
+     "pricePerUnit": 3.5,
+     "orders": 1
+    },
+    {
+     "amount": 85909,
+     "pricePerUnit": 3.6,
+     "orders": 3
+    },
+    {
+     "amount": 309,
+     "pricePerUnit": 3.8,
+     "orders": 2
+    }
+   ],
+   "quick_status": {
+    "productId": "IRON_INGOT",
+    "sellPrice": 0.09999999999999999,
+    "sellVolume": 1119642,
+    "sellMovingWeek": 195626818,
+    "sellOrders": 16,
+    "buyPrice": 3.542317881181981,
+    "buyVolume": 6856124,
+    "buyMovingWeek": 5645862,
+    "buyOrders": 149
+   }
+  },
+  "BONE": {
+   "product_id": "BONE",
+   "sell_summary": [
+    {
+     "amount": 170753,
+     "pricePerUnit": 0.1,
+     "orders": 3
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 47591,
+     "pricePerUnit": 4.6,
+     "orders": 4
+    },
+    {
+     "amount": 138873,
+     "pricePerUnit": 4.7,
+     "orders": 2
+    },
+    {
+     "amount": 64563,
+     "pricePerUnit": 5,
+     "orders": 1
+    },
+    {
+     "amount": 202,
+     "pricePerUnit": 6.5,
+     "orders": 4
+    },
+    {
+     "amount": 71009,
+     "pricePerUnit": 6.6,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "BONE",
+    "sellPrice": 0.1,
+    "sellVolume": 170753,
+    "sellMovingWeek": 21823464,
+    "sellOrders": 3,
+    "buyPrice": 4.658538646501254,
+    "buyVolume": 5669719,
+    "buyMovingWeek": 1962849,
+    "buyOrders": 280
+   }
+  },
+  "SPIDER_EYE": {
+   "product_id": "SPIDER_EYE",
+   "sell_summary": [
+    {
+     "amount": 92468,
+     "pricePerUnit": 0.2,
+     "orders": 2
+    },
+    {
+     "amount": 1270994,
+     "pricePerUnit": 0.1,
+     "orders": 19
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 6211,
+     "pricePerUnit": 7.8,
+     "orders": 2
+    },
+    {
+     "amount": 1,
+     "pricePerUnit": 7.9,
+     "orders": 1
+    },
+    {
+     "amount": 137,
+     "pricePerUnit": 8,
+     "orders": 3
+    },
+    {
+     "amount": 219,
+     "pricePerUnit": 9.4,
+     "orders": 1
+    },
+    {
+     "amount": 27395,
+     "pricePerUnit": 9.6,
+     "orders": 6
+    }
+   ],
+   "quick_status": {
+    "productId": "SPIDER_EYE",
+    "sellPrice": 0.2,
+    "sellVolume": 1363462,
+    "sellMovingWeek": 22210390,
+    "sellOrders": 21,
+    "buyPrice": 9.263420735116682,
+    "buyVolume": 1866632,
+    "buyMovingWeek": 1017606,
+    "buyOrders": 77
+   }
+  },
+  "ENCHANTED_PAPER": {
+   "product_id": "ENCHANTED_PAPER",
+   "sell_summary": [
+    {
+     "amount": 809,
+     "pricePerUnit": 751.4,
+     "orders": 1
+    },
+    {
+     "amount": 640,
+     "pricePerUnit": 751.3,
+     "orders": 1
+    },
+    {
+     "amount": 1024,
+     "pricePerUnit": 751.2,
+     "orders": 1
+    },
+    {
+     "amount": 4989,
+     "pricePerUnit": 751,
+     "orders": 1
+    },
+    {
+     "amount": 69196,
+     "pricePerUnit": 750.7,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 162,
+     "pricePerUnit": 1906.5,
+     "orders": 1
+    },
+    {
+     "amount": 288,
+     "pricePerUnit": 1906.6,
+     "orders": 1
+    },
+    {
+     "amount": 195,
+     "pricePerUnit": 2035,
+     "orders": 1
+    },
+    {
+     "amount": 7028,
+     "pricePerUnit": 2336.2,
+     "orders": 4
+    },
+    {
+     "amount": 2094,
+     "pricePerUnit": 2336.3,
+     "orders": 2
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_PAPER",
+    "sellPrice": 750.738600015654,
+    "sellVolume": 1580803,
+    "sellMovingWeek": 150981,
+    "sellOrders": 434,
+    "buyPrice": 1906.5639999999999,
+    "buyVolume": 14709,
+    "buyMovingWeek": 312264,
+    "buyOrders": 13
+   }
+  },
+  "SUGAR_CANE": {
+   "product_id": "SUGAR_CANE",
+   "sell_summary": [
+    {
+     "amount": 596042,
+     "pricePerUnit": 1.8,
+     "orders": 9
+    },
+    {
+     "amount": 872,
+     "pricePerUnit": 1.7,
+     "orders": 1
+    },
+    {
+     "amount": 59935,
+     "pricePerUnit": 1.6,
+     "orders": 1
+    },
+    {
+     "amount": 202419,
+     "pricePerUnit": 1.4,
+     "orders": 3
+    },
+    {
+     "amount": 57310,
+     "pricePerUnit": 1.1,
+     "orders": 3
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 48250,
+     "pricePerUnit": 5.9,
+     "orders": 1
+    },
+    {
+     "amount": 55284,
+     "pricePerUnit": 6,
+     "orders": 1
+    },
+    {
+     "amount": 17004,
+     "pricePerUnit": 6.3,
+     "orders": 2
+    },
+    {
+     "amount": 70800,
+     "pricePerUnit": 6.5,
+     "orders": 1
+    },
+    {
+     "amount": 13010,
+     "pricePerUnit": 6.6,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "SUGAR_CANE",
+    "sellPrice": 1.8,
+    "sellVolume": 2641992,
+    "sellMovingWeek": 127438940,
+    "sellOrders": 43,
+    "buyPrice": 5.9,
+    "buyVolume": 1807815,
+    "buyMovingWeek": 16222708,
+    "buyOrders": 41
+   }
+  },
+  "ENCHANTED_SUGAR": {
+   "product_id": "ENCHANTED_SUGAR",
+   "sell_summary": [
+    {
+     "amount": 92911,
+     "pricePerUnit": 620,
+     "orders": 2
+    },
+    {
+     "amount": 42808,
+     "pricePerUnit": 616.7,
+     "orders": 1
+    },
+    {
+     "amount": 5814,
+     "pricePerUnit": 616,
+     "orders": 1
+    },
+    {
+     "amount": 30016,
+     "pricePerUnit": 614.3,
+     "orders": 1
+    },
+    {
+     "amount": 23,
+     "pricePerUnit": 611.1,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 2240,
+     "pricePerUnit": 669.7,
+     "orders": 1
+    },
+    {
+     "amount": 57066,
+     "pricePerUnit": 669.8,
+     "orders": 1
+    },
+    {
+     "amount": 13154,
+     "pricePerUnit": 669.9,
+     "orders": 1
+    },
+    {
+     "amount": 39448,
+     "pricePerUnit": 670,
+     "orders": 2
+    },
+    {
+     "amount": 1321,
+     "pricePerUnit": 670.7,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_SUGAR",
+    "sellPrice": 561.4849608068064,
+    "sellVolume": 33413261,
+    "sellMovingWeek": 48630122,
+    "sellOrders": 901,
+    "buyPrice": 669.8801023557938,
+    "buyVolume": 5143290,
+    "buyMovingWeek": 10850276,
+    "buyOrders": 1007
+   }
+  },
+  "ENCHANTED_SUGAR_CANE": {
+   "product_id": "ENCHANTED_SUGAR_CANE",
+   "sell_summary": [
+    {
+     "amount": 961,
+     "pricePerUnit": 101759.4,
+     "orders": 1
+    },
+    {
+     "amount": 27,
+     "pricePerUnit": 101759.3,
+     "orders": 1
+    },
+    {
+     "amount": 779,
+     "pricePerUnit": 101759.2,
+     "orders": 1
+    },
+    {
+     "amount": 31,
+     "pricePerUnit": 101758.9,
+     "orders": 1
+    },
+    {
+     "amount": 18,
+     "pricePerUnit": 101758.7,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 40,
+     "pricePerUnit": 105138.9,
+     "orders": 1
+    },
+    {
+     "amount": 85,
+     "pricePerUnit": 105139,
+     "orders": 1
+    },
+    {
+     "amount": 774,
+     "pricePerUnit": 105139.4,
+     "orders": 1
+    },
+    {
+     "amount": 19,
+     "pricePerUnit": 105139.5,
+     "orders": 1
+    },
+    {
+     "amount": 82,
+     "pricePerUnit": 105139.7,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_SUGAR_CANE",
+    "sellPrice": 101759.4,
+    "sellVolume": 37004,
+    "sellMovingWeek": 359297,
+    "sellOrders": 19,
+    "buyPrice": 105140.15777358491,
+    "buyVolume": 129333,
+    "buyMovingWeek": 577474,
+    "buyOrders": 279
+   }
+  },
+  "WHEAT": {
+   "product_id": "WHEAT",
+   "sell_summary": [
+    {
+     "amount": 70233,
+     "pricePerUnit": 3.4,
+     "orders": 1
+    },
+    {
+     "amount": 9281,
+     "pricePerUnit": 3.3,
+     "orders": 1
+    },
+    {
+     "amount": 389459,
+     "pricePerUnit": 3.2,
+     "orders": 6
+    },
+    {
+     "amount": 106956,
+     "pricePerUnit": 3,
+     "orders": 2
+    },
+    {
+     "amount": 628432,
+     "pricePerUnit": 2.9,
+     "orders": 9
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 61734,
+     "pricePerUnit": 5.7,
+     "orders": 1
+    },
+    {
+     "amount": 21174,
+     "pricePerUnit": 5.8,
+     "orders": 3
+    },
+    {
+     "amount": 42482,
+     "pricePerUnit": 5.9,
+     "orders": 1
+    },
+    {
+     "amount": 462,
+     "pricePerUnit": 6,
+     "orders": 3
+    },
+    {
+     "amount": 960,
+     "pricePerUnit": 6.1,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "WHEAT",
+    "sellPrice": 3.282610074065976,
+    "sellVolume": 9132864,
+    "sellMovingWeek": 1129951601,
+    "sellOrders": 139,
+    "buyPrice": 6.5258241769966645,
+    "buyVolume": 21209287,
+    "buyMovingWeek": 8497079,
+    "buyOrders": 319
+   }
+  },
+  "ENCHANTED_BREAD": {
+   "product_id": "ENCHANTED_BREAD",
+   "sell_summary": [
+    {
+     "amount": 1024,
+     "pricePerUnit": 89.4,
+     "orders": 1
+    },
+    {
+     "amount": 662,
+     "pricePerUnit": 89.3,
+     "orders": 2
+    },
+    {
+     "amount": 70860,
+     "pricePerUnit": 89.2,
+     "orders": 1
+    },
+    {
+     "amount": 54118,
+     "pricePerUnit": 89.1,
+     "orders": 1
+    },
+    {
+     "amount": 16243,
+     "pricePerUnit": 89,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 18160,
+     "pricePerUnit": 248.6,
+     "orders": 13
+    },
+    {
+     "amount": 648,
+     "pricePerUnit": 248.8,
+     "orders": 1
+    },
+    {
+     "amount": 440,
+     "pricePerUnit": 248.9,
+     "orders": 1
+    },
+    {
+     "amount": 1728,
+     "pricePerUnit": 249,
+     "orders": 1
+    },
+    {
+     "amount": 1280,
+     "pricePerUnit": 249.1,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "ENCHANTED_BREAD",
+    "sellPrice": 89.2037355608855,
+    "sellVolume": 147685,
+    "sellMovingWeek": 353933,
+    "sellOrders": 8,
+    "buyPrice": 248.60000000000002,
+    "buyVolume": 355262,
+    "buyMovingWeek": 103156,
+    "buyOrders": 245
+   }
+  },
+  "HAY_BLOCK": {
+   "product_id": "HAY_BLOCK",
+   "sell_summary": [],
+   "buy_summary": [],
+   "quick_status": {
+    "productId": "HAY_BLOCK",
+    "sellPrice": 0,
+    "sellVolume": 0,
+    "sellMovingWeek": 0,
+    "sellOrders": 0,
+    "buyPrice": 0,
+    "buyVolume": 0,
+    "buyMovingWeek": 0,
+    "buyOrders": 0
+   }
+  },
+  "ENCHANTED_HAY_BLOCK": {
+   "product_id": "ENCHANTED_HAY_BLOCK",
+   "sell_summary": [],
+   "buy_summary": [],
+   "quick_status": {
+    "productId": "ENCHANTED_HAY_BLOCK",
+    "sellPrice": 0,
+    "sellVolume": 0,
+    "sellMovingWeek": 0,
+    "sellOrders": 0,
+    "buyPrice": 0,
+    "buyVolume": 0,
+    "buyMovingWeek": 0,
+    "buyOrders": 0
+   }
+  },
+  "SHARD_WIKI_TIKI": {
+   "product_id": "SHARD_WIKI_TIKI",
+   "sell_summary": [
+    {
+     "amount": 216,
+     "pricePerUnit": 16246.9,
+     "orders": 1
+    },
+    {
+     "amount": 133,
+     "pricePerUnit": 16246.6,
+     "orders": 1
+    },
+    {
+     "amount": 682,
+     "pricePerUnit": 16246.4,
+     "orders": 1
+    },
+    {
+     "amount": 32,
+     "pricePerUnit": 16246.2,
+     "orders": 1
+    },
+    {
+     "amount": 40,
+     "pricePerUnit": 16246.1,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 2,
+     "pricePerUnit": 23614.4,
+     "orders": 1
+    },
+    {
+     "amount": 1620,
+     "pricePerUnit": 23614.5,
+     "orders": 3
+    },
+    {
+     "amount": 27,
+     "pricePerUnit": 23614.6,
+     "orders": 1
+    },
+    {
+     "amount": 420,
+     "pricePerUnit": 24433.4,
+     "orders": 1
+    },
+    {
+     "amount": 291,
+     "pricePerUnit": 24433.5,
+     "orders": 2
+    }
+   ],
+   "quick_status": {
+    "productId": "SHARD_WIKI_TIKI",
+    "sellPrice": 16246.022910773976,
+    "sellVolume": 134464,
+    "sellMovingWeek": 30903,
+    "sellOrders": 106,
+    "buyPrice": 23614.499827882963,
+    "buyVolume": 4604,
+    "buyMovingWeek": 49483,
+    "buyOrders": 65
+   }
+  },
+  "SHARD_SALMON": {
+   "product_id": "SHARD_SALMON",
+   "sell_summary": [
+    {
+     "amount": 278,
+     "pricePerUnit": 1440.2,
+     "orders": 1
+    },
+    {
+     "amount": 29,
+     "pricePerUnit": 1360.7,
+     "orders": 1
+    },
+    {
+     "amount": 858,
+     "pricePerUnit": 1276.9,
+     "orders": 1
+    },
+    {
+     "amount": 5924,
+     "pricePerUnit": 1188.7,
+     "orders": 1
+    },
+    {
+     "amount": 721,
+     "pricePerUnit": 1095.7,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 309,
+     "pricePerUnit": 2952,
+     "orders": 2
+    },
+    {
+     "amount": 34,
+     "pricePerUnit": 2952.1,
+     "orders": 1
+    },
+    {
+     "amount": 200,
+     "pricePerUnit": 2952.2,
+     "orders": 1
+    },
+    {
+     "amount": 1888,
+     "pricePerUnit": 2952.4,
+     "orders": 1
+    },
+    {
+     "amount": 96,
+     "pricePerUnit": 2953.2,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "SHARD_SALMON",
+    "sellPrice": 1035.0369601693899,
+    "sellVolume": 810502,
+    "sellMovingWeek": 306698,
+    "sellOrders": 106,
+    "buyPrice": 2954.0825310100413,
+    "buyVolume": 330714,
+    "buyMovingWeek": 497666,
+    "buyOrders": 320
+   }
+  },
+  "SHARD_BEEHEEMOTH": {
+   "product_id": "SHARD_BEEHEEMOTH",
+   "sell_summary": [
+    {
+     "amount": 38,
+     "pricePerUnit": 67465.2,
+     "orders": 1
+    },
+    {
+     "amount": 121,
+     "pricePerUnit": 67465.1,
+     "orders": 1
+    },
+    {
+     "amount": 9,
+     "pricePerUnit": 67464.8,
+     "orders": 1
+    },
+    {
+     "amount": 156,
+     "pricePerUnit": 67463.9,
+     "orders": 1
+    },
+    {
+     "amount": 27,
+     "pricePerUnit": 67463.2,
+     "orders": 1
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 40,
+     "pricePerUnit": 94782.3,
+     "orders": 1
+    },
+    {
+     "amount": 2,
+     "pricePerUnit": 94783.5,
+     "orders": 1
+    },
+    {
+     "amount": 12,
+     "pricePerUnit": 97819.7,
+     "orders": 1
+    },
+    {
+     "amount": 4,
+     "pricePerUnit": 101372.8,
+     "orders": 1
+    },
+    {
+     "amount": 42,
+     "pricePerUnit": 101375.3,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "SHARD_BEEHEEMOTH",
+    "sellPrice": 67465.2,
+    "sellVolume": 938,
+    "sellMovingWeek": 4258,
+    "sellOrders": 15,
+    "buyPrice": 94782.3,
+    "buyVolume": 182,
+    "buyMovingWeek": 8436,
+    "buyOrders": 11
+   }
+  },
+  "END_STONE_SHULKER": {
+   "product_id": "END_STONE_SHULKER",
+   "sell_summary": [
+    {
+     "amount": 21,
+     "pricePerUnit": 0.6,
+     "orders": 2
+    },
+    {
+     "amount": 10,
+     "pricePerUnit": 0.5,
+     "orders": 1
+    },
+    {
+     "amount": 169,
+     "pricePerUnit": 0.3,
+     "orders": 2
+    }
+   ],
+   "buy_summary": [
+    {
+     "amount": 2,
+     "pricePerUnit": 11898.9,
+     "orders": 1
+    },
+    {
+     "amount": 29,
+     "pricePerUnit": 11899,
+     "orders": 3
+    },
+    {
+     "amount": 26,
+     "pricePerUnit": 11899.1,
+     "orders": 1
+    },
+    {
+     "amount": 26,
+     "pricePerUnit": 11899.2,
+     "orders": 1
+    },
+    {
+     "amount": 26,
+     "pricePerUnit": 11899.3,
+     "orders": 1
+    }
+   ],
+   "quick_status": {
+    "productId": "END_STONE_SHULKER",
+    "sellPrice": 0.6,
+    "sellVolume": 705,
+    "sellMovingWeek": 4382,
+    "sellOrders": 9,
+    "buyPrice": 11898.993333333334,
+    "buyVolume": 559,
+    "buyMovingWeek": 5667,
+    "buyOrders": 22
+   }
+  },
+  "ENCHANTMENT_CAYENNE_3": {
+   "product_id": "ENCHANTMENT_CAYENNE_3",
+   "sell_summary": [],
+   "buy_summary": [],
+   "quick_status": {
+    "productId": "ENCHANTMENT_CAYENNE_3",
+    "sellPrice": 0,
+    "sellVolume": 0,
+    "sellMovingWeek": 0,
+    "sellOrders": 0,
+    "buyPrice": 0,
+    "buyVolume": 0,
+    "buyMovingWeek": 0,
+    "buyOrders": 0
+   }
+  }
+ }
+}

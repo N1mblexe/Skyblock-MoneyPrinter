@@ -1,0 +1,91 @@
+/* owner: package D — design tokens (ported from legacy bazaar-masasi.html).
+   Light is the default; dark applies via system preference unless data-theme="light",
+   or explicitly via data-theme="dark". Views should only use these variables. */
+:root {
+  --bg: #f3f5f4;
+  --panel: #ffffff;
+  --panel-2: #f8faf9;
+  --ink: #15211f;
+  --muted: #5d6d69;
+  --line: #d6dedb;
+  --line-strong: #bfcac6;
+  --accent: #9a6a12;
+  --accent-ink: #ffffff;
+  --accent-soft: #f6ecd6;
+  --good: #1f7a4d;
+  --good-soft: #e2f2e8;
+  --bad: #b23b2e;
+  --bad-soft: #f8e3e0;
+  --warn: #8a5a00;
+  --warn-soft: #fbefd2;
+  --info: #22608f;
+  --info-soft: #e1edf6;
+  --violet: #6a3fa0;
+  --violet-soft: #efe7f8;
+  --row-hover: #faf4e6;
+  --shadow: 0 1px 2px rgb(21 33 31 / 0.06), 0 2px 8px rgb(21 33 31 / 0.04);
+
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --gutter: 16px;
+  --maxw: 1200px;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1715;
+    --panel: #16211e;
+    --panel-2: #1b2824;
+    --ink: #e4ece9;
+    --muted: #93a39f;
+    --line: #2a3834;
+    --line-strong: #3a4a45;
+    --accent: #e0b155;
+    --accent-ink: #1a1408;
+    --accent-soft: #33291a;
+    --good: #5cc68e;
+    --good-soft: #163024;
+    --bad: #ef8a7c;
+    --bad-soft: #3a1d19;
+    --warn: #f0c46a;
+    --warn-soft: #3a2f17;
+    --info: #7fb6e3;
+    --info-soft: #16293a;
+    --violet: #c2a3ec;
+    --violet-soft: #2a2138;
+    --row-hover: #1e2b20;
+    --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --bg: #0f1715;
+  --panel: #16211e;
+  --panel-2: #1b2824;
+  --ink: #e4ece9;
+  --muted: #93a39f;
+  --line: #2a3834;
+  --line-strong: #3a4a45;
+  --accent: #e0b155;
+  --accent-ink: #1a1408;
+  --accent-soft: #33291a;
+  --good: #5cc68e;
+  --good-soft: #163024;
+  --bad: #ef8a7c;
+  --bad-soft: #3a1d19;
+  --warn: #f0c46a;
+  --warn-soft: #3a2f17;
+  --info: #7fb6e3;
+  --info-soft: #16293a;
+  --violet: #c2a3ec;
+  --violet-soft: #2a2138;
+  --row-hover: #1e2b20;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.3);
+  color-scheme: dark;
+}

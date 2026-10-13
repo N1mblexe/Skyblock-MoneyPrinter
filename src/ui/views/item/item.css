@@ -1,0 +1,371 @@
+/* item view styles (owner: E4). Colors only via theme tokens. */
+.item-view {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.item-view > *,
+.item-main > * {
+  min-width: 0;
+}
+.item-main {
+  display: grid;
+  gap: 14px;
+}
+
+/* ---- top bar: back + search */
+.item-top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  justify-content: space-between;
+  gap: 10px 16px;
+}
+.item-back {
+  padding-inline: 4px;
+}
+.item-search {
+  flex: 0 1 340px;
+  min-width: min(260px, 100%);
+}
+.item-search-box {
+  position: relative;
+}
+.item-search-box input {
+  width: 100%;
+}
+.item-sugg {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  margin: 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--panel);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow), 0 8px 24px rgb(0 0 0 / 0.12);
+  max-height: 340px;
+  overflow: auto;
+}
+.item-sugg li > a {
+  display: block;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: var(--ink);
+  text-decoration: none;
+  font-weight: 500;
+}
+.item-sugg li > a:hover,
+.item-sugg li[aria-selected="true"] > a {
+  background: var(--accent-soft);
+}
+.item-sugg-none {
+  padding: 8px;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+/* ---- header */
+.item-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+}
+.item-head h2 {
+  margin: 0;
+}
+.item-head .id-sub {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+}
+.item-badges {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+.item-tier.tier-common {
+  background: var(--line);
+  color: var(--ink);
+}
+.item-tier.tier-uncommon {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.item-tier.tier-rare {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.item-tier.tier-epic {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.item-tier.tier-legendary {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.item-tier.tier-mythic,
+.item-tier.tier-divine,
+.item-tier.tier-special,
+.item-tier.tier-very_special {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
+
+/* ---- key facts */
+.item-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.item-facts .banner {
+  margin: 0;
+}
+.item-quick-card {
+  grid-column: span 2;
+}
+@media (max-width: 640px) {
+  .item-quick-card {
+    grid-column: auto;
+  }
+}
+.item-quick {
+  overflow-x: auto;
+}
+.item-quick th {
+  position: static;
+}
+
+/* ---- risk */
+.item-risk h3 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.item-flags {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 4px;
+  font-size: 0.9rem;
+}
+
+/* ---- order book */
+.item-book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
+  gap: 14px;
+}
+.item-book-grid > div {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+  min-width: 0;
+}
+.item-book .tbl {
+  --tbl-max-h: none;
+}
+.item-side {
+  margin: 0;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.item-side::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.item-side-bid::before {
+  background: var(--good);
+}
+.item-side-ask::before {
+  background: var(--accent);
+}
+
+/* ---- chart */
+.item-chart-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+.item-chart-head h3 {
+  margin: 0;
+  margin-right: auto;
+}
+.lc-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+.lc-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.lc-sw {
+  display: inline-block;
+  width: 18px;
+  height: 0;
+  border-top: 2px solid currentColor;
+  flex: none;
+}
+.lc-sw.lc-bid {
+  color: var(--good);
+}
+.lc-sw.lc-ask {
+  color: var(--accent);
+  border-top-style: dashed;
+}
+.item-chart-box {
+  min-width: 0;
+}
+.lc {
+  position: relative;
+  min-width: 0;
+}
+.lc-plot {
+  width: 100%;
+  overflow: hidden;
+  touch-action: pan-y;
+}
+.lc-svg {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  font-family: var(--f-mono);
+  font-size: 11px;
+}
+.lc-frame {
+  fill: var(--panel-2);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.lc-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.lc-tick {
+  stroke: var(--line-strong);
+}
+.lc-ylab,
+.lc-xlab {
+  fill: var(--muted);
+}
+.lc-empty {
+  fill: var(--muted);
+  font-family: var(--f-body);
+  font-size: 13px;
+}
+.lc-line {
+  fill: none;
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.lc-line.lc-bid,
+.lc-dot.lc-bid,
+.lc-end.lc-bid {
+  stroke: var(--good);
+}
+.lc-line.lc-ask,
+.lc-dot.lc-ask,
+.lc-end.lc-ask {
+  stroke: var(--accent);
+}
+.lc-line.lc-ask {
+  stroke-dasharray: 6 4;
+}
+.lc-end,
+.lc-dot {
+  fill: var(--panel);
+  stroke-width: 2;
+}
+.lc-guide {
+  stroke: var(--muted);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.lc-hit {
+  fill: transparent;
+  cursor: crosshair;
+}
+.lc-tip {
+  position: absolute;
+  top: 10px;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--panel);
+  color: var(--ink);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow), 0 6px 18px rgb(0 0 0 / 0.12);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  display: grid;
+  gap: 2px;
+  min-width: 170px;
+}
+.lc-tip-time {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+.lc-tip-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.lc-tip-row b {
+  margin-left: auto;
+  font-family: var(--f-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- recipes */
+.item-recipes {
+  display: grid;
+  gap: 14px;
+}
+.item-recipes .tbl {
+  --tbl-max-h: 520px;
+}
+.item-view td.item-wrap {
+  white-space: normal;
+  min-width: 180px;
+}
+.item-rin {
+  display: inline-block;
+  margin: 1px 10px 1px 0;
+  white-space: nowrap;
+}
+.item-rin .num {
+  color: var(--muted);
+}
+.item-rin.is-self {
+  font-weight: 700;
+}
+.item-kind-craft {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.item-kind-forge {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.item-view td .btn {
+  font-family: var(--f-body);
+}

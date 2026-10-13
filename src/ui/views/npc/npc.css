@@ -1,0 +1,59 @@
+/* npc view styles */
+.npc-view {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+.npc-titlebar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.npc-titlebar > h2 {
+  margin: 0;
+}
+.npc-intro,
+.npc-dir-desc {
+  margin: 0;
+  max-width: 75ch;
+}
+.npc-dir-desc {
+  color: var(--ink);
+}
+.npc-seg > button {
+  white-space: nowrap;
+}
+.npc-note {
+  max-width: none;
+  border-left: 4px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  color: var(--ink);
+}
+.npc-note > p {
+  max-width: 90ch;
+}
+.npc-note strong {
+  color: var(--warn);
+}
+.npc-price {
+  display: block;
+}
+.npc-src {
+  display: block;
+  margin-top: 2px;
+  line-height: 1;
+}
+.npc-floor {
+  font-family: var(--f-mono);
+  font-size: 0.68rem;
+  color: var(--warn);
+  cursor: help;
+  white-space: nowrap;
+}
+.npc-view .npc-suspect td {
+  opacity: 0.8;
+}

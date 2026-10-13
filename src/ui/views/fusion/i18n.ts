@@ -1,0 +1,81 @@
+import { registerDict } from '../../../i18n/index.ts';
+
+const tr = {
+  title: 'Shard fusion',
+  intro: 'İki shard’ı birleştirip üçüncüsünü elde etmek kâr eder mi? Tarifi gir, maliyet ve kâr canlı fiyatlarla hesaplansın.',
+  inA: 'Girdi 1',
+  inB: 'Girdi 2',
+  out: 'Çıktı',
+  qty: 'Adet',
+  itemPh: 'Ad ya da ID',
+  recipeN: 'Tarif {n}',
+  del: 'Sil',
+  delAria: 'Tarif {n} sil',
+  add: 'Tarif ekle',
+  quickAdd: 'Çıktıya göre hızlı ekle',
+  quickAddPh: 'En değerli shard’lar…',
+  quickAddHelp: 'Seçtiğin shard çıktı olarak yeni bir tarife yazılır; girdileri sen tamamlarsın.',
+  count: '{n} tarif',
+  emptyTitle: 'Henüz tarif yok.',
+  emptyHint: '“Tarif ekle” ile ilk fusion’ını gir: iki girdi shard’ı, adetleri ve çıkan shard. Kutulara yazmaya başlayınca bazaar ürünleri önerilir.',
+  cost: 'Maliyet',
+  value: 'Değer (vergi sonrası)',
+  profit: 'Kâr',
+  margin: 'Marj',
+  unitBuy: 'alış {p} / adet',
+  unitSell: 'satış {p} / adet',
+  notFound: 'bazaar’da bulunamadı',
+  noPrice: 'fiyat yok',
+  missing: 'Fiyat yok: {ids}',
+  incomplete: 'Tarifi tamamla: iki girdiyi ve çıktıyı gir.',
+  catalogLoading: 'Eşya kataloğu yükleniyor… Tarifleri şimdiden girebilirsin; sonuçlar katalog gelince hesaplanır.',
+  catalogError: 'Eşya kataloğu yüklenemedi ({err}). Tarifleri girebilirsin ama sonuçlar hesaplanamıyor.',
+  note1:
+    '<strong>Tarifleri oyundan sen gir.</strong> Galatea’daki fusion makinesinde hangi iki shard’ın neyi verdiğini görüp buraya yaz. Ad (ör. Salmon Shard) ya da ID (SHARD_SALMON) yazabilirsin; öneri listesinde shard’lar başta çıkar.',
+  note2:
+    'Fusion ücretleri ve gereksinimleri (makine kilitleri, seviye şartları vb.) hesaba katılmaz. Alış/satış şekli ve vergi üstteki Genel ayarlar’dan gelir; şu an: <strong>{cost}</strong>, <strong>{sell}</strong>.',
+  note3:
+    'Fiyatlar order book’un tepesinden alınır (en iyi buy order + 0,1 / en düşük sell offer − 0,1), quick_status ortalamaları kullanılmaz. Vergi sadece bazaar satışından düşülür. Buy order’ın en az NPC satış fiyatının 0,9 katına mal olduğu varsayılır.',
+  note4: 'Tarifler sadece bu tarayıcıda saklanır.',
+};
+
+const en: Record<keyof typeof tr, string> = {
+  title: 'Shard fusion',
+  intro: 'Is fusing two shards into a third one worth it? Enter the recipe and cost and profit are computed from live prices.',
+  inA: 'Input 1',
+  inB: 'Input 2',
+  out: 'Output',
+  qty: 'Qty',
+  itemPh: 'Name or ID',
+  recipeN: 'Recipe {n}',
+  del: 'Delete',
+  delAria: 'Delete recipe {n}',
+  add: 'Add recipe',
+  quickAdd: 'Quick add by output',
+  quickAddPh: 'Most valuable shards…',
+  quickAddHelp: 'The shard you pick becomes the output of a new recipe; you fill in the inputs.',
+  count: '{n} recipes',
+  emptyTitle: 'No recipes yet.',
+  emptyHint: 'Use “Add recipe” to enter your first fusion: two input shards, their quantities and the resulting shard. Bazaar items are suggested as you type.',
+  cost: 'Cost',
+  value: 'Value (after tax)',
+  profit: 'Profit',
+  margin: 'Margin',
+  unitBuy: 'buy {p} / unit',
+  unitSell: 'sell {p} / unit',
+  notFound: 'not found on the bazaar',
+  noPrice: 'no price',
+  missing: 'No price: {ids}',
+  incomplete: 'Complete the recipe: enter both inputs and the output.',
+  catalogLoading: 'Loading the item catalog… You can enter recipes already; results appear once it has loaded.',
+  catalogError: 'Could not load the item catalog ({err}). You can still enter recipes, but results cannot be computed.',
+  note1:
+    '<strong>Enter the recipes yourself from the game.</strong> Check which two shards give what at the fusion machine in Galatea and type it here. Use a name (e.g. Salmon Shard) or an ID (SHARD_SALMON); shards come first in the suggestions.',
+  note2:
+    'Fusion fees and requirements (machine unlocks, level requirements etc.) are not modeled. Buy/sell mode and tax come from the Global settings above; currently: <strong>{cost}</strong>, <strong>{sell}</strong>.',
+  note3:
+    'Prices come from the top of the order book (best buy order + 0.1 / lowest sell offer − 0.1), never quick_status averages. Tax is only taken from bazaar sales. Buy orders are assumed to cost at least 0.9 × the NPC sell price.',
+  note4: 'Recipes are stored in this browser only.',
+};
+
+registerDict('fusion', { tr, en });

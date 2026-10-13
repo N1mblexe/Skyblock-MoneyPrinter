@@ -1,0 +1,29 @@
+{
+  "name": "bazaar-masasi",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --port 4173",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "data": "tsx scripts/build-data.ts",
+    "fixture": "tsx scripts/capture-fixture.ts",
+    "sanity": "tsx scripts/sanity.ts",
+    "smoke": "tsx scripts/smoke.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.4",
+    "fake-indexeddb": "^6.2.5",
+    "happy-dom": "^21.0.1",
+    "playwright-core": "^1.64.0",
+    "tar": "^7.5.22",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}

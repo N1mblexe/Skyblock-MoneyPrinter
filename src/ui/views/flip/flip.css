@@ -1,0 +1,48 @@
+/* flip view styles (view-specific only; shared kit lives in components.css) */
+.flip-view {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.flip-view .flip-head h2 {
+  margin: 0;
+}
+.flip-view .flip-intro {
+  margin: 2px 0 0;
+}
+.flip-view .flip-body {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.flip-view td.flip-spark {
+  padding-top: 2px;
+  padding-bottom: 2px;
+  line-height: 0;
+}
+.flip-view tr.risk-row-suspect td {
+  background: color-mix(in srgb, var(--bad-soft) 45%, transparent);
+}
+/* 14 columns: let headers wrap onto two lines and tighten padding so it fits wider screens */
+.flip-view .tbl-wrap th {
+  white-space: normal;
+  vertical-align: bottom;
+  line-height: 1.25;
+}
+.flip-view .tbl-wrap th.num .th-btn {
+  text-align: right;
+  justify-content: flex-end;
+}
+.flip-view .tbl-wrap th,
+.flip-view .tbl-wrap td {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+.flip-view .tbl-wrap td.name-cell {
+  min-width: 180px;
+}
+@media (max-width: 600px) {
+  .flip-view .tbl-wrap td.name-cell {
+    min-width: 140px;
+  }
+}
