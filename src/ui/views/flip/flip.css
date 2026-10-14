@@ -1,48 +1,141 @@
-/* flip view styles (view-specific only; shared kit lives in components.css) */
-.flip-view {
-  display: grid;
-  gap: 12px;
+/* flip + books view styles (view-specific only; shared kit lives in components.css). Theme tokens only. */
+.flip-view,
+.books-view {
   min-width: 0;
 }
-.flip-view .flip-head h2 {
-  margin: 0;
-}
-.flip-view .flip-intro {
-  margin: 2px 0 0;
-}
-.flip-view .flip-body {
+:is(.flip-main, .books-main) {
   display: grid;
-  gap: 8px;
+  gap: var(--s-3);
   min-width: 0;
+}
+:is(.flip-view, .books-view) .view-head {
+  display: grid;
+  gap: var(--s-1);
+}
+:is(.flip-view, .books-view) .view-title {
+  font-size: var(--fs-2xl);
+}
+:is(.flip-view, .books-view) .view-intro {
+  max-width: 90ch;
+}
+:is(.flip-body, .books-body) {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+:is(.flip-tools, .books-tools) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }
 .flip-view td.flip-spark {
   padding-top: 2px;
   padding-bottom: 2px;
   line-height: 0;
 }
-.flip-view tr.risk-row-suspect td {
+:is(.flip-view, .books-view) tr.risk-row-suspect td {
   background: color-mix(in srgb, var(--bad-soft) 45%, transparent);
 }
-/* 14 columns: let headers wrap onto two lines and tighten padding so it fits wider screens */
-.flip-view .tbl-wrap th {
+:is(.flip-view, .books-view) .tbl-wrap th {
   white-space: normal;
   vertical-align: bottom;
   line-height: 1.25;
 }
-.flip-view .tbl-wrap th.num .th-btn {
+:is(.flip-view, .books-view) .tbl-wrap th.num .th-btn {
   text-align: right;
   justify-content: flex-end;
 }
-.flip-view .tbl-wrap th,
-.flip-view .tbl-wrap td {
-  padding-left: 8px;
-  padding-right: 8px;
+:is(.flip-view, .books-view) .tbl-wrap th,
+:is(.flip-view, .books-view) .tbl-wrap td {
+  padding-left: var(--s-2);
+  padding-right: var(--s-2);
 }
-.flip-view .tbl-wrap td.name-cell {
+:is(.flip-view, .books-view) .tbl-wrap td.name-cell {
   min-width: 180px;
 }
+:is(.flip-view, .books-view) .badge.flip-clamp,
+:is(.flip-view, .books-view) .badge.book-ver {
+  margin-left: var(--s-1);
+  vertical-align: middle;
+}
+:is(.flip-view, .books-view) .watch-btn {
+  color: var(--muted);
+  font-size: var(--fs-md);
+  line-height: 1;
+}
+:is(.flip-view, .books-view) .watch-btn.on {
+  color: var(--warn);
+}
+
+/* detail panel */
+:is(.flip-view, .books-view) .dp {
+  display: grid;
+  gap: var(--s-4);
+}
+:is(.flip-view, .books-view) .dp-sec {
+  display: grid;
+  gap: var(--s-2);
+}
+:is(.flip-view, .books-view) .dp-sec h3 {
+  font-size: var(--fs-md);
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+:is(.flip-view, .books-view) .dp-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: var(--s-1);
+}
+:is(.flip-view, .books-view) .dp-flags {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+}
+:is(.flip-view, .books-view) .dp-flags code {
+  font-family: var(--f-mono);
+  font-size: var(--fs-xs);
+  color: var(--muted);
+}
+:is(.flip-view, .books-view) .dp-book {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: var(--s-3);
+}
+:is(.flip-view, .books-view) .dp-book-t caption {
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  padding-bottom: var(--s-1);
+}
+:is(.flip-view, .books-view) .dp-book-t th,
+:is(.flip-view, .books-view) .dp-book-t td {
+  padding: 3px 6px;
+  font-size: var(--fs-sm);
+}
+:is(.flip-view, .books-view) .dp-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
 @media (max-width: 600px) {
-  .flip-view .tbl-wrap td.name-cell {
+  :is(.flip-view, .books-view) .tbl-wrap td.name-cell {
     min-width: 140px;
+  }
+}
+/* the kit's .seg is nowrap inline-flex and overflows a 150px filter cell: let it wrap and give it two cells */
+:is(.flip-view, .books-view) .kit-fb-fields .seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+@media (min-width: 760px) {
+  :is(.flip-view, .books-view) .kit-fb-fields > .field:has(> .seg) {
+    grid-column: span 2;
   }
 }
