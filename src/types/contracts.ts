@@ -546,7 +546,7 @@ export interface HistoryRepo {
   stats(id: string): PriceStats | null;
   saveLatest(s: Snapshot): Promise<void>;
   loadLatest(): Promise<Snapshot | null>;
-  /** Sync, cross-item stats from in-memory data; memoized per record + taxRate. */
+  /** Sync, cross-item stats from in-memory data; memoized per record, minute (sliding 24h window) and taxRate. */
   marketStats(taxRate: number): ReadonlyMap<string, MarketStat>;
   info(): { raw: number; q15: number; oldest: number | null; persistent: boolean };
   /** Drop all stored history (keeps nothing). */
