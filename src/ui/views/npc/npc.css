@@ -1,59 +1,203 @@
-/* npc view styles */
+/* NPC & Shops view (owner: npc-fusion). Theme tokens only. */
 .npc-view {
   display: grid;
-  gap: 14px;
+  gap: var(--s-3);
   min-width: 0;
+  align-content: start;
+}
+.npc-head {
+  display: grid;
+  gap: var(--s-1);
 }
 .npc-titlebar {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 8px 16px;
+  gap: var(--s-2) var(--s-4);
 }
-.npc-titlebar > h2 {
+.npc-titlebar > h1 {
   margin: 0;
+  font-size: var(--fs-2xl);
+}
+.npc-title:focus {
+  outline: none;
+}
+.npc-title:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 .npc-intro,
 .npc-dir-desc {
   margin: 0;
-  max-width: 75ch;
+  max-width: 90ch;
 }
 .npc-dir-desc {
   color: var(--ink);
+  font-size: var(--fs-sm);
 }
 .npc-seg > button {
   white-space: nowrap;
 }
-.npc-note {
-  max-width: none;
-  border-left: 4px solid var(--warn);
-  background: var(--warn-soft);
-  border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  color: var(--ink);
+.npc-seg > button:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
 }
-.npc-note > p {
-  max-width: 90ch;
+.npc-box {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
 }
-.npc-note strong {
-  color: var(--warn);
+.npc-tb {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  color: var(--muted);
+  font-size: var(--fs-sm);
 }
-.npc-price {
-  display: block;
+
+/* single-line price + source badge (virtual rows have a fixed height) */
+.npc-view .npc-price {
+  font-variant-numeric: tabular-nums;
 }
-.npc-src {
-  display: block;
-  margin-top: 2px;
-  line-height: 1;
+.npc-view td .badge {
+  vertical-align: 1px;
 }
 .npc-floor {
   font-family: var(--f-mono);
-  font-size: 0.68rem;
+  font-size: var(--fs-xs);
   color: var(--warn);
   cursor: help;
   white-space: nowrap;
 }
-.npc-view .npc-suspect td {
+.npc-lim {
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.npc-lim-npcLimit,
+.npc-lim-slots {
+  color: var(--warn);
+}
+.npc-view .npc-suspect td,
+.npc-view .kcard.npc-suspect {
   opacity: 0.8;
+}
+.npc-view .npc-unpriced td {
+  color: var(--muted);
+}
+.npc-star {
+  min-width: 2.2em;
+  color: var(--muted);
+}
+.npc-star.on {
+  color: var(--accent);
+}
+.npc-cur {
+  white-space: nowrap;
+}
+
+/* best rate per currency */
+.npc-rates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+}
+.npc-rates-title {
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-right: var(--s-1);
+}
+.npc-rate {
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+}
+.npc-rate:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* explainer */
+.npc-note {
+  max-width: none;
+  border-left: 3px solid var(--warn);
+  background: var(--warn-soft);
+  border-radius: var(--radius-sm);
+  padding: var(--s-2) var(--s-3);
+  color: var(--ink);
+}
+.npc-note > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--warn);
+}
+.npc-note > summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+.npc-note > p {
+  max-width: 90ch;
+}
+
+/* detail panel body */
+.npc-detail {
+  display: grid;
+  gap: var(--s-2);
+}
+.npc-detail h3 {
+  margin: var(--s-2) 0 0;
+  font-size: var(--fs-md);
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.npc-d-route {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.npc-steps,
+.npc-flags {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+}
+.npc-d-compare {
+  margin: 0;
+  padding: var(--s-2);
+  border-radius: var(--radius-sm);
+  background: var(--info-soft);
+  color: var(--ink);
+}
+.npc-d-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+@media (max-width: 760px) {
+  .npc-titlebar > h1 {
+    font-size: var(--fs-xl);
+  }
+  .npc-seg {
+    width: 100%;
+  }
+  .npc-seg > button {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+  .npc-rates {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: var(--s-1);
+  }
+  .npc-rate {
+    flex: none;
+  }
 }
