@@ -1,0 +1,9 @@
+/* books view styles (the shared flip/books table + detail-panel rules live in ../flip/flip.css). */
+.books-view .book-chain-text {
+  font-size: var(--fs-md);
+  line-height: 1.5;
+}
+.books-view .book-chain {
+  font-family: var(--f-mono);
+  white-space: nowrap;
+}
