@@ -285,6 +285,8 @@ export interface Leg {
   comp?: number;
   /** this leg rests on the bazaar as an order (uses an order slot) */
   order?: boolean;
+  /** quote clamp passed through from buyQuote */
+  clamped?: Quote['clamped'];
   /** reported as limitedBy when this leg's rate binds (default 'volume') */
   bound?: SideBound;
 }

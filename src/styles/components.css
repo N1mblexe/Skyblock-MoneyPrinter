@@ -1126,6 +1126,10 @@ table.tbl-plain tbody tr:hover > td {
 .kit-fb-fields {
   gap: var(--s-2) var(--s-3);
 }
+.kit-fb-fields .seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
 .kit-fb-fields input[type="search"],
 .kit-fb-fields input[type="text"] {
   min-height: calc(var(--row-h) - 4px);

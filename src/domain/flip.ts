@@ -11,7 +11,7 @@ export function computeFlips(ctx: CalcCtx): FlipRow[] {
   for (const [id, p] of Object.entries(snap.products)) {
     const buy = (q: number): Leg | null => {
       const s = buySide(p, costMode, share, q, catalog.items[id]?.npcSell);
-      return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp, order: costMode === 'order' };
+      return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp, order: costMode === 'order', clamped: s.quote.clamped };
     };
     const sell = (q: number): Leg | null => {
       const s = sellSide(p, sellMode, share, q);
@@ -42,6 +42,7 @@ export function computeFlips(ctx: CalcCtx): FlipRow[] {
       tp: plan.tp,
       profitPerHour: plan.tp.unitsPerHour * plan.profit,
       risk: assessRisk(p, ctx.stats?.(id) ?? null),
+      ...(plan.buy.clamped ? { buyClamped: plan.buy.clamped } : {}),
     });
   }
   return rows;

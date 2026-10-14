@@ -306,12 +306,13 @@ describe('flip view', () => {
     expect(count()).toBe(visible + hiddenN);
   });
 
-  it('shows a banner and a message when the catalog failed', async () => {
+  it('shows a banner but still lists flips (id-derived names) when the catalog failed', async () => {
     store.set({ snapshot: SNAP, catalogError: 'boom' });
     mount();
+    await flush();
     expect(q('.banner').hidden).toBe(false);
     expect(q('.banner').textContent).toContain('boom');
-    expect(q('[data-testid="flip-msg"]').textContent).toContain('Katalog');
+    expect(rowKeys().length).toBeGreaterThan(0);
   });
 
   it('switches language', async () => {

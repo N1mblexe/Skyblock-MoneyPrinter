@@ -1,4 +1,5 @@
 // Memoized domain results shared by all views. Owner: history package.
+import { catalogFromFile } from '../data/catalog.ts';
 import { computeBookCombines } from '../domain/books.ts';
 import { computeCrafts } from '../domain/craft.ts';
 import { computeFlips } from '../domain/flip.ts';
@@ -6,7 +7,7 @@ import { computeFusion } from '../domain/fusion.ts';
 import { computeNpcFlips } from '../domain/npc.ts';
 import { toOpportunities } from '../domain/optimizer.ts';
 import { computeShopRows } from '../domain/shops.ts';
-import type { AppState, CalcCtx, Derived, HistoryRepo, Settings, Store } from '../types/contracts.ts';
+import type { AppState, CalcCtx, Catalog, Derived, HistoryRepo, Settings, Store } from '../types/contracts.ts';
 
 /** Settings that change computed numbers. Display-only ones (lang, theme, density, notify, hideSuspicious, autoRefresh) are left out. */
 export const CALC_SETTINGS = [
@@ -49,10 +50,11 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
       memo.clear();
       const ah = s.settings.ahEnabled ? s.ah : null;
       ctx =
-        s.snapshot && s.catalog
+        s.snapshot && (s.catalog || s.catalogError)
           ? {
               snap: s.snapshot,
-              catalog: s.catalog,
+              // catalog failed to load: flips/NPC still work with id-derived names
+              catalog: s.catalog ?? emptyCatalog(),
               settings: s.settings,
               stats: (id) => history.stats(id),
               ah: ah ? (id) => ah.lowestBin[id] ?? null : undefined,
@@ -91,4 +93,9 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     marketStats: () => history.marketStats(store.get().settings.taxRate),
   };
   return d;
+}
+
+let empty: Catalog | null = null;
+function emptyCatalog(): Catalog {
+  return (empty ??= catalogFromFile({ v: 1, generatedAt: '', items: {}, recipes: [] }));
 }

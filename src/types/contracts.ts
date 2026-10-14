@@ -280,6 +280,8 @@ export interface FlipRow {
   tp: Throughput;
   profitPerHour: number;
   risk: RiskReport;
+  /** buy order price was clamped (NPC floor raised it / ask capped it) */
+  buyClamped?: 'npcFloor' | 'ask';
 }
 
 export interface IngredientLine {

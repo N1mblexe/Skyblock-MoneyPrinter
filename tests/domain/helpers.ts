@@ -1,6 +1,6 @@
 // Test helpers for domain tests: build runtime Catalog / Snapshot from fixtures without depending on other packages.
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
+import { resolve } from 'node:path';
 import { deriveName } from '../../src/domain/ids.ts';
 import type { RawBazaar, RawOrder } from '../../src/types/api.ts';
 import type {
@@ -17,7 +17,8 @@ import type {
   Snapshot,
 } from '../../src/types/contracts.ts';
 
-const fixture = (name: string) => JSON.parse(readFileSync(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)), 'utf8'));
+// cwd-relative: under happy-dom's web transform import.meta.url is root-relative
+const fixture = (name: string) => JSON.parse(readFileSync(resolve(process.cwd(), 'tests/fixtures', name), 'utf8'));
 
 export function buildCatalog(f: CatalogFile): Catalog {
   const items: Record<string, ItemInfo> = {};
