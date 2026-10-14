@@ -285,6 +285,7 @@ export function createItemView(): View {
       return;
     }
     msgEl.hidden = true;
+    msgEl.replaceChildren();
     mainEl.hidden = false;
     offNote.hidden = !!p;
     bookSec.hidden = !p;

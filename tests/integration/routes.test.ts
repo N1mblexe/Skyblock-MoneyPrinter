@@ -240,11 +240,9 @@ describe('a11y invariants', () => {
     }
   });
 
-  // BUG (src/ui/shell.ts focusView, line 450): after an item -> item navigation (same view, update()), focus is left
-  // on the previous page's h1 because "focus is already inside the view" is read as "the view focused something
-  // itself". After #/item/NOPE_ITEM -> #/item/ENCHANTED_GOLD the focused h1 is the hidden "Ürün bulunamadı" heading
-  // (src/ui/views/item/itemView.ts keeps it in the hidden .item-msg, which precedes the item heading in the DOM).
-  it.fails('item -> unknown item -> item: focus lands on a visible h1 each time', async () => {
+  // Regression: item -> item navigation (same view, update()) used to leave focus on the previous page's h1,
+  // including a hidden "not found" heading.
+  it('item -> unknown item -> item: focus lands on a visible h1 each time', async () => {
     const b = await bootApp();
     await settle(2);
     await go(b, '#/flip');

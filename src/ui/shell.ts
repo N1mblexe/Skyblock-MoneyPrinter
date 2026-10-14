@@ -443,15 +443,17 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
     clearTimeout(readyTimer);
     alive = false;
   });
-  function focusView(force = false, attempt = 0): void {
+  function focusView(force = false, attempt = 0, before: Element | null = document.activeElement): void {
     nextFrame(() => {
       if (!alive) return;
       const active = document.activeElement;
-      if (!force && active && active !== viewRoot && viewRoot.contains(active)) return; // the view focused something itself
+      const visible = (el: Element) => !el.closest('[hidden]');
+      // the view focused something itself since the navigation (not the previous page's still-focused h1)
+      if (!force && active && active !== before && active !== viewRoot && viewRoot.contains(active) && visible(active)) return;
       if (!force && (currentPalette() || drawers.some((d) => d.isOpen()))) return;
-      const h1 = viewRoot.querySelector<HTMLElement>('h1');
+      const h1 = [...viewRoot.querySelectorAll<HTMLElement>('h1')].find(visible) ?? null;
       if (!h1 && attempt === 0 && !force) {
-        focusView(false, 1); // views that render on the next frame
+        focusView(false, 1, before); // views that render on the next frame
         return;
       }
       const target = h1 ?? viewRoot;
