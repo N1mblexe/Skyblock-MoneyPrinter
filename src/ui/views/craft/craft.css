@@ -1,135 +1,125 @@
-/* craft view styles */
+/* craft view styles (scoped under .craft-view; theme tokens only) */
 .craft-view {
-  display: grid;
-  gap: 12px;
+  gap: var(--s-3);
   min-width: 0;
+  /* the lines table has 10 columns: give the docked panel a bit more room than the default */
+  --detail-w: clamp(420px, 36vw, 560px);
+}
+.craft-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.craft-title {
+  margin: 0;
+  font-size: var(--fs-2xl);
+}
+.craft-title:focus {
+  outline: none;
+}
+.craft-title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .craft-intro {
   margin: 0;
 }
-.craft-filters .filters {
-  grid-template-columns: repeat(auto-fit, minmax(min(170px, 100%), 1fr));
-}
-.craft-search {
-  grid-column: span 2;
-}
-@media (max-width: 480px) {
-  .craft-search {
-    grid-column: auto;
-  }
-}
-.craft-kind {
-  align-self: start;
-  min-height: 36px;
-  width: max-content;
-}
-.craft-state[hidden],
-.craft-table[hidden] {
+.craft-view .craft-state[hidden],
+.craft-view .tbl[hidden],
+.craft-view .craft-tools[hidden] {
   display: none;
 }
 
-/* output cell */
-.craft-badges {
-  display: block;
-  margin-top: 3px;
+/* filter bar: segments keep their natural width; at table widths they take two grid tracks */
+.craft-bar .seg {
+  max-width: 100%;
+  flex-wrap: wrap;
+  width: max-content;
 }
-.badge.craft-forge {
+@media (min-width: 760px) {
+  .craft-bar .kit-fb-fields > .field:has(> .seg) {
+    grid-column: span 2;
+  }
+}
+
+/* toolbar extra: count, hidden-suspect toggle, unpriced count */
+.craft-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-3);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+
+/* output cell: one line (name + badges) + one sub line (inputs), both clipped to fit the fixed row height */
+.craft-view .craft-name {
+  min-width: 220px;
+  max-width: 34ch;
+}
+.craft-line1 {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  white-space: nowrap;
+  overflow: hidden;
+}
+.craft-line1 > a {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.craft-line1 .badge + .badge,
+.craft-line1 a + .badge {
+  margin-left: 0;
+}
+.craft-n {
+  font-family: var(--f-mono);
+  color: var(--muted);
+  font-size: var(--fs-xs);
+}
+.craft-view .craft-sub {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--f-body);
+}
+.craft-view .craft-unpriced-ids {
+  color: var(--warn);
+}
+.craft-view tr.craft-unpriced > td,
+.craft-view .kcard.craft-unpriced {
+  color: var(--muted);
+}
+.craft-view .badge.craft-forge {
   background: var(--violet-soft);
   color: var(--violet);
   text-transform: none;
   letter-spacing: 0.02em;
 }
-.craft-inputs,
-.craft-req,
-.craft-unpriced-ids,
-.craft-via {
-  display: block;
-  font-weight: 400;
-  line-height: 1.35;
-}
-.craft-inputs {
-  font-size: 0.76rem;
-  color: var(--muted);
-  margin-top: 2px;
-  max-width: 42ch;
-}
-.craft-req {
-  font-style: italic;
-}
-.craft-unpriced-ids {
+.craft-view .badge.craft-src-ah {
+  background: var(--warn-soft);
   color: var(--warn);
+  box-shadow: inset 0 0 0 1px var(--warn);
 }
-tr.craft-unpriced > td {
+.craft-view .badge.craft-off {
+  background: transparent;
   color: var(--muted);
+  box-shadow: inset 0 0 0 1px var(--line);
 }
-tr.craft-unpriced > td .badge,
-tr.craft-unpriced > td a {
-  opacity: 0.75;
-}
-
-/* detail toggle (not a button: the whole row toggles) */
-.craft-tog {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.78rem;
-  font-weight: 600;
-  color: var(--accent);
-}
-.craft-chev {
-  display: inline-block;
-  transition: transform 0.15s ease;
-}
-tr.open .craft-chev {
-  transform: rotate(180deg);
-}
-
-/* detail panel */
-.craft-detail {
-  max-width: 900px;
-}
-.craft-steps {
-  margin: 0;
-  padding-left: 1.4em;
-  display: grid;
-  gap: 4px;
-  font-size: 0.9rem;
-}
-.craft-steps b {
-  font-family: var(--f-mono);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.craft-ing-title {
-  margin: 0;
-  font-size: 0.78rem;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-}
-.craft-ing-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.craft-ing tbody tr:last-child > td {
-  border-bottom: none;
-}
-.craft-ing th {
-  position: static;
-}
-.craft-ing .name-cell {
-  min-width: 180px;
-}
-.craft-via {
-  color: var(--violet);
-  margin-top: 2px;
-}
-.craft-bott-row > td {
-  background: var(--bad-soft);
-}
-.craft-npc-limit {
+.craft-why-npcLimit,
+.craft-why-slots,
+.craft-why-forge {
   color: var(--info);
+}
+.craft-star {
+  color: var(--muted);
+  font-size: var(--fs-lg);
+  line-height: 1;
+}
+.craft-star.on,
+.craft-star[aria-pressed="true"] {
+  color: var(--warn);
 }
 
 /* let the long numeric headers wrap so more columns fit without side-scrolling */
@@ -138,10 +128,171 @@ tr.open .craft-chev {
   vertical-align: bottom;
   min-width: 5.5em;
 }
-.craft-table .tbl-wrap > table > thead th.num .th-btn {
-  text-align: right;
-  justify-content: flex-end;
+
+/* ---------------------------------------------------------------- detail panel */
+.craft-detail {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+  font-size: var(--fs-md);
 }
-.craft-table .tbl-wrap > table > thead th.name-cell {
-  min-width: 200px;
+.craft-d-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.craft-d-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+}
+.craft-d-badges .badge + .badge {
+  margin-left: 0;
+}
+.craft-d-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+.craft-watch[aria-pressed="true"] {
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.craft-sum {
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+}
+.craft-sum > div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+.craft-sum dt,
+.craft-sum dd {
+  margin: 0;
+}
+.craft-sec {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+}
+.craft-sec > h3 {
+  margin: 0;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+}
+.craft-steps {
+  margin: 0;
+  padding-left: 1.4em;
+  display: grid;
+  gap: var(--s-1);
+}
+.craft-buys {
+  margin: var(--s-1) 0 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 2px;
+}
+.craft-total {
+  margin: var(--s-1) 0 0;
+}
+.craft-steps b {
+  font-family: var(--f-mono);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.craft-notes {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: var(--s-1);
+  color: var(--muted);
+}
+.craft-notes b {
+  color: var(--ink);
+}
+.craft-slip-bad {
+  color: var(--warn);
+}
+
+/* ingredient + output lines: scrolls sideways inside the panel; the item column stays put */
+.craft-ing-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.craft-ing-wrap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.craft-ing {
+  font-size: var(--fs-sm);
+}
+.craft-ing th,
+.craft-ing td {
+  white-space: nowrap;
+}
+.craft-ing thead th {
+  position: static;
+}
+.craft-ing tbody tr:last-child > * {
+  border-bottom: none;
+}
+.craft-ing tbody th.name-cell {
+  position: sticky;
+  left: 0;
+  top: auto;
+  z-index: 1;
+  background: var(--panel);
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: inherit;
+  color: var(--ink);
+  min-width: 170px;
+  max-width: 230px;
+  white-space: normal;
+  text-align: left;
+  font-weight: 400;
+}
+.craft-role {
+  display: block;
+  font-size: var(--fs-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.craft-role-out {
+  color: var(--accent);
+}
+.craft-l-out > * {
+  border-top: 2px solid var(--line);
+}
+.craft-via {
+  display: block;
+  color: var(--violet);
+  margin-top: 2px;
+}
+.craft-few {
+  font-size: var(--fs-xs);
+  padding: 0 6px;
+  color: var(--warn);
+  border-color: var(--warn);
+}
+.craft-ing tbody tr.craft-bott-row > * {
+  background: var(--bad-soft);
+}
+.craft-npc-limit {
+  color: var(--info);
+}
+
+/* how-it-works footnote */
+.craft-note > summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink);
+}
+.craft-note-body {
+  margin-top: var(--s-2);
 }
