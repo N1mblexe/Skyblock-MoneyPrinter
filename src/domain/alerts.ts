@@ -1,6 +1,7 @@
 // Alert rule evaluation (pure). Owner: history package.
 import type { AlertEvent, AlertMetric, AlertRule, CalcCtx } from '../types/contracts.ts';
-import { afterTax, buySide, planTrade, sellSide, type Leg, type TradePlan } from './pricing.ts';
+import { planFlip } from './flip.ts';
+import type { TradePlan } from './pricing.ts';
 
 const fin = (x: number | null | undefined): x is number => typeof x === 'number' && Number.isFinite(x);
 
@@ -10,18 +11,7 @@ const fin = (x: number | null | undefined): x is number => typeof x === 'number'
  */
 export function flipPlanFor(id: string, ctx: CalcCtx): TradePlan | null {
   const p = ctx.snap.products[id];
-  if (!p) return null;
-  const { costMode, sellMode, share, taxRate } = ctx.settings;
-  const npcSell = ctx.catalog.items[id]?.npcSell;
-  const buy = (q: number): Leg | null => {
-    const s = buySide(p, costMode, share, q, npcSell);
-    return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp };
-  };
-  const sell = (q: number): Leg | null => {
-    const s = sellSide(p, sellMode, share, q);
-    return s && { price: s.quote.price, net: afterTax(s.quote.price, taxRate), rate: s.rate, depth: s.depth, comp: s.comp };
-  };
-  return planTrade(buy, sell, ctx.settings, costMode === 'insta' || sellMode === 'insta');
+  return p ? planFlip(id, p, ctx) : null;
 }
 
 /**
