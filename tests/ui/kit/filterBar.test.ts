@@ -51,6 +51,17 @@ describe('createFilterBar', () => {
     expect($<HTMLButtonElement>('.kit-fb-reset').disabled).toBe(true);
   });
 
+  it('a pending number edit survives another field changing the state', () => {
+    const { qs, $ } = setup();
+    const num = $<HTMLInputElement>('input[data-filter="minVol"]');
+    num.value = '500';
+    num.dispatchEvent(new Event('input'));
+    $<HTMLButtonElement>('.seg button[data-value="ok"]').click(); // state changes while minVol is still debouncing
+    expect(num.value).toBe('500');
+    vi.advanceTimersByTime(FILTER_DEBOUNCE_MS);
+    expect(qs.get()).toMatchObject({ minVol: 500, risk: 'ok' });
+  });
+
   it('debounces search/number input, counts active filters, reset clears', () => {
     const { qs, $ } = setup();
     const search = $<HTMLInputElement>('input[type="search"]');

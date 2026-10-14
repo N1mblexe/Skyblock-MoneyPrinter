@@ -230,7 +230,7 @@ export function createCraftView(): View {
         },
         selectedKey: null,
         columnsKey: 'craft',
-        toolbar: { columns: true, exportName: 'crafts', onReset: () => qs?.reset(), extra },
+        toolbar: { columns: true, exportName: 'crafts', extra },
         rowActions: (r) => watchButton(env, r),
         onRowAction: (action, r) => {
           if (action === 'watch') toggleWatch(r);

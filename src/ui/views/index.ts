@@ -41,6 +41,3 @@ export const NAV: NavEntry[] = [
   { id: 'plan', group: 'tools' },
   { id: 'watch', group: 'tools' },
 ];
-
-/** @deprecated kept for the current shell until the Wave 2 shell lands */
-export const TAB_ORDER: RouteId[] = NAV.map((n) => n.id);

@@ -532,7 +532,7 @@ export function createNpcView(): View {
         rowClass: (r) => (r.risk.level === 'suspect' ? 'npc-suspect' : ''),
         emptyText: () => flipEmpty || t('common.noRows'),
         columnsKey: 'npc',
-        toolbar: { columns: true, exportName: 'npc-flips', onReset: () => flipQs.reset(), extra: h('div', { class: 'npc-tb' }, flipCount, flipHidden) },
+        toolbar: { columns: true, exportName: 'npc-flips', extra: h('div', { class: 'npc-tb' }, flipCount, flipHidden) },
         rowActions: (r) => star(r.id, r.name),
         onRowAction: (a, r) => a === 'watch' && ctx?.watch.toggle(r.id),
       });
@@ -569,7 +569,7 @@ export function createNpcView(): View {
         rowClass: (r) => (r.risk?.level === 'suspect' ? 'npc-suspect' : r.value == null ? 'npc-unpriced' : ''),
         emptyText: () => shopEmpty || t('common.noRows'),
         columnsKey: 'npc-shops',
-        toolbar: { columns: true, exportName: 'npc-shops', onReset: () => shopQs.reset(), extra: h('div', { class: 'npc-tb' }, shopCount, shopHidden) },
+        toolbar: { columns: true, exportName: 'npc-shops', extra: h('div', { class: 'npc-tb' }, shopCount, shopHidden) },
         rowActions: (r) => star(r.id, r.name),
         onRowAction: (a, r) => a === 'watch' && ctx?.watch.toggle(r.id),
       });

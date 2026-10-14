@@ -12,7 +12,8 @@ export const defaultSettings: Settings = {
   hideSuspicious: true,
   autoRefresh: true,
   lang: 'tr',
-  theme: 'auto',
+  // dark-first terminal look; 'auto' follows the system
+  theme: 'dark',
   orderSlots: ORDER_SLOTS_DEFAULT,
   npcDailyLimit: NPC_DAILY_LIMIT_DEFAULT,
   fillModel: FILL_MODEL_DEFAULT,

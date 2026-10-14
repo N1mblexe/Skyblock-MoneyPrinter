@@ -368,7 +368,7 @@ export function createPlanView(): View {
       onSortChange: (sort) => qs.set({ sort }),
       onActivate: openDetail,
       columnsKey: 'plan',
-      toolbar: { columns: true, exportName: 'plan', onReset: () => qs.reset() },
+      toolbar: { columns: true, exportName: 'plan' },
       rowActions: watchBtn,
       onRowAction: (action, r) => {
         if (action === 'watch') ctx?.watch.toggle(r.opp.id);

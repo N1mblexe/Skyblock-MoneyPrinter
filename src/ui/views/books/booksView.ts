@@ -404,7 +404,7 @@ export function createBooksView(): View {
         rowClass: (r) => (r.risk.level === 'ok' ? '' : `risk-row-${r.risk.level}`),
         emptyText: () => emptyText || t('books.empty'),
         columnsKey: 'books',
-        toolbar: { columns: true, exportName: 'books', onReset: () => qs.reset(), extra },
+        toolbar: { columns: true, exportName: 'books', extra },
         rowActions: (r) => watchButton(ctx.watch.has(r.id), r.name),
         onRowAction: (action, r) => {
           if (action === 'watch') toggleWatch(r.id);

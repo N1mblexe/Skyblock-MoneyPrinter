@@ -405,7 +405,7 @@ export function createFlipView(): View {
         rowClass: (r) => (r.risk.level === 'ok' ? '' : `risk-row-${r.risk.level}`),
         emptyText: () => emptyText || t('flip.empty'),
         columnsKey: 'flip',
-        toolbar: { columns: true, exportName: 'flips', onReset: () => qs.reset(), extra },
+        toolbar: { columns: true, exportName: 'flips', extra },
         rowActions: (r) => watchButton(ctx.watch.has(r.id), r.name),
         onRowAction: (action, r) => {
           if (action === 'watch') toggleWatch(r.id);

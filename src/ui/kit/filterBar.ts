@@ -148,7 +148,7 @@ export function createFilterBar<V extends object>(specs: FilterSpec[], state: Qu
           sync(v) {
             const cur = parseNumberInput(inp.value);
             const want = (v[key] as number | null | undefined) ?? null;
-            if (cur !== want) {
+            if (cur !== want && !push.pending()) {
               inp.value = want == null ? '' : String(want);
               inp.removeAttribute('aria-invalid');
             }
