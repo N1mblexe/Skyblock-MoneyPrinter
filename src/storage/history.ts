@@ -6,6 +6,7 @@ import {
   HISTORY_RECENT_MS,
   LATEST_BOOK_DEPTH,
 } from '../config.ts';
+import { marketStatFromColumns } from '../domain/marketStats.ts';
 import { pctChange } from '../domain/stats.ts';
 import type { HistoryPoint, HistoryRange, HistoryRepo, MarketStat, PriceStats, Product, Snapshot } from '../types/contracts.ts';
 import { openDb, reqP, txDone } from './db.ts';
@@ -23,6 +24,8 @@ const DB_VERSION = 1;
 const FIELDS = 6;
 const LATEST_KEY = 'latest';
 const CHANGE_MIN_SPAN_MS = 20 * 3600_000;
+/** ids per block in marketStats (keeps the column buffers cache-sized) */
+const STATS_CHUNK = 256;
 
 interface IdsRec {
   v: number;
@@ -115,12 +118,16 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
   const q15: Q15Rec[] = [];
   /** lastUpdated values already recorded */
   const seen = new Set<number>();
+  /** bucket keys of every stored q15 record (the DB holds 7d, memory only 24h of them); for info() */
+  const q15Keys: number[] = [];
   let latestMem: Snapshot | null = null;
   let queue: Promise<void> = Promise.resolve();
 
   // derived-data cache, invalidated on every record()
   let rev = 0;
   const cache = new Map<string, { key: string; points: HistoryPoint[]; stats: PriceStats | null | undefined }>();
+  /** marketStats memo per taxRate */
+  const statsMemo = new Map<number, { key: string; stats: ReadonlyMap<string, MarketStat> }>();
 
   function addVersion(v: number, ids: string[]): void {
     versions.set(v, { ids, index: new Map(ids.map((id, i) => [id, i])) });
@@ -135,6 +142,7 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     dropBefore(raw, t - HISTORY_RAW_KEEP_MS, (r) => r.ts);
     dropBefore(q15, t - memQ15Keep(), (r) => r.at);
     const cut = t - HISTORY_Q15_KEEP_MS;
+    dropBefore(q15Keys, cut, (k) => k); // same cut as the DB prune (keys below t - 7d)
     for (const ts of seen) if (ts < cut) seen.delete(ts);
   }
 
@@ -162,10 +170,11 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
         reqP(tx.objectStore('ids').getAll() as IDBRequest<IdsRec[]>),
         reqP(rawS.getAll() as IDBRequest<RawRec[]>),
         reqP(q15S.getAll(IDBKeyRange.lowerBound(bucketOf(t - HISTORY_RECENT_MS))) as IDBRequest<Q15Rec[]>),
+        reqP(q15S.getAllKeys() as IDBRequest<number[]>),
       ]);
       all.catch(() => undefined); // surfaced via `done` if the transaction fails
       await done;
-      const [vRaw, vQ15, allIds, rawRecs, q15Recs] = await all;
+      const [vRaw, vQ15, allIds, rawRecs, q15Recs, keys] = await all;
       const maxV = allIds.reduce((m, r) => Math.max(m, r.v), 0);
       const keepFrom = Math.min(vRaw, vQ15, maxV);
       const stale: number[] = [];
@@ -179,6 +188,8 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       q15.sort((a, b) => a.ts - b.ts);
       for (const r of raw) seen.add(r.ts);
       for (const r of q15) seen.add(r.at);
+      for (const k of keys) if (typeof k === 'number') q15Keys.push(k);
+      q15Keys.sort((a, b) => a - b);
       pruneMemory(t);
       if (stale.length) await deleteIds(stale);
     } catch (e) {
@@ -190,6 +201,7 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       curV = 0;
       raw.length = 0;
       q15.length = 0;
+      q15Keys.length = 0;
       seen.clear();
     }
   }
@@ -352,6 +364,116 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     return { n, medianAsk, medianBid, madAsk, madBid, change24h };
   }
 
+  function invalidate(): void {
+    rev++;
+    cache.clear();
+    recentList = null;
+    statsMemo.clear();
+  }
+
+  /**
+   * MarketStat for every id in the recent (24h) records without building point objects: ids are processed in
+   * blocks of STATS_CHUNK; for each block one sweep over the records copies the block's Float32 cells into per-id
+   * column buffers (cache-sized), then marketStatFromColumns summarises each id from subarray views.
+   * Every record cell is read once. ~20 ms for 2,200 ids x 280 records on a desktop (see the bench test).
+   */
+  function computeMarketStats(taxRate: number, key: string): ReadonlyMap<string, MarketStat> {
+    const recs = recentRecords(key);
+    const R = recs.length;
+    const out = new Map<string, MarketStat>();
+    if (R === 0) return out;
+    // global id numbering across the id versions in use
+    const gIndex = new Map<string, number>();
+    const gIds: string[] = [];
+    const used = [...new Set(recs.map((r) => r.v))];
+    for (const v of used) {
+      for (const id of versions.get(v)?.ids ?? []) {
+        if (gIndex.has(id)) continue;
+        gIndex.set(id, gIds.length);
+        gIds.push(id);
+      }
+    }
+    const N = gIds.length;
+    // per version: global index -> row (-1 = absent)
+    const inv = new Map<number, Int32Array>();
+    for (const v of used) {
+      const a = new Int32Array(N).fill(-1);
+      (versions.get(v)?.ids ?? []).forEach((id, row) => (a[gIndex.get(id)!] = row));
+      inv.set(v, a);
+    }
+    const recInv = recs.map((r) => inv.get(r.v)!);
+    const C = Math.min(N, STATS_CHUNK);
+    const cnt = new Int32Array(C);
+    const ts = new Float64Array(C * R);
+    const bid = new Float32Array(C * R);
+    const ask = new Float32Array(C * R);
+    const bw = new Float32Array(C * R);
+    const sw = new Float32Array(C * R);
+    const t = now();
+    const scratch = new Float64Array(2 * R);
+    for (let g0 = 0; g0 < N; g0 += C) {
+      const g1 = Math.min(N, g0 + C);
+      cnt.fill(0);
+      for (let r = 0; r < R; r++) {
+        const rowOf = recInv[r]!;
+        const d = recs[r]!.data;
+        const rts = recs[r]!.ts;
+        for (let g = g0; g < g1; g++) {
+          const row = rowOf[g]!;
+          if (row < 0) continue;
+          const o = row * FIELDS;
+          const b = d[o]!;
+          const a = d[o + 1]!;
+          if (Number.isNaN(b) && Number.isNaN(a)) continue; // same rule as pointOf
+          const j = g - g0;
+          const k = j * R + cnt[j]!++;
+          ts[k] = rts;
+          bid[k] = b;
+          ask[k] = a;
+          bw[k] = d[o + 2]!;
+          sw[k] = d[o + 3]!;
+        }
+      }
+      for (let g = g0; g < g1; g++) {
+        const j = g - g0;
+        const n = cnt[j]!;
+        if (n === 0) continue;
+        const lo = j * R;
+        const cols = {
+          ts: ts.subarray(lo, lo + n),
+          bid: bid.subarray(lo, lo + n),
+          ask: ask.subarray(lo, lo + n),
+          buyWeek: bw.subarray(lo, lo + n),
+          sellWeek: sw.subarray(lo, lo + n),
+        };
+        out.set(gIds[g]!, marketStatFromColumns(gIds[g]!, cols, n, t, taxRate, scratch));
+      }
+    }
+    return out;
+  }
+
+  async function doClear(): Promise<void> {
+    await ensureInit();
+    raw.length = 0;
+    q15.length = 0;
+    q15Keys.length = 0;
+    seen.clear();
+    versions.clear();
+    curV = 0;
+    latestMem = null;
+    invalidate();
+    if (!db) return;
+    try {
+      // ids go too: they only describe rows of the deleted records. Schema/version untouched.
+      const tx = db.transaction(['latest', 'ids', 'raw', 'q15'], 'readwrite');
+      const done = txDone(tx);
+      for (const name of ['latest', 'ids', 'raw', 'q15']) tx.objectStore(name).clear();
+      await done;
+    } catch (e) {
+      warn('clearing history failed', e);
+    }
+  }
+
   async function writeRecord(ts: number, ver: { v: number; created: IdsRec | null }, data: Float32Array, t: number): Promise<void> {
     if (!db) return;
     const tx = db.transaction(['ids', 'raw', 'q15'], 'readwrite');
@@ -393,9 +515,9 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       const existing = q15.find((r) => r.ts === bucket);
       if (!existing || existing.at < ts) upsertSorted(q15, { ts: bucket, at: ts, v: ver.v, data }, (r) => r.ts);
     }
+    if (ts >= t - HISTORY_Q15_KEEP_MS) upsertSorted(q15Keys, bucket, (k) => k);
     pruneMemory(t);
-    rev++;
-    cache.clear();
+    invalidate();
 
     try {
       await writeRecord(ts, ver, data, t);
@@ -476,19 +598,32 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       return looksLikeSnapshot(s) ? { ...s, source: 'cache' } : null;
     },
 
-    // Wave 0 stub: implemented by the history package (Wave 1).
-    marketStats(_taxRate: number): ReadonlyMap<string, MarketStat> {
-      return EMPTY_STATS;
+    marketStats(taxRate: number): ReadonlyMap<string, MarketStat> {
+      // keyed like recent(): new record or a new minute (the 24h window slides) -> recompute
+      const key = cacheKey();
+      const hit = statsMemo.get(taxRate);
+      if (hit?.key === key) return hit.stats;
+      const stats = computeMarketStats(taxRate, key);
+      statsMemo.set(taxRate, { key, stats });
+      return stats;
     },
 
+    /**
+     * raw = raw records (3h); q15 = stored 15-min buckets (7d, persistent store when there is one);
+     * oldest = earliest snapshot time still stored (for DB-only buckets: the bucket start).
+     */
     info() {
-      const oldest = Math.min(raw[0]?.ts ?? Infinity, q15[0]?.at ?? Infinity);
-      return { raw: raw.length, q15: q15.length, oldest: Number.isFinite(oldest) ? oldest : null, persistent: !!db };
+      const k0 = q15Keys[0];
+      const q0 = q15[0];
+      const qOldest = k0 === undefined || q0?.ts === k0 ? (q0?.at ?? Infinity) : k0;
+      const oldest = Math.min(raw[0]?.ts ?? Infinity, qOldest);
+      return { raw: raw.length, q15: q15Keys.length, oldest: Number.isFinite(oldest) ? oldest : null, persistent: !!db };
     },
 
-    // Wave 0 stub: implemented by the history package (Wave 1).
-    async clear(): Promise<void> {},
+    clear(): Promise<void> {
+      const p = queue.then(doClear);
+      queue = p.catch(() => undefined);
+      return p;
+    },
   };
 }
-
-const EMPTY_STATS: ReadonlyMap<string, MarketStat> = new Map();
