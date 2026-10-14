@@ -5,10 +5,13 @@ import { LS_VIEWPREFS } from '../../../src/config.ts';
 import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.ts';
 import '../../../src/i18n/common.ts';
 import { dictKeys, setLang, t } from '../../../src/i18n/index.ts';
+import '../../../src/state/alertsI18n.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type {
+  AhSnapshot,
   AppState,
+  MarketStat,
   Catalog,
   HistoryPoint,
   HistoryRange,
@@ -19,6 +22,9 @@ import type {
   View,
   ViewContext,
 } from '../../../src/types/contracts.ts';
+import { flipPlanFor } from '../../../src/domain/alerts.ts';
+import { fmtPct } from '../../../src/ui/format.ts';
+import { alertPrefill, alertValueFromInput, fmtPrice, fmtTrend, isBookId } from '../../../src/ui/views/item/helpers.ts';
 import { bookRows, createItemView, searchProducts } from '../../../src/ui/views/item/itemView.ts';
 import { lineChartSvg, nearestIndex, timeTicks } from '../../../src/ui/views/item/lineChart.ts';
 import bazaarJson from '../../fixtures/bazaar.json';
@@ -204,9 +210,11 @@ describe('item view', () => {
     await mount('ENCHANTED_MELON');
     setLang('en');
     await flush();
-    expect(q('[data-testid="order-book"] h3').textContent).toBe('Order book');
+    expect(q('[data-testid="order-book"] h2').textContent).toBe('Order book');
     expect(q('[data-range="3h"]').textContent).toBe('3h');
-    expect(q('[data-testid="recipes-out"] h3').textContent).toBe('Recipes producing this');
+    expect(q('[data-testid="recipes-out"] h2').textContent).toBe('Recipes producing this');
+    expect(q('[data-testid="item-watch"]').textContent).toBe('☆ Watch');
+    expect(q('[data-testid="item-flip"] h2').textContent).toBe('Your flip');
   });
 
   it('shows catalog state when recipes are missing', async () => {
@@ -225,6 +233,225 @@ describe('item view', () => {
     expect(history.seriesCalls.length).toBe(n);
     expect(root.children.length).toBe(0);
     view = { id: 'item', mount() {}, unmount() {} };
+  });
+});
+
+
+describe('item view: your flip, stats, AH, shard', () => {
+  const dd = (card: string, k: string) => q(`[data-testid="${card}"] dd[data-k="${k}"]`).textContent;
+
+  it('has a single h1 (the item name) and h2 card headings', async () => {
+    await mount('ENCHANTED_MELON');
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+    expect(q('h1').textContent).toBe('Enchanted Melon');
+    expect(root.querySelectorAll('.item-facts h2').length).toBeGreaterThan(3);
+  });
+
+  it('"your flip" matches the Flips tab in order mode, with hours and slots', async () => {
+    await mount('ENCHANTED_MELON');
+    const row = ctx.derived.flips().find((r) => r.id === 'ENCHANTED_MELON');
+    const plan = flipPlanFor('ENCHANTED_MELON', ctx.derived.calcCtx()!)!;
+    const buy = row?.buyAt ?? plan.buy.price;
+    expect(dd('item-flip', 'buy')).toBe(fmtPrice(buy));
+    expect(dd('item-flip', 'sell')).toBe(fmtPrice(row?.sellAt ?? plan.sell.price));
+    expect(dd('item-flip', 'profit')).toBe(fmtPrice(row?.profit ?? plan.profit));
+    if (row) {
+      expect(root.querySelector('[data-testid="item-flip"] dd[data-k="buyHours"]')).toBeTruthy();
+      expect(dd('item-flip', 'sellHours')).not.toBe('');
+      expect(dd('item-flip', 'slots')).toBe(String(row.tp.slots));
+    }
+    expect(q('[data-testid="flip-mode"]').textContent).toContain('buy order');
+  });
+
+  it('"your flip" follows insta cost and sell modes (same numbers as flipPlanFor / the Flips tab)', async () => {
+    await mount('ENCHANTED_MELON');
+    const orderBuy = dd('item-flip', 'buy');
+    store.set((s) => ({ settings: { ...s.settings, costMode: 'insta', sellMode: 'insta' } }));
+    await flush();
+    const plan = flipPlanFor('ENCHANTED_MELON', ctx.derived.calcCtx()!)!;
+    const row = ctx.derived.flips().find((r) => r.id === 'ENCHANTED_MELON');
+    expect(plan.buy.price).toBe(row?.buyAt ?? plan.buy.price);
+    expect(dd('item-flip', 'buy')).toBe(fmtPrice(plan.buy.price));
+    expect(dd('item-flip', 'sell')).toBe(fmtPrice(plan.sell.price));
+    expect(dd('item-flip', 'net')).toBe(fmtPrice(plan.sell.net));
+    expect(dd('item-flip', 'buy')).not.toBe(orderBuy);
+    const p = SNAP.products.ENCHANTED_MELON!;
+    expect(plan.buy.price).toBeGreaterThanOrEqual(p.ask!); // insta-buy pays the ask (or more), not bid + tick
+    expect(q('[data-testid="flip-mode"]').textContent).toContain('insta-buy');
+    expect(q('[data-testid="item-flip"]').textContent).toContain('Insta-buy ile alış');
+    // the NPC-floor banner only applies to buy orders
+    view.update!({ id: 'item', param: 'GOLD_INGOT' });
+    await flush();
+    expect(root.querySelectorAll('[data-testid="npc-floor"]').length).toBe(0);
+  });
+
+  it('marks unprofitable flips as not on the Flips tab', async () => {
+    await mount('ENCHANTED_MELON');
+    const losing = Object.keys(SNAP.products).find(
+      (id) => !ctx.derived.flips().some((r) => r.id === id) && flipPlanFor(id, ctx.derived.calcCtx()!) != null,
+    );
+    expect(losing).toBeTruthy();
+    if (!losing) return;
+    view.update!({ id: 'item', param: losing });
+    await flush();
+    expect(q('[data-testid="not-on-flip"]')).toBeTruthy();
+    expect(root.querySelector('[data-testid="item-flip"] dd[data-k="pph"]')).toBeNull();
+  });
+
+  it('market-stats card shows the cross-item stats, volume trend labelled as an estimate', async () => {
+    const stat: MarketStat = {
+      id: 'ENCHANTED_MELON',
+      n: 40,
+      change1h: -0.02,
+      change24h: 0.05,
+      volatility: 0.031,
+      spreadMedian: 0.08,
+      consistency: 0.75,
+      buyVolTrend: 1.25,
+      sellVolTrend: 0.8,
+    };
+    history.marketStats = () => new Map([['ENCHANTED_MELON', stat]]);
+    await mount('ENCHANTED_MELON');
+    expect(dd('item-stats', 'consistency')).toBe(fmtPct(0.75));
+    expect(dd('item-stats', 'spreadMedian')).toBe(fmtPct(0.08));
+    expect(dd('item-stats', 'volatility')).toBe(fmtPct(0.031));
+    expect(dd('item-stats', 'buyVolTrend')).toBe(fmtTrend(1.25));
+    expect(q('[data-testid="item-stats"] dd[data-k="change1h"]').classList.contains('neg')).toBe(true);
+    expect(q('[data-testid="item-stats"]').textContent).toContain('tahmin');
+    expect(q('[data-testid="item-stats"]').textContent).toContain('40');
+  });
+
+  it('market-stats card without history says so', async () => {
+    await mount('ENCHANTED_MELON');
+    expect(q('[data-testid="item-stats"]').textContent).toContain('Yeterli geçmiş yok');
+  });
+
+  it('AH card appears only with a lowest BIN and carries the caveat', async () => {
+    await mount('ENCHANTED_MELON');
+    expect(root.querySelector('[data-testid="item-ah"]')).toBeNull();
+    const ah: AhSnapshot = {
+      fetchedAt: Date.now() - 5 * 60_000,
+      lastUpdated: 0,
+      lowestBin: { ENCHANTED_MELON: { price: 1234, count: 3 } },
+      failedPages: [7],
+    };
+    store.set({ ah });
+    await flush();
+    expect(dd('item-ah', 'ahPrice')).toBe(fmtPrice(1234));
+    expect(dd('item-ah', 'ahCount')).toBe('3');
+    expect(dd('item-ah', 'ahAge')).toContain('5 dk');
+    const txt = q('[data-testid="item-ah"]').textContent!;
+    expect(txt).toContain('yıldız');
+    expect(txt).toContain('1 sayfa');
+  });
+
+  it('shows a reduced page for AH-only items (no book, chart or alert button)', async () => {
+    store.set({ ah: { fetchedAt: Date.now(), lastUpdated: 0, lowestBin: { HYPERION: { price: 9e8, count: 12 } } } });
+    await mount('HYPERION', { snapshot: SNAP, catalog: CATALOG });
+    expect(q('.item-msg').hidden).toBe(true);
+    expect(q('[data-testid="off-bazaar"]').hidden).toBe(false);
+    expect(q('[data-testid="order-book"]').hidden).toBe(true);
+    expect(q('[data-testid="item-ah"]')).toBeTruthy();
+    expect(root.querySelector('[data-testid="item-flip"]')).toBeNull();
+    expect(q('[data-testid="item-alert-btn"]').hidden).toBe(true);
+  });
+
+  it('shard card from catalog shard metadata', async () => {
+    const file = {
+      ...(catalogJson as object),
+      v: 2,
+      items: { ...(catalogJson as { items: object }).items, SHARD_SALMON: { n: 'Salmon Shard', bz: 1, sh: { r: 'RARE', f: ['Fish', 'Water'], a: 'Ocean' } } },
+    };
+    const cat = catalogFromFile(validateCatalogFile(file as unknown));
+    await mount('SHARD_SALMON', { snapshot: SNAP, catalog: cat });
+    expect(dd('item-shard', 'shardRarity')).toBe('RARE');
+    expect(dd('item-shard', 'shardFamily')).toBe('Fish, Water');
+    expect(dd('item-shard', 'shardAlignment')).toBe('Ocean');
+    view.update!({ id: 'item', param: 'ENCHANTED_MELON' });
+    await flush();
+    expect(root.querySelector('[data-testid="item-shard"]')).toBeNull();
+  });
+});
+
+describe('item view: header actions', () => {
+  it('★ toggles the watchlist and reflects it', async () => {
+    await mount('ENCHANTED_MELON');
+    const btn = q<HTMLButtonElement>('[data-testid="item-watch"]');
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+    btn.click();
+    expect(store.get().watchlist.map((w) => w.id)).toEqual(['ENCHANTED_MELON']);
+    await flush();
+    expect(btn.getAttribute('aria-pressed')).toBe('true');
+    expect(btn.textContent).toContain('★');
+    btn.click();
+    await flush();
+    expect(store.get().watchlist).toEqual([]);
+    expect(btn.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('add-alert form prefills ±5% and appends a rule to store.alerts', async () => {
+    await mount('ENCHANTED_MELON');
+    const form = q<HTMLFormElement>('[data-testid="item-alert-form"]');
+    expect(form.hidden).toBe(true);
+    q<HTMLButtonElement>('[data-testid="item-alert-btn"]').click();
+    expect(form.hidden).toBe(false);
+    expect(q('[data-testid="item-alert-btn"]').getAttribute('aria-expanded')).toBe('true');
+    const ask = SNAP.products.ENCHANTED_MELON!.ask!;
+    const val = q<HTMLInputElement>('[data-testid="alert-value"]');
+    expect(Number(val.value)).toBe(alertPrefill('ask', 'lt', ask));
+    expect(Number(val.value)).toBeCloseTo(ask * 0.95, 0);
+    const op = q<HTMLSelectElement>('[data-testid="alert-op"]');
+    op.value = 'gt';
+    op.dispatchEvent(new Event('change'));
+    expect(Number(val.value)).toBeCloseTo(ask * 1.05, 0);
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    const rules = store.get().alerts;
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatchObject({ id: 'ENCHANTED_MELON', metric: 'ask', op: 'gt', value: Number(val.value), enabled: true, cooldownMin: 15 });
+    expect(ctx.toast).toHaveBeenCalledWith(expect.stringContaining('Alarm eklendi'), 'ok');
+    expect(form.hidden).toBe(true);
+    await flush();
+    expect(q('.item-alert-count').hidden).toBe(false);
+    expect(q('.item-alert-count a').getAttribute('href')).toBe('#/watch');
+  });
+
+  it('percent metrics are typed in percent and stored as ratios; bad input is rejected', async () => {
+    await mount('ENCHANTED_MELON');
+    q<HTMLButtonElement>('[data-testid="item-alert-btn"]').click();
+    const metric = q<HTMLSelectElement>('[data-testid="alert-metric"]');
+    metric.value = 'flipMargin';
+    metric.dispatchEvent(new Event('change'));
+    const val = q<HTMLInputElement>('[data-testid="alert-value"]');
+    const form = q<HTMLFormElement>('[data-testid="item-alert-form"]');
+    val.value = 'abc';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(store.get().alerts).toHaveLength(0);
+    expect(val.getAttribute('aria-invalid')).toBe('true');
+    val.value = '12,5';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(store.get().alerts[0]).toMatchObject({ metric: 'flipMargin', op: 'lt', value: 0.125 });
+  });
+
+  it('copy id writes the id to the clipboard', async () => {
+    const writeText = vi.fn(async () => {});
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    await mount('ENCHANTED_MELON');
+    q<HTMLButtonElement>('[data-testid="item-copy"]').click();
+    await flush();
+    expect(writeText).toHaveBeenCalledWith('ENCHANTED_MELON');
+    expect(ctx.toast).toHaveBeenCalledWith('Kopyalandı', 'ok');
+  });
+
+  it('links to the Books tab for enchanted books (header and recipe rows)', async () => {
+    await mount('ENCHANTMENT_ULTIMATE_WISE_1');
+    expect(q('.item-links a[href="#/books?q=ENCHANTMENT_ULTIMATE_WISE_1"]')).toBeTruthy();
+    expect(q('.item-links a[href="#/flip?q=ENCHANTMENT_ULTIMATE_WISE_1"]')).toBeTruthy();
+    const out = q('[data-testid="recipes-out"]');
+    expect(out.querySelector('a[href="#/craft?q=ENCHANTMENT_ULTIMATE_WISE_1"]')).toBeTruthy();
+    expect(out.querySelector('a[href="#/books?q=ENCHANTMENT_ULTIMATE_WISE_1"]')).toBeTruthy();
+    view.update!({ id: 'item', param: 'ENCHANTED_MELON' });
+    await flush();
+    expect(root.querySelector('a[href^="#/books"]')).toBeNull();
   });
 });
 
@@ -280,6 +507,18 @@ describe('item helpers', () => {
     );
     const d = /d="([^"]+)"/.exec(out.svg)![1]!;
     expect(d.match(/M/g)).toHaveLength(2);
+  });
+
+  it('alert prefill and value helpers', () => {
+    expect(alertPrefill('ask', 'lt', 100)).toBe(95);
+    expect(alertPrefill('bid', 'gt', 100)).toBe(105);
+    expect(alertPrefill('flipMargin', 'gt', 0.1)).toBe(10.5);
+    expect(alertPrefill('flipProfit', 'gt', -10)).toBe(-9.5);
+    expect(alertValueFromInput('spreadPct', 12.5)).toBe(0.125);
+    expect(alertValueFromInput('ask', 12.5)).toBe(12.5);
+    expect(isBookId('ENCHANTMENT_SHARPNESS_5')).toBe(true);
+    expect(isBookId('ENCHANTED_GOLD')).toBe(false);
+    expect(fmtTrend(null)).toBe('—');
   });
 
   it('nearestIndex', () => {
