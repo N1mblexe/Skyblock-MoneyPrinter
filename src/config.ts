@@ -43,10 +43,6 @@ export const CRAFT_RECURSION_DEPTH = 3;
  * Caps NPC-bought ingredients and NPC->bazaar flips so NPC loops don't look unlimited.
  */
 export const NPC_DAILY_LIMIT_DEFAULT = 640;
-/** @deprecated use settings.npcDailyLimit (removed in Wave 3) */
-export const NPC_BUY_LIMIT_PER_DAY = NPC_DAILY_LIMIT_DEFAULT;
-/** @deprecated use settings.npcDailyLimit / 24 (removed in Wave 3) */
-export const NPC_BUY_RATE_PER_HOUR = NPC_BUY_LIMIT_PER_DAY / 24;
 /** Bazaar order slots (default for a mid-game profile; tune in settings). */
 export const ORDER_SLOTS_DEFAULT = 14;
 export const ORDER_SLOTS_MAX = 35;
