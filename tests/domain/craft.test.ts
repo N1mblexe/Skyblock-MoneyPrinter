@@ -1,8 +1,12 @@
-import { NPC_BUY_RATE_PER_HOUR } from '../../src/config.ts';
 import { describe, expect, it } from 'vitest';
+import { MAX_ORDER_UNITS } from '../../src/config.ts';
 import { computeCrafts } from '../../src/domain/craft.ts';
-import type { CatalogFile, CraftRow } from '../../src/types/contracts.ts';
-import { buildCatalog, catalogFile, ctx, makeProduct, snap, stats } from './helpers.ts';
+import { buyQuote } from '../../src/domain/pricing.ts';
+import { assessRisk } from '../../src/domain/risk.ts';
+import type { AhPrice, CatalogFile, CraftRow } from '../../src/types/contracts.ts';
+import { baseSettings, buildCatalog, catalog, catalogFile, ctx, makeProduct, P, snap, stats } from './helpers.ts';
+
+const NPC_RATE = baseSettings.npcDailyLimit / 24;
 
 const rowsBy = (rows: CraftRow[]) => new Map(rows.map((r) => [r.recipe.key, r]));
 
@@ -10,11 +14,11 @@ describe('computeCrafts (order/offer)', () => {
   const rows = computeCrafts(ctx());
   const by = rowsBy(rows);
 
-  it('only recipes with bazaar outputs', () => {
-    expect(rows.every((r) => r.recipe.output !== 'PAPER' && !r.id.startsWith('CYCLE_'))).toBe(true);
-    expect(by.has('PAPER#12')).toBe(false);
-    expect(by.has('CYCLE_A#17')).toBe(false);
-    expect(rows).toHaveLength(17);
+  it('every recipe, off-bazaar outputs flagged', () => {
+    expect(rows).toHaveLength(catalog.recipes.length);
+    expect(by.get('PAPER#12')).toMatchObject({ outputOffBazaar: true, unpriced: ['PAPER'], profitPerHour: 0 });
+    expect(by.get('CYCLE_A#17')!.outputOffBazaar).toBe(true);
+    expect(by.get('ENCHANTED_MELON#2')!.outputOffBazaar).toBeUndefined();
   });
 
   it('ENCHANTED_MELON from MELON by order', () => {
@@ -73,10 +77,10 @@ describe('computeCrafts (order/offer)', () => {
       ['STICK', 'npc'],
     ]);
     // NPC-bought ingredients are capped by the assumed daily shop limit
-    expect(r.lines[0]!.craftsPerHour).toBeCloseTo(NPC_BUY_RATE_PER_HOUR / 59, 9);
-    expect(r.lines[1]!.craftsPerHour).toBeCloseTo(NPC_BUY_RATE_PER_HOUR / 1, 9);
+    expect(r.lines[0]!.craftsPerHour).toBeCloseTo(NPC_RATE / 59, 9);
+    expect(r.lines[1]!.craftsPerHour).toBeCloseTo(NPC_RATE / 1, 9);
     expect(r.lines[0]!.bottleneck).toBe(true);
-    expect(r.inCraftsPerHour).toBeCloseTo(NPC_BUY_RATE_PER_HOUR / 59, 9);
+    expect(r.inCraftsPerHour).toBeCloseTo(NPC_RATE / 59, 9);
     expect(r.cost).toBeCloseTo(59 * 2.33 + 1, 9);
     // in insta mode WHEAT is still NPC (2.33 < 5.7)
     const insta = rowsBy(computeCrafts(ctx({ costMode: 'insta' }))).get('ENCHANTED_BREAD#11')!;
@@ -121,6 +125,26 @@ describe('computeCrafts (order/offer)', () => {
     expect(r.outCraftsPerHour).toBe(Infinity);
   });
 
+  it("NPC-valued crafts do not carry the output's bazaar risk", () => {
+    const r = by.get('ENCHANTED_GOLD_BLOCK#1')!;
+    const outFlags = assessRisk(P('ENCHANTED_GOLD_BLOCK')).flags;
+    expect(outFlags.length).toBeGreaterThan(0);
+    for (const f of outFlags) expect(r.risk.flags).not.toContain(f);
+    expect(r.risk).toEqual({ level: 'ok', score: 0, flags: [] });
+    // the bazaar-valued sibling still carries its output's flags
+    const melon = by.get('ENCHANTED_MELON#2')!;
+    expect(melon.risk.flags).toEqual(expect.arrayContaining(assessRisk(P('ENCHANTED_MELON')).flags));
+  });
+
+  it('slot limit binds: buy orders for 160 melons per craft + one sell offer', () => {
+    const r = rowsBy(computeCrafts(ctx({ orderSlots: 2, capital: 0, cycleHours: 168 }))).get('ENCHANTED_MELON#2')!;
+    expect(r.tp.limitedBy).toBe('slots');
+    expect(r.tp.batchQty).toBeCloseTo(MAX_ORDER_UNITS / 160, 9);
+    expect(r.tp.slots).toBe(2);
+    const free = rowsBy(computeCrafts(ctx({ capital: 0, cycleHours: 168, orderSlots: 35 }))).get('ENCHANTED_MELON#2')!;
+    expect(free.tp.slots).toBeLessThanOrEqual(35);
+  });
+
   it('no NaN anywhere', () => {
     for (const r of rows) {
       for (const v of [r.cost, r.value, r.profit, r.profitPerHour, r.tp.unitsPerHour, r.tp.batchQty]) expect(Number.isNaN(v)).toBe(false);
@@ -135,7 +159,7 @@ describe('computeCrafts (insta)', () => {
   it('chooses NPC MELON (2.5) over insta ask (4.9)', () => {
     const r = by.get('ENCHANTED_MELON#2')!;
     expect(r.lines[0]).toMatchObject({ source: 'npc', unit: 2.5, bottleneck: true });
-    expect(r.lines[0]!.craftsPerHour).toBeCloseTo(NPC_BUY_RATE_PER_HOUR / 160, 9);
+    expect(r.lines[0]!.craftsPerHour).toBeCloseTo(NPC_RATE / 160, 9);
     expect(r.cost).toBe(400);
     expect(r.value).toBeCloseTo(302 * 0.9875, 9);
     expect(r.outCraftsPerHour).toBeCloseTo((215043264 / 168) * 0.05, 6);
@@ -236,5 +260,119 @@ describe('computeCrafts recursion depth', () => {
     const [r] = computeCrafts({ ...ctx(), snap: s, catalog: buildCatalog(f) });
     expect(r!.lines[0]!.unit).toBe(100.1);
     expect(r!.cost).toBeCloseTo(200.2, 9);
+  });
+});
+
+describe('computeCrafts insta slippage (refine pass)', () => {
+  // ING: 50 units at 10, then a wall at 20. OUT: 20 bids at 300, then 200.
+  const ing = makeProduct({
+    id: 'ING',
+    asks: [
+      { price: 10, amount: 50, orders: 1 },
+      { price: 20, amount: 100_000, orders: 5 },
+    ],
+    bids: [{ price: 9, amount: 1000, orders: 5 }],
+    instaBuysWeek: 168 * 20_000, // 1000/h at share 0.05 -> 100 crafts/h
+  });
+  const out = makeProduct({
+    id: 'OUT',
+    bids: [
+      { price: 300, amount: 20, orders: 1 },
+      { price: 200, amount: 100_000, orders: 5 },
+    ],
+    asks: [{ price: 310, amount: 1000, orders: 1 }],
+    instaSellsWeek: 168 * 4000, // 200/h at share 0.05
+  });
+  const f: CatalogFile = {
+    ...catalogFile,
+    items: { OUT: { n: 'Out', bz: 1 }, ING: { n: 'Ing', bz: 1 } },
+    recipes: [{ o: 'OUT', c: 1, i: [['ING', 10]], k: 'craft' }],
+  };
+  const run = (over = {}) =>
+    computeCrafts({ ...ctx({ costMode: 'insta', sellMode: 'insta', ...over }), snap: { ...snap, products: { ING: ing, OUT: out } }, catalog: buildCatalog(f) })[0]!;
+
+  it('re-quotes ingredients and output at the batch size', () => {
+    const r = run();
+    // sequential: Q/100 + Q/200 = 1h -> Q = 66.67 crafts -> re-quoted at 67 crafts = 670 ING / 67 OUT
+    expect(r.tp.batchQty).toBeCloseTo(200 / 3, 9);
+    const qty1Cost = 10 * buyQuote(ing, 'insta', 10)!.price;
+    expect(qty1Cost).toBe(100);
+    expect(r.lines[0]!.unit).toBeCloseTo((50 * 10 + 620 * 20) / 670, 9);
+    expect(r.cost).toBeCloseTo((10 * (50 * 10 + 620 * 20)) / 670, 9);
+    expect(r.cost).toBeGreaterThan(qty1Cost * 1.9);
+    expect(r.value).toBeCloseTo(((20 * 300 + 47 * 200) / 67) * 0.9875, 9);
+    expect(r.profit).toBeCloseTo(r.value - r.cost, 9);
+    expect(r.profitPerHour).toBeCloseTo(r.tp.unitsPerHour * r.profit, 9);
+    expect(r.tp.slots).toBe(0); // insta legs use no order slots
+  });
+
+  it('order/offer modes are not re-quoted', () => {
+    const r = run({ costMode: 'order', sellMode: 'offer' });
+    expect(r.lines[0]!.unit).toBe(9.1);
+  });
+});
+
+describe('computeCrafts off-bazaar outputs', () => {
+  const f: CatalogFile = {
+    ...catalogFile,
+    items: { Y: { n: 'Y', nb: 1 }, GEAR_N: { n: 'Gear N', ns: 50 }, GEAR_A: { n: 'Gear A' }, GEAR_U: { n: 'Gear U' } },
+    recipes: [
+      { o: 'GEAR_N', c: 1, i: [['Y', 3]], k: 'forge', d: 3600 },
+      { o: 'GEAR_A', c: 2, i: [['Y', 3]], k: 'forge', d: 3600 },
+      { o: 'GEAR_U', c: 1, i: [['Y', 3]], k: 'forge', d: 3600 },
+    ],
+  };
+  const cat = buildCatalog(f);
+  const ah = (count: number) => (id: string): AhPrice | null => (id === 'GEAR_A' ? { price: 1000, count } : null);
+  const run = (over = {}, count = 1) => rowsBy(computeCrafts({ ...ctx(over, { ah: ah(count) }), catalog: cat }));
+
+  it('NPC-valued, AH-valued and unpriced forge outputs', () => {
+    const by = run();
+    const n = by.get('GEAR_N#0')!;
+    expect(n).toMatchObject({ outputOffBazaar: true, valueSource: 'npc', value: 50, cost: 3, unpriced: [] });
+    expect(n.outCraftsPerHour).toBe(Infinity);
+    // NPC in (26.67/h / 3 per craft), NPC out: the forge (2 slots, 1h) binds
+    expect(n.tp).toMatchObject({ limitedBy: 'forge', unitsPerHour: 2, slots: 0 });
+    expect(n.profitPerHour).toBeCloseTo(2 * 47, 9);
+
+    const a = by.get('GEAR_A#1')!;
+    expect(a).toMatchObject({ outputOffBazaar: true, valueSource: 'ah', value: 2000, cost: 3, unpriced: [] });
+    expect(a.outCraftsPerHour).toBe(Infinity);
+    expect(a.risk.flags).toEqual(['LOW_VOLUME']); // fewer than AH.minCount listings
+    expect(a.tp.unitsPerHour).toBe(2);
+
+    const u = by.get('GEAR_U#2')!;
+    expect(u).toMatchObject({ outputOffBazaar: true, unpriced: ['GEAR_U'], cost: 0, value: 0, profitPerHour: 0, margin: null });
+  });
+
+  it('enough AH listings -> no AH flag; no ctx.ah -> unpriced', () => {
+    expect(run({}, 5).get('GEAR_A#1')!.risk.flags).toEqual([]);
+    const plain = rowsBy(computeCrafts({ ...ctx(), catalog: cat }));
+    expect(plain.get('GEAR_A#1')!.unpriced).toEqual(['GEAR_A']);
+  });
+
+  it('NPC daily limit binds without the forge, and npcDailyLimit sets the rate', () => {
+    const r = run({ forgeSlots: 100 }).get('GEAR_N#0')!;
+    expect(r.lines[0]!.craftsPerHour).toBeCloseTo(640 / 24 / 3, 9);
+    expect(r.tp.limitedBy).toBe('npcLimit');
+    expect(r.tp.unitsPerHour).toBeCloseTo(640 / 24 / 3, 9);
+    const r2 = run({ forgeSlots: 100, npcDailyLimit: 72 }).get('GEAR_N#0')!;
+    expect(r2.lines[0]!.craftsPerHour).toBeCloseTo(1, 9);
+    expect(r2.tp.unitsPerHour).toBeCloseTo(1, 9);
+  });
+
+  it('NPC limit propagates through sub-crafts', () => {
+    const g: CatalogFile = {
+      ...catalogFile,
+      items: { TOP: { n: 'Top', ns: 100 }, MID: { n: 'Mid' }, Y: { n: 'Y', nb: 1 } },
+      recipes: [
+        { o: 'TOP', c: 1, i: [['MID', 2]], k: 'craft' },
+        { o: 'MID', c: 1, i: [['Y', 4]], k: 'craft' },
+      ],
+    };
+    const [r] = computeCrafts({ ...ctx(), catalog: buildCatalog(g) });
+    expect(r!.lines[0]).toMatchObject({ source: 'craft', viaRecipe: 'MID#1' });
+    expect(r!.inCraftsPerHour).toBeCloseTo(640 / 24 / 8, 9);
+    expect(r!.tp.limitedBy).toBe('npcLimit');
   });
 });

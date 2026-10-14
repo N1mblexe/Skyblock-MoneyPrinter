@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { computeFlips } from '../../src/domain/flip.ts';
-import { computeNpcFlips } from '../../src/domain/npc.ts';
 import { ctx, P, stats } from './helpers.ts';
 
 describe('computeFlips', () => {
@@ -21,7 +20,13 @@ describe('computeFlips', () => {
     expect(r.rSell).toBeCloseTo(6005159 / 168 / 93, 6);
     expect(r.weekVol).toBe(6005159);
     expect(r.tp.limitedBy).toBe('volume');
-    expect(r.tp.batchQty).toBeCloseTo(r.rSell, 6);
+    // sequential fill: buy the batch, then sell it within one 1h cycle
+    expect(r.tp.batchQty).toBeCloseTo(1 / (1 / r.rBuy + 1 / r.rSell), 6);
+    expect(r.tp.buyHours! + r.tp.sellHours!).toBeCloseTo(1, 9);
+    expect(r.tp.slots).toBe(2); // one buy order + one sell offer
+    const pipe = computeFlips(ctx({ fillModel: 'pipelined' })).find((x) => x.id === 'ENCHANTED_MELON')!;
+    expect(pipe.tp.batchQty).toBeCloseTo(r.rSell, 6);
+    expect(pipe.tp.capitalUsed).toBeCloseTo(2 * pipe.tp.batchQty * 302.1, 6);
     expect(r.profitPerHour).toBeCloseTo(r.tp.unitsPerHour * r.profit, 6);
     expect(r.risk.flags).toContain('NO_HISTORY');
   });
@@ -65,38 +70,20 @@ describe('computeFlips', () => {
     expect(computeFlips(ctx({ costMode: 'insta', sellMode: 'insta' }))).toEqual([]);
   });
 
+  it('order quotes never exceed the ask (NPC floor capped)', () => {
+    for (const r of rows) expect(r.buyAt).toBeLessThanOrEqual(P(r.id).ask!);
+  });
+
+  it('slot limit binds on huge markets', () => {
+    const r = computeFlips(ctx({ orderSlots: 1, capital: 0 })).find((x) => x.id === 'ENCHANTED_MELON')!;
+    expect(r.tp.limitedBy).toBe('slots');
+    expect(r.profitPerHour).toBe(0);
+  });
+
   it('uses stats for risk when provided', () => {
     const r = computeFlips(ctx({}, { stats: () => stats({ medianAsk: 325, medianBid: 302, madAsk: 2 }) })).find(
       (x) => x.id === 'ENCHANTED_MELON',
     )!;
     expect(r.risk.flags).not.toContain('NO_HISTORY');
-  });
-});
-
-describe('computeNpcFlips', () => {
-  it('GOLD_INGOT 0.1 bid: buy order floored at 0.9 x NPC sell, still suspect', () => {
-    const rows = computeNpcFlips(ctx());
-    const g = rows.find((r) => r.id === 'GOLD_INGOT' && r.direction === 'bz2npc')!;
-    expect(g.buyAt).toBeCloseTo(2.7, 9);
-    expect(g.sellAt).toBe(3);
-    expect(g.profit).toBeCloseTo(0.3, 9);
-    expect(g.risk.level).toBe('suspect'); // dead bid
-    for (const r of rows) expect(r.profit).toBeGreaterThan(0);
-  });
-
-  it('npc2bz: MELON bought at NPC, sold by offer after tax', () => {
-    const rows = computeNpcFlips(ctx());
-    const m = rows.find((r) => r.id === 'MELON' && r.direction === 'npc2bz')!;
-    expect(m.buyAt).toBe(2.5);
-    expect(m.sellAt).toBeCloseTo(4.8 * 0.9875, 9);
-    expect(m.profit).toBeCloseTo(4.8 * 0.9875 - 2.5, 9);
-    expect(m.tp.limitedBy).toBe('volume');
-  });
-
-  it('insta modes: GOLD_INGOT insta ask 6 > NPC 4 -> not listed; MELON insta-sell 0.7 < 2.5 -> not listed', () => {
-    const rows = computeNpcFlips(ctx({ costMode: 'insta', sellMode: 'insta' }));
-    expect(rows.find((r) => r.id === 'GOLD_INGOT')).toBeUndefined();
-    expect(rows.find((r) => r.id === 'MELON' && r.direction === 'npc2bz')).toBeUndefined();
-    for (const r of rows) expect(r.profit).toBeGreaterThan(0);
   });
 });

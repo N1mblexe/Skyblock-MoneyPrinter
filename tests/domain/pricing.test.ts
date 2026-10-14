@@ -11,7 +11,9 @@ import {
   round1,
   sellQuote,
   sellSide,
+  npcBuyRate,
   sideRates,
+  slotsFor,
   throughput,
 } from '../../src/domain/pricing.ts';
 import { makeProduct, P } from './helpers.ts';
@@ -108,9 +110,35 @@ describe('rates & competition', () => {
 describe('throughput', () => {
   const base = { rBuy: 1000, rSell: 2000, unitCost: 100, capital: 1e12, cycleHours: 1 };
 
-  it('volume-limited', () => {
+  it('volume-limited (sequential: buy the batch, then sell it)', () => {
+    // Q/1000 + Q/2000 = 1h -> Q = 2000/3
     const t = throughput(base);
-    expect(t).toEqual({ unitsPerHour: 1000, batchQty: 1000, capitalUsed: 100_000, fillHours: 1, limitedBy: 'volume' });
+    expect(t.limitedBy).toBe('volume');
+    expect(t.batchQty).toBeCloseTo(2000 / 3, 9);
+    expect(t.unitsPerHour).toBeCloseTo(2000 / 3, 9);
+    expect(t.capitalUsed).toBeCloseTo(200_000 / 3, 6);
+    expect(t.buyHours).toBeCloseTo(2 / 3, 12);
+    expect(t.sellHours).toBeCloseTo(1 / 3, 12);
+    expect(t.fillHours).toBeCloseTo(1, 12);
+    expect(t.slots).toBe(0); // no orderUnits given
+  });
+
+  it('volume-limited (pipelined: one batch buys while the previous one sells, 2x capital)', () => {
+    const t = throughput({ ...base, fillModel: 'pipelined' });
+    expect(t).toEqual({
+      unitsPerHour: 1000,
+      batchQty: 1000,
+      capitalUsed: 200_000,
+      fillHours: 1,
+      limitedBy: 'volume',
+      buyHours: 1,
+      sellHours: 0.5,
+      slots: 0,
+    });
+    // an instant side (NPC sell) needs no overlap: 1x capital, same as sequential
+    const npcOut = { ...base, rSell: Infinity };
+    expect(throughput({ ...npcOut, fillModel: 'pipelined' })).toEqual(throughput(npcOut));
+    expect(throughput(npcOut).capitalUsed).toBe(100_000);
   });
 
   it('capital-limited', () => {
@@ -118,8 +146,10 @@ describe('throughput', () => {
     expect(t.limitedBy).toBe('capital');
     expect(t.batchQty).toBe(100);
     expect(t.capitalUsed).toBe(10_000);
-    expect(t.fillHours).toBeCloseTo(0.1);
+    expect(t.fillHours).toBeCloseTo(0.15, 12); // 100/1000 + 100/2000
     expect(t.unitsPerHour).toBe(100); // one batch per cycle, not capital/price per hour
+    const p = throughput({ ...base, capital: 10_050, fillModel: 'pipelined' });
+    expect(p).toMatchObject({ limitedBy: 'capital', batchQty: 50, capitalUsed: 10_000, unitsPerHour: 50 });
   });
 
   it('depth-limited', () => {
@@ -136,18 +166,93 @@ describe('throughput', () => {
     expect(t.unitsPerHour).toBe(0.5);
   });
 
-  it('MAX_ORDER_UNITS cap and unlimited capital (<= 0)', () => {
+  it('MAX_ORDER_UNITS cap when nothing else bounds the batch; unlimited capital (<= 0)', () => {
     const t = throughput({ ...base, rBuy: Infinity, rSell: Infinity, capital: 0 });
     expect(t.batchQty).toBe(MAX_ORDER_UNITS);
     expect(t.limitedBy).toBe('depth');
     expect(t.fillHours).toBe(0);
     expect(t.unitsPerHour).toBe(MAX_ORDER_UNITS);
+    // orders but no slot limit: still capped
+    expect(throughput({ ...base, rBuy: Infinity, rSell: Infinity, capital: 0, orderUnits: [1, 1] }).batchQty).toBe(MAX_ORDER_UNITS);
   });
 
   it('longer cycles spread a batch over the cycle', () => {
     const t = throughput({ ...base, cycleHours: 4, capital: 20_000 });
     expect(t.batchQty).toBe(200);
     expect(t.unitsPerHour).toBe(50);
+  });
+
+  it('sequential vs pipelined on a synthetic product (exact)', () => {
+    // order/offer flip: buy rate 300/h, sell rate 100/h, cycle 2h, ample capital
+    const o = { rBuy: 300, rSell: 100, unitCost: 50, capital: 1e9, cycleHours: 2, orderUnits: [1, 1], orderSlots: 14 };
+    const seq = throughput({ ...o, fillModel: 'sequential' });
+    // Q/300 + Q/100 = 2 -> Q = 150; period 2h
+    expect(seq.batchQty).toBeCloseTo(150, 9);
+    expect(seq.unitsPerHour).toBeCloseTo(75, 9);
+    expect(seq.buyHours).toBeCloseTo(0.5, 12);
+    expect(seq.sellHours).toBeCloseTo(1.5, 12);
+    expect(seq.capitalUsed).toBeCloseTo(7500, 6);
+    expect(seq.slots).toBe(2);
+    const pipe = throughput({ ...o, fillModel: 'pipelined' });
+    // Q = 2h x min(300, 100) = 200; capital 2 x 200 x 50
+    expect(pipe).toMatchObject({ unitsPerHour: 100, batchQty: 200, capitalUsed: 20_000, fillHours: 2, limitedBy: 'volume', sellHours: 2, slots: 2 });
+    expect(pipe.buyHours).toBeCloseTo(2 / 3, 12);
+    expect(seq.unitsPerHour).toBeLessThanOrEqual(pipe.unitsPerHour);
+    // the default model is sequential
+    expect(throughput(o)).toEqual(seq);
+  });
+
+  it('sequential uph <= pipelined uph whenever capital does not bind', () => {
+    let seed = 11;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < 300; i++) {
+      const o = {
+        rBuy: rnd() * 1e4,
+        rSell: rnd() < 0.2 ? Infinity : rnd() * 1e4,
+        unitCost: 1 + rnd() * 1e3,
+        capital: 0,
+        cycleHours: 0.1 + rnd() * 12,
+        depthCap: rnd() < 0.3 ? rnd() * 1e4 : undefined,
+        forgeCap: rnd() < 0.2 ? rnd() * 10 : undefined,
+        orderUnits: rnd() < 0.5 ? [1, 1] : [],
+        orderSlots: 1 + Math.floor(rnd() * 20),
+      };
+      const s = throughput({ ...o, fillModel: 'sequential' });
+      const p = throughput({ ...o, fillModel: 'pipelined' });
+      expect(s.unitsPerHour).toBeLessThanOrEqual(p.unitsPerHour + 1e-9);
+    }
+  });
+
+  it('order slots: ceil(Q / MAX_ORDER_UNITS) per order, Q shrinks to fit (limitedBy slots)', () => {
+    const o = { rBuy: 1e7, rSell: 1e7, unitCost: 1, capital: 0, cycleHours: 1, fillModel: 'pipelined' as const };
+    // two orders (buy + sell) of 1 unit each per batch unit, 5 slots -> floor(5/2) = 2 orders each
+    const t = throughput({ ...o, orderUnits: [1, 1], orderSlots: 5 });
+    expect(t.limitedBy).toBe('slots');
+    expect(t.batchQty).toBe(2 * MAX_ORDER_UNITS);
+    expect(t.slots).toBe(4);
+    // uneven legs: 1 unit + 3 units per batch unit within 4 slots -> 3 slots on the big leg, 1 on the small one
+    const u = throughput({ ...o, orderUnits: [1, 3], orderSlots: 4 });
+    expect(u.limitedBy).toBe('slots');
+    expect(u.batchQty).toBe(MAX_ORDER_UNITS);
+    expect(u.slots).toBe(4);
+    // one slot cannot hold two orders
+    expect(throughput({ ...o, orderUnits: [1, 1], orderSlots: 1 })).toMatchObject({ batchQty: 0, unitsPerHour: 0, limitedBy: 'slots' });
+    // within the limit nothing changes; insta/NPC legs (no orderUnits) use no slots
+    const small = throughput({ ...o, rBuy: 100, rSell: 100, orderUnits: [1, 1], orderSlots: 2 });
+    expect(small).toMatchObject({ limitedBy: 'volume', batchQty: 100, slots: 2 });
+    expect(slotsFor(MAX_ORDER_UNITS, [1, 1])).toBe(2);
+    expect(slotsFor(MAX_ORDER_UNITS + 1, [1, 1])).toBe(4);
+    expect(slotsFor(0.0001, [1, 0, NaN])).toBe(1);
+  });
+
+  it('NPC-limited side reports npcLimit', () => {
+    const t = throughput({ ...base, rBuy: 640 / 24, rSell: Infinity, buyBound: 'npcLimit' });
+    expect(t.limitedBy).toBe('npcLimit');
+    expect(t.unitsPerHour).toBeCloseTo(640 / 24, 9);
+    expect(throughput({ ...base, rSell: 10, sellBound: 'npcLimit' }).limitedBy).toBe('npcLimit');
+    expect(throughput({ ...base, rBuy: 0, buyBound: 'npcLimit' }).limitedBy).toBe('npcLimit');
+    expect(npcBuyRate(640)).toBeCloseTo(640 / 24, 12);
+    expect(npcBuyRate(NaN)).toBe(0);
   });
 
   it('zero / invalid inputs -> zeros', () => {
@@ -202,9 +307,19 @@ describe('planTrade', () => {
     const qs: number[] = [];
     const buy = (q: number) => (qs.push(q), { price: q > 1 ? 11 : 10, net: q > 1 ? 11 : 10, rate: 100, depth: 500 });
     const plan = planTrade(buy, () => ({ price: 20, net: 20, rate: 50 }), { capital: 1e9, cycleHours: 1 }, true)!;
-    expect(qs).toEqual([1, 50]);
+    // sequential: Q/100 + Q/50 = 1h -> Q = 100/3, re-quoted at ceil(Q) = 34
+    expect(qs).toEqual([1, 34]);
     expect(plan.profit).toBe(9);
-    expect(plan.tp.batchQty).toBe(50);
+    expect(plan.tp.batchQty).toBeCloseTo(100 / 3, 9);
+  });
+
+  it('passes fill model, slots and leg bounds to throughput', () => {
+    const leg = (rate: number, extra = {}) => () => ({ price: 10, net: 10, rate, order: true, ...extra });
+    const s = { capital: 0, cycleHours: 1, fillModel: 'pipelined' as const, orderSlots: 1 };
+    // two order legs cannot share one slot
+    expect(planTrade(leg(100), leg(100), s, false)!.tp.limitedBy).toBe('slots');
+    const npc = planTrade(leg(5, { order: false, bound: 'npcLimit' }), leg(100), { ...s, orderSlots: 14 }, false)!;
+    expect(npc.tp).toMatchObject({ limitedBy: 'npcLimit', batchQty: 5, slots: 1 });
   });
 
   it('keeps the first quote if the re-quote fails', () => {
@@ -215,11 +330,45 @@ describe('planTrade', () => {
 });
 
 describe('NPC floor on buy orders', () => {
-  it('raises dead bids to 0.9 x NPC sell price, leaves normal bids alone', async () => {
-    const { buyQuote } = await import('../../src/domain/pricing.ts');
-    const p = { id: 'X', bid: 0.1, ask: 6, bids: [{ price: 0.1, amount: 1, orders: 1 }], asks: [{ price: 6, amount: 1, orders: 1 }], quick: {} as never, instaBuysWeek: 1, instaSellsWeek: 1 };
-    expect(buyQuote(p, 'order', undefined, 3)!.price).toBeCloseTo(2.7, 9);
-    expect(buyQuote({ ...p, bid: 5 }, 'order', undefined, 3)!.price).toBeCloseTo(5.1, 9);
+  const p = makeProduct({
+    bids: [{ price: 0.1, amount: 1, orders: 1 }],
+    asks: [{ price: 6, amount: 1, orders: 1 }],
+    instaBuysWeek: 168_000,
+    instaSellsWeek: 16_800,
+  });
+
+  it('raises dead bids to 0.9 x NPC sell price, leaves normal bids alone', () => {
+    expect(buyQuote(p, 'order', undefined, 3)).toEqual({ price: 2.7, filled: Infinity, slippage: 0, source: 'order', clamped: 'npcFloor' });
+    const normal = buyQuote({ ...p, bid: 5 }, 'order', undefined, 3)!;
+    expect(normal.price).toBeCloseTo(5.1, 9);
+    expect(normal.clamped).toBeUndefined();
     expect(buyQuote(p, 'insta', 1, 3)!.price).toBe(6);
+  });
+
+  it('never above the ask (ENDER_PEARL shape: bid 1.5, ask 3.9, NPC sell 7 -> floor 6.3 capped at 3.9)', () => {
+    const pearl = makeProduct({
+      bids: [{ price: 1.5, amount: 20_000, orders: 3 }],
+      asks: [
+        { price: 3.9, amount: 500, orders: 2 },
+        { price: 4.2, amount: 9000, orders: 6 },
+      ],
+      instaBuysWeek: 168_000,
+      instaSellsWeek: 16_800,
+    });
+    const q = buyQuote(pearl, 'order', undefined, 7)!;
+    expect(q.price).toBeLessThanOrEqual(pearl.ask!);
+    expect(q).toEqual({ price: 3.9, filled: Infinity, slippage: 0, source: 'order', clamped: 'ask' });
+    // capped at the ask -> fills right away: insta-buy rate (instaBuysWeek/168 x share), no queue
+    const s = buySide(pearl, 'order', 0.05, undefined, 7)!;
+    expect(s.rate).toBeCloseTo((168_000 / 168) * 0.05, 9);
+    expect(s.comp).toBe(0);
+    // without the NPC floor it queues on the bids at the bid-side rate
+    const plain = buySide(pearl, 'order', 0.05)!;
+    expect(plain.quote.clamped).toBeUndefined();
+    expect(plain.rate).toBeCloseTo((16_800 / 168) * 0.05, 9);
+    // a floor that lands exactly on the ask is not clamped
+    expect(buyQuote(pearl, 'order', undefined, 3.9 / 0.9)).toMatchObject({ price: 3.9, clamped: 'npcFloor' });
+    // no ask: the floor stands
+    expect(buyQuote({ ...pearl, ask: null, asks: [] }, 'order', undefined, 7)).toMatchObject({ price: 6.3, clamped: 'npcFloor' });
   });
 });

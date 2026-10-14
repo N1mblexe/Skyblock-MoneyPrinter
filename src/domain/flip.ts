@@ -11,11 +11,18 @@ export function computeFlips(ctx: CalcCtx): FlipRow[] {
   for (const [id, p] of Object.entries(snap.products)) {
     const buy = (q: number): Leg | null => {
       const s = buySide(p, costMode, share, q, catalog.items[id]?.npcSell);
-      return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp };
+      return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp, order: costMode === 'order' };
     };
     const sell = (q: number): Leg | null => {
       const s = sellSide(p, sellMode, share, q);
-      return s && { price: s.quote.price, net: afterTax(s.quote.price, taxRate), rate: s.rate, depth: s.depth, comp: s.comp };
+      return s && {
+        price: s.quote.price,
+        net: afterTax(s.quote.price, taxRate),
+        rate: s.rate,
+        depth: s.depth,
+        comp: s.comp,
+        order: sellMode === 'offer',
+      };
     };
     const plan = planTrade(buy, sell, settings, refine);
     if (!plan || !(plan.profit > 0) || !(plan.buy.price > 0)) continue;
