@@ -1,6 +1,6 @@
 // Book combining: buy 2^(L-k) level-k enchanted books, combine on an anvil, sell one level-L book.
 // Rows come from ctx.derived.books(); unverified chains (above the curated anvil max) are hidden by default.
-import { BOOK, LS_VIEWPREFS } from '../../../config.ts';
+import { BOOK, HOTKEYS, LS_VIEWPREFS } from '../../../config.ts';
 import { parseBookId } from '../../../domain/books.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
@@ -451,7 +451,9 @@ export function createBooksView(): View {
           dataDirty = true;
           render();
         }),
-        registerHotkeys({ s: starCurrent, e: () => table?.exportCsv() }),
+        registerHotkeys(
+          Object.fromEntries([...HOTKEYS.star.map((k) => [k, starCurrent]), ...HOTKEYS.export.map((k) => [k, () => table?.exportCsv()])]),
+        ),
       );
       render();
     },

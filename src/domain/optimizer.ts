@@ -52,13 +52,16 @@ export function uncappedRate(tp: Throughput, cycleHours: number): { maxUnits: nu
 
 /**
  * Normalize domain rows into opportunities (profitable, priced, with a positive rate only).
- * unitCost is coins tied up per unit: the buy cost, doubled under the pipelined fill model (buying the next batch
- * while the previous one sells). maxUnits is the capital-free per-cycle bound (see uncappedRate). slots are the
+ * unitCost is coins tied up per unit: the buy cost, doubled under the pipelined fill model when both legs take
+ * time (buying the next batch while the previous one sells). maxUnits is the capital-free per-cycle bound (see uncappedRate). slots are the
  * order slots used at maxUnits: tp.slots when the estimator provides it for that batch, else ceil(qty/MAX_ORDER_UNITS)
  * per order/offer leg and 0 per insta/NPC leg.
  */
 export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity[] {
-  const capMul = s.fillModel === 'pipelined' ? 2 : 1;
+  const pipelined = s.fillModel === 'pipelined';
+  // Pipelined holds 2x capital only when both legs take time (same rule as throughput()); an instant leg
+  // (e.g. selling to an NPC) means 1x. Unknown hours or a 0-unit tp: stay conservative (2x).
+  const capMul = (tp: Throughput) => (pipelined && !(tp.batchQty > 0 && (tp.buyHours === 0 || tp.sellHours === 0)) ? 2 : 1);
   const buyOrder = s.costMode === 'order';
   const sellOffer = s.sellMode === 'offer';
   const out: Opportunity[] = [];
@@ -78,7 +81,7 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
       key: `${kind}:${keyPart}`,
       id: row.id,
       name: row.name,
-      unitCost: cost * capMul,
+      unitCost: cost * capMul(row.tp),
       profitPerUnit: row.profit,
       unitsPerHour,
       maxUnits,

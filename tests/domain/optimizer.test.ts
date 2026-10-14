@@ -178,6 +178,9 @@ describe('toOpportunities', () => {
   it('pipelined fill doubles the capital per unit', () => {
     const [o] = toOpportunities({ ...EMPTY, flips: [flipRow('X')] }, { ...s, fillModel: 'pipelined' });
     expect(o!.unitCost).toBe(20);
+    // an instant leg (e.g. sold to an NPC) overlaps nothing: 1x capital, like throughput()
+    const [i] = toOpportunities({ ...EMPTY, flips: [flipRow('Y', { tp: tp({ buyHours: 0.5, sellHours: 0 }) })] }, { ...s, fillModel: 'pipelined' });
+    expect(i!.unitCost).toBe(10);
   });
 
   it('insta legs need no slot; big batches need several orders; tp.slots wins when given', () => {

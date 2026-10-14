@@ -1,6 +1,6 @@
 // Flip finder: buy low (buy order), sell high (sell offer) on the same bazaar product.
 // Rows come from ctx.derived.flips(); filters live in the URL (bindQueryState); a row opens the detail panel.
-import { LS_VIEWPREFS } from '../../../config.ts';
+import { HOTKEYS, LS_VIEWPREFS } from '../../../config.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, FlipRow, MarketStat, Route, View, ViewContext } from '../../../types/contracts.ts';
@@ -454,7 +454,9 @@ export function createFlipView(): View {
           dataDirty = true;
           render();
         }),
-        registerHotkeys({ s: starCurrent, e: () => table?.exportCsv() }),
+        registerHotkeys(
+          Object.fromEntries([...HOTKEYS.star.map((k) => [k, starCurrent]), ...HOTKEYS.export.map((k) => [k, () => table?.exportCsv()])]),
+        ),
       );
       render();
     },

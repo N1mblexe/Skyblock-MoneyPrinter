@@ -1,3 +1,4 @@
+import { FUSION_FEE_COINS } from '../config.ts';
 import type { CalcCtx, FusionRecipe, FusionRow, RiskReport } from '../types/contracts.ts';
 import { afterTax, buySide, sellSide, throughput } from './pricing.ts';
 import { assessRisk, combineRisk } from './risk.ts';
@@ -55,7 +56,7 @@ export function computeFusion(ctx: CalcCtx, recipes: readonly FusionRecipe[]): F
     const ca = price(recipe.a, recipe.qa, 'buy');
     const cb = price(recipe.b, recipe.qb, 'buy');
     const value = price(recipe.out, recipe.qo, 'sell');
-    const cost = ca != null && cb != null ? ca + cb : null;
+    const cost = ca != null && cb != null ? ca + cb + FUSION_FEE_COINS : null;
     const profit = cost != null && value != null ? value - cost : null;
     const margin = profit != null && cost != null && cost > 0 && missing.length === 0 ? profit / cost : null;
     const row: FusionRow = { recipe, cost, value, profit, margin, missing };
