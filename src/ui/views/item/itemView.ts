@@ -1,14 +1,20 @@
-// Item detail view: #/item/<bazaar id>. Key facts, risk, top-10 order book, price history chart, recipes.
-import { LS_VIEWPREFS, PRICE_TICK } from '../../../config.ts';
-import { afterTax, buyQuote, round1, sellQuote } from '../../../domain/pricing.ts';
+// Item detail view: #/item/<id>. Header actions (watch, quick alert, copy id), key facts, your flip (same as the
+// Flips tab), market stats, AH lowest BIN, shard info, risk, top-10 order book, price history chart, recipes.
+// Catalog / AH items that are not bazaar products get a reduced page (no book, chart or flip).
+import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
+import { flipPlanFor, metricValue } from '../../../domain/alerts.ts';
+import { buyQuote } from '../../../domain/pricing.ts';
 import { assessRisk } from '../../../domain/risk.ts';
 import { matchesQuery, resolveUserInput, searchItems } from '../../../domain/search.ts';
 import { deriveName } from '../../../domain/ids.ts';
 import { onLangChange } from '../../../i18n/index.ts';
 import { lsGet, lsSet } from '../../../storage/local.ts';
 import type {
+  AlertMetric,
+  AlertRule,
   AppState,
   Catalog,
+  FlipRow,
   HistoryPoint,
   HistoryRange,
   OrderLevel,
@@ -16,14 +22,27 @@ import type {
   Recipe,
   Route,
   Snapshot,
+  Throughput,
   View,
   ViewContext,
 } from '../../../types/contracts.ts';
 import { itemCell, riskBadge, riskFlagText } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
-import { fmtCoins, fmtHours, fmtInt, fmtPct } from '../../format.ts';
+import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtPct } from '../../format.ts';
+import { parseNumberInput } from '../../kit/index.ts';
 import { createTable, type TableHandle } from '../../table.ts';
-import { fmtPrice, fmtQty, fmtSignedPct, fmtStamp, fmtTick } from './helpers.ts';
+import {
+  alertPrefill,
+  alertValueFromInput,
+  fmtPrice,
+  fmtQty,
+  fmtSignedPct,
+  fmtStamp,
+  fmtTick,
+  fmtTrend,
+  isBookId,
+  PCT_METRICS,
+} from './helpers.ts';
 import { createLineChart, type ChartData, type LineChart } from './lineChart.ts';
 import './i18n.ts';
 import './item.css';
@@ -33,6 +52,7 @@ const USING_LIMIT = 20;
 const SUGGEST_LIMIT = 8;
 const RANGES: HistoryRange[] = ['3h', '24h', '7d'];
 const PREFS_KEY = LS_VIEWPREFS + 'item';
+const METRICS: AlertMetric[] = ['ask', 'bid', 'spreadPct', 'flipMargin', 'flipProfit'];
 
 interface BookRow {
   key: string;
@@ -76,7 +96,19 @@ function fmtTax(tax: number): string {
   return fmtPct(tax, digits);
 }
 
+/** Displayed per-unit flip numbers: the Flips tab row when the flip is profitable, else the same plan unfiltered. */
+interface FlipView {
+  buy: number;
+  sell: number;
+  net: number;
+  profit: number;
+  tp: Throughput;
+  /** null when the flip is not on the Flips tab (not profitable) */
+  row: FlipRow | null;
+}
+
 const pctClass = (x: number | null | undefined) => (x == null || !Number.isFinite(x) || x === 0 ? '' : x > 0 ? 'pos' : 'neg');
+const fin = (x: number | null | undefined): x is number => typeof x === 'number' && Number.isFinite(x);
 
 export function createItemView(): View {
   let ctx: ViewContext | null = null;
@@ -88,6 +120,8 @@ export function createItemView(): View {
   let seriesToken = 0;
   let alive = false;
   const cleanups: (() => void)[] = [];
+  /** flips() array -> rows by id (rebuilt only when derived recomputes) */
+  let flipIndex: { src: readonly FlipRow[]; map: Map<string, FlipRow> } | null = null;
 
   const t = (k: string, p?: Record<string, string | number>) => ctx!.t(`item.${k}`, p);
   const st = (): AppState => ctx!.store.get();
@@ -96,9 +130,30 @@ export function createItemView(): View {
   // ---- persistent pieces (built in mount)
   let msgEl!: HTMLElement;
   let mainEl!: HTMLElement;
-  let headEl!: HTMLElement;
+  let nameEl!: HTMLHeadingElement;
+  let badgesEl!: HTMLElement;
+  let idEl!: HTMLElement;
+  let actionsEl!: HTMLElement;
+  let watchBtn!: HTMLButtonElement;
+  let alertBtn!: HTMLButtonElement;
+  let copyBtn!: HTMLButtonElement;
+  let linksEl!: HTMLElement;
+  let alertCountEl!: HTMLElement;
+  let alertForm: HTMLFormElement | null = null;
+  let alertTitle!: HTMLElement;
+  let metricLabel!: HTMLElement;
+  let metricSel!: HTMLSelectElement;
+  let opLabel!: HTMLElement;
+  let opSel!: HTMLSelectElement;
+  let valueLabel!: HTMLElement;
+  let valueInput!: HTMLInputElement;
+  let valueHint!: HTMLElement;
+  let alertSave!: HTMLButtonElement;
+  let alertCancel!: HTMLButtonElement;
+  let offNote!: HTMLElement;
   let factsEl!: HTMLElement;
-  let riskEl!: HTMLElement;
+  let bookSec!: HTMLElement;
+  let chartSec!: HTMLElement;
   let bookTitle!: HTMLElement;
   let bidsTitle!: HTMLElement;
   let asksTitle!: HTMLElement;
@@ -122,9 +177,11 @@ export function createItemView(): View {
   let chart!: LineChart;
 
   // ---------------------------------------------------------------- cells
+  const linkable = (x: string) => !!(st().snapshot?.products[x] || st().catalog?.items[x]);
+
   function itemLink(x: string): string {
     const name = nameOf(x);
-    if (st().snapshot?.products[x]) return `<a href="#/item/${encodeURIComponent(x)}">${esc(name)}</a>`;
+    if (linkable(x)) return `<a href="#/item/${encodeURIComponent(x)}">${esc(name)}</a>`;
     return `<span title="${esc(x)}">${esc(name)}</span>`;
   }
 
@@ -144,8 +201,12 @@ export function createItemView(): View {
     return s;
   }
 
-  const craftLink = (r: Recipe) =>
-    `<a class="btn btn-sm" href="#/craft?q=${encodeURIComponent(r.output)}">${esc(t('openCraft'))} →</a>`;
+  /** Craft tab link, plus a Books tab link when the output is an enchanted book. */
+  const recipeLinks = (r: Recipe) =>
+    `<a class="btn btn-sm" href="#/craft?q=${encodeURIComponent(r.output)}" title="${esc(t('openCraft'))}">${esc(t('openCraftShort'))} →</a>` +
+    (isBookId(r.output)
+      ? ` <a class="btn btn-sm" href="#/books?q=${encodeURIComponent(r.output)}" title="${esc(t('openBooksLong'))}">${esc(t('openBooks'))} →</a>`
+      : '');
 
   // ---------------------------------------------------------------- tables
   function bookTable(): TableHandle<BookRow> {
@@ -164,13 +225,14 @@ export function createItemView(): View {
   }
 
   const kindCol = { key: 'kind', label: () => t('colKind'), get: (r: Recipe) => r.kind, html: kindHtml, cls: 'item-wrap' };
-  const craftCol = { key: 'go', label: () => t('colCraft'), get: () => null, html: craftLink, align: 'right' as const, sortable: false };
+  const craftCol = { key: 'go', label: () => t('colCraft'), get: () => null, html: recipeLinks, align: 'right' as const, sortable: false };
 
   // ---------------------------------------------------------------- rendering
   function showMsg(html: string): void {
     msgEl.innerHTML = html;
     msgEl.hidden = false;
     mainEl.hidden = true;
+    closeAlertForm();
   }
 
   function renderStatic(): void {
@@ -178,6 +240,19 @@ export function createItemView(): View {
     backLink.title = t('backTitle');
     searchLabel.textContent = t('searchLabel');
     searchInput.placeholder = t('searchPh');
+    actionsEl.setAttribute('aria-label', t('actionsAria'));
+    alertBtn.textContent = t('addAlert');
+    copyBtn.textContent = t('copyId');
+    alertTitle.textContent = t('alertTitle');
+    metricLabel.textContent = t('alertMetric');
+    opLabel.textContent = t('alertOp');
+    valueLabel.textContent = t('alertValue');
+    for (const o of metricSel.options) o.textContent = ctx!.t(`alerts.m_${o.value}`);
+    opSel.options[0]!.textContent = t('alertOpLt');
+    opSel.options[1]!.textContent = t('alertOpGt');
+    alertSave.textContent = t('alertSave');
+    alertCancel.textContent = t('alertCancel');
+    offNote.textContent = t('offBazaar');
     bookTitle.textContent = t('bookTitle');
     bidsTitle.textContent = t('bookBids');
     asksTitle.textContent = t('bookAsks');
@@ -200,89 +275,199 @@ export function createItemView(): View {
     if (!alive || !ctx) return;
     const s = st();
     if (!s.snapshot) {
-      showMsg(`<div class="card"><p class="empty">${esc(t('loading'))}</p></div>`);
+      showMsg(`<div class="card"><h1 class="kit-sr">${esc(ctx.t('common.nav_item'))}</h1><p class="empty">${esc(t('loading'))}</p></div>`);
       return;
     }
-    const p = s.snapshot.products[id];
-    if (!p) {
-      showMsg(
-        `<div class="card"><h2>${esc(t('unknownTitle'))}</h2><p class="note">${esc(t('unknown', { id }))}</p></div>`,
-      );
+    const p = s.snapshot.products[id] ?? null;
+    const known = !!p || !!s.catalog?.items[id] || !!s.ah?.lowestBin[id];
+    if (!known) {
+      showMsg(`<div class="card"><h1>${esc(t('unknownTitle'))}</h1><p class="note">${esc(t('unknown', { id }))}</p></div>`);
       return;
     }
     msgEl.hidden = true;
     mainEl.hidden = false;
+    offNote.hidden = !!p;
+    bookSec.hidden = !p;
+    chartSec.hidden = !p;
+    if (!p) closeAlertForm();
     renderHead(p, s);
     renderFacts(p, s);
-    tblBids.setRows(bookRows(p.bids, 'b'));
-    tblAsks.setRows(bookRows(p.asks, 'a'));
+    if (p) {
+      tblBids.setRows(bookRows(p.bids, 'b'));
+      tblAsks.setRows(bookRows(p.asks, 'a'));
+    }
     renderRecipes(s);
+    if (alertForm && !alertForm.hidden) syncAlertHint();
   }
 
-  function renderHead(p: Product, s: AppState): void {
+  function renderHead(p: Product | null, s: AppState): void {
     const info = s.catalog?.items[id];
-    const risk = assessRisk(p, ctx!.history.stats(id));
+    nameEl.textContent = nameOf(id);
     const tier = info?.tier
       ? `<span class="badge item-tier tier-${esc(info.tier.toLowerCase().replace(/[^a-z]+/g, '_'))}">${esc(info.tier.replace(/_/g, ' '))}</span>`
       : '';
-    headEl.innerHTML =
-      `<h2 data-testid="item-name">${esc(nameOf(id))}</h2>` +
-      `<div class="item-badges">${tier}${riskBadge(risk)}</div>` +
-      `<span class="id-sub">${esc(id)}</span>`;
-
-    const flags = risk.flags.length
-      ? `<ul class="item-flags">${risk.flags
-          .map((f) => `<li><span class="mono small muted">${esc(f)}</span> ${esc(riskFlagText(f))}</li>`)
-          .join('')}</ul>`
-      : `<p class="note">${esc(t('riskNone'))}</p>`;
-    riskEl.innerHTML =
-      `<h3>${esc(t('riskTitle'))} ${riskBadge(risk)} <span class="small muted">${esc(t('riskScore', { n: risk.score }))}</span></h3>` +
-      flags;
+    const cat = info?.category ? `<span class="badge item-cat" title="${esc(t('category'))}">${esc(info.category.replace(/_/g, ' '))}</span>` : '';
+    badgesEl.innerHTML = tier + cat + (p ? riskBadge(assessRisk(p, ctx!.history.stats(id))) : '');
+    idEl.textContent = id;
+    renderActions(p, s);
   }
 
-  function kv(rows: [string, string, string?][]): string {
-    return `<dl class="kv">${rows.map(([k, v, cls]) => `<dt>${esc(k)}</dt><dd${cls ? ` class="${cls}"` : ''}>${v}</dd>`).join('')}</dl>`;
+  function renderActions(p: Product | null, s: AppState): void {
+    const on = ctx!.watch.has(id);
+    watchBtn.textContent = on ? t('watchOn') : t('watchOff');
+    watchBtn.title = on ? t('watchTitleOn') : t('watchTitleOff');
+    watchBtn.setAttribute('aria-pressed', String(on));
+    alertBtn.hidden = !p;
+    alertBtn.setAttribute('aria-expanded', String(!!alertForm && !alertForm.hidden));
+    const links: string[] = [];
+    const link = (href: string, label: string) => `<a class="btn btn-sm btn-ghost" href="${esc(href)}">${esc(label)} →</a>`;
+    const q = encodeURIComponent(id);
+    if (p) links.push(link(`#/flip?q=${q}`, t('openFlip')));
+    if (s.catalog?.byOutput.get(id)?.length) links.push(link(`#/craft?q=${q}`, t('openCraftShort')));
+    if (isBookId(id)) links.push(link(`#/books?q=${q}`, t('openBooks')));
+    linksEl.innerHTML = links.length ? `<span class="small muted">${esc(t('openIn'))}</span> ${links.join(' ')}` : '';
+    const n = s.alerts.filter((r) => r.id === id).length;
+    alertCountEl.hidden = n === 0;
+    alertCountEl.innerHTML = n ? `${esc(t('alertsHere', { n }))} · <a href="#/watch">${esc(t('manageAlerts'))}</a>` : '';
   }
 
-  function renderFacts(p: Product, s: AppState): void {
+  type KvRow = [label: string, valueHtml: string, cls?: string, key?: string];
+  function kv(rows: KvRow[]): string {
+    return `<dl class="kv">${rows
+      .map(([k, v, cls, key]) => `<dt>${esc(k)}</dt><dd${cls ? ` class="${cls}"` : ''}${key ? ` data-k="${key}"` : ''}>${v}</dd>`)
+      .join('')}</dl>`;
+  }
+  const card = (title: string, body: string, attrs = '', cls = '') =>
+    `<section class="card item-card ${cls}"${attrs}><h2 class="item-card-h">${esc(title)}</h2>${body}</section>`;
+  const note = (txt: string) => `<p class="note small">${esc(txt)}</p>`;
+
+  function flipView(): FlipView | null {
+    const c = ctx!.derived.calcCtx();
+    if (!c) return null;
+    const flips = ctx!.derived.flips();
+    if (flipIndex?.src !== flips) flipIndex = { src: flips, map: new Map(flips.map((r) => [r.id, r])) };
+    const row = flipIndex.map.get(id) ?? null;
+    if (row) return { buy: row.buyAt, sell: row.sellAt, net: row.netSell, profit: row.profit, tp: row.tp, row };
+    const plan = flipPlanFor(id, c);
+    if (!plan) return null;
+    return { buy: plan.buy.price, sell: plan.sell.price, net: plan.sell.net, profit: plan.profit, tp: plan.tp, row: null };
+  }
+
+  function yourFlipHtml(p: Product, s: AppState): string {
+    const set = s.settings;
     const info = s.catalog?.items[id];
+    const mode = t('modeLine', {
+      buy: t(set.costMode === 'order' ? 'modeOrder' : 'modeInsta'),
+      sell: t(set.sellMode === 'offer' ? 'modeOffer' : 'modeInstaSell'),
+    });
+    const head = `<p class="small muted item-mode" data-testid="flip-mode">${esc(mode)}</p>`;
+    if (!s.catalog) return head + note(s.catalogError ? t('catalogError', { err: s.catalogError }) : t('catalogLoading'));
+    const f = flipView();
+    if (!f) return head + `<p class="note">${esc(t('bookEmpty'))}</p>`;
+    const margin = f.buy > 0 ? f.profit / f.buy : null;
+    const tp = f.tp;
+    const rows: KvRow[] = [
+      [t(set.costMode === 'order' ? 'buyOrderAt' : 'buyInstaAt'), esc(fmtPrice(f.buy)), '', 'buy'],
+      [t(set.sellMode === 'offer' ? 'sellOfferAt' : 'sellInstaAt'), esc(fmtPrice(f.sell)), '', 'sell'],
+      [t('afterTax', { tax: fmtTax(set.taxRate) }), esc(fmtPrice(f.net)), '', 'net'],
+      [t('flipProfit'), esc(fmtPrice(f.profit)), pctClass(f.profit), 'profit'],
+      [t('flipMargin'), esc(fmtPct(margin)), pctClass(margin), 'margin'],
+    ];
+    if (f.row) {
+      rows.push(
+        [t('flipPph'), esc(fmtCoins(f.row.profitPerHour)), pctClass(f.row.profitPerHour), 'pph'],
+        [t('flipUph'), esc(fmtQty(tp.unitsPerHour)), '', 'uph'],
+        [t('flipBatch'), esc(fmtInt(tp.batchQty)), '', 'batch'],
+        [t('buyHours'), esc(fin(tp.buyHours) ? fmtHours(tp.buyHours) : '—'), '', 'buyHours'],
+        [t('sellHours'), esc(fin(tp.sellHours) ? fmtHours(tp.sellHours) : '—'), '', 'sellHours'],
+        [t('flipSlots'), esc(fin(tp.slots) ? fmtInt(tp.slots) : '—'), '', 'slots'],
+        [t('limitedBy'), esc(t(`lim_${tp.limitedBy}`)), '', 'limited'],
+      );
+    }
+    let body = head + kv(rows);
+    if (!f.row) body += `<p class="note small" data-testid="not-on-flip">${esc(t('notOnFlipTab'))}</p>`;
+    if (set.costMode === 'order') {
+      const q = buyQuote(p, 'order', undefined, info?.npcSell);
+      if (q?.clamped === 'npcFloor') {
+        body += `<p class="banner banner-warn small" data-testid="npc-floor">${esc(
+          t('npcFloorApplied', { npc: fmtPrice(info?.npcSell), bid: fmtPrice(p.bid) }),
+        )}</p>`;
+      } else if (q?.clamped === 'ask') {
+        body += `<p class="banner banner-info small" data-testid="ask-capped">${esc(t('askCapped', { ask: fmtPrice(p.ask) }))}</p>`;
+      }
+    }
+    const insta = set.costMode === 'insta' || set.sellMode === 'insta';
+    body += note(`${t(insta ? 'yourNoteInsta' : 'yourNoteOrder')} ${t('yourNoteTax')}`);
+    return body;
+  }
+
+  function statsHtml(): string {
+    const m = ctx!.derived.marketStats().get(id);
+    if (!m || m.n === 0) return note(t('statsNone'));
+    const pct = (x: number | null) => esc(fmtPct(x));
+    return (
+      kv([
+        [t('change1h'), esc(fmtSignedPct(m.change1h)), pctClass(m.change1h), 'change1h'],
+        [t('change24h'), esc(fmtSignedPct(m.change24h)), pctClass(m.change24h), 'change24h'],
+        [t('volatility'), pct(m.volatility), '', 'volatility'],
+        [t('spreadMedian'), pct(m.spreadMedian), '', 'spreadMedian'],
+        [t('consistency'), pct(m.consistency), '', 'consistency'],
+        [t('buyVolTrend'), esc(fmtTrend(m.buyVolTrend)), '', 'buyVolTrend'],
+        [t('sellVolTrend'), esc(fmtTrend(m.sellVolTrend)), '', 'sellVolTrend'],
+      ]) + note(`${t('statsPoints', { n: m.n })}. ${t('statsNote')}`)
+    );
+  }
+
+  function ahHtml(s: AppState): string | null {
+    const ah = s.ah;
+    const a = ah?.lowestBin[id];
+    if (!ah || !a) return null;
+    const rows: KvRow[] = [
+      [t('ahLowest'), esc(fmtPrice(a.price)), '', 'ahPrice'],
+      [t('ahCount'), esc(fmtInt(a.count)), '', 'ahCount'],
+      [t('ahAge'), esc(t('ahAgeVal', { age: fmtAge(Date.now() - ah.fetchedAt) })), '', 'ahAge'],
+    ];
+    const partial = ah.failedPages?.length ? note(t('ahPartial', { n: ah.failedPages.length })) : '';
+    return kv(rows) + partial + note(t('ahCaveat'));
+  }
+
+  function shardHtml(s: AppState): string | null {
+    const sh = s.catalog?.items[id]?.shard;
+    if (!sh) return null;
+    return kv([
+      [t('shardRarity'), esc(sh.rarity || '—'), '', 'shardRarity'],
+      [t('shardFamily'), esc(sh.family.length ? sh.family.join(', ') : '—'), '', 'shardFamily'],
+      [t('shardAlignment'), esc(sh.alignment ?? '—'), '', 'shardAlignment'],
+    ]);
+  }
+
+  function npcHtml(s: AppState): string {
+    const info = s.catalog?.items[id];
+    if (!s.catalog) return `<p class="note">${esc(s.catalogError ? t('catalogError', { err: s.catalogError }) : t('catalogLoading'))}</p>`;
+    if (info?.npcSell == null && info?.npcBuy == null) return `<p class="note">${esc(t('npcNone'))}</p>`;
+    return kv([
+      [t('npcSell'), esc(fmtPrice(info?.npcSell))],
+      [t('npcBuy'), esc(fmtPrice(info?.npcBuy))],
+    ]);
+  }
+
+  function marketHtml(p: Product): string {
     const { bid, ask } = p;
     const spread = bid != null && ask != null ? ask - bid : null;
     const spreadPct = spread != null && bid! > 0 ? spread / bid! : null;
     const change = ctx!.history.stats(id)?.change24h ?? null;
-
-    const market = kv([
+    return kv([
       [t('bid'), esc(fmtPrice(bid))],
       [t('ask'), esc(fmtPrice(ask))],
       [t('spread'), esc(fmtPrice(spread))],
       [t('spreadPct'), esc(fmtPct(spreadPct))],
       [t('change24h'), change == null ? `<span class="muted">${esc(t('change24hNone'))}</span>` : esc(fmtSignedPct(change)), pctClass(change)],
     ]);
+  }
 
-    const tax = s.settings.taxRate;
-    const bq = buyQuote(p, 'order', undefined, info?.npcSell);
-    const sq = sellQuote(p, 'offer');
-    const net = sq ? afterTax(sq.price, tax) : null;
-    const profit = bq && net != null ? net - bq.price : null;
-    const margin = profit != null && bq!.price > 0 ? profit / bq!.price : null;
-    const floored = bq != null && bid != null && bq.price > round1(bid + PRICE_TICK);
-    const yours =
-      kv([
-        [t('buyOrderAt'), esc(fmtPrice(bq?.price))],
-        [t('sellOfferAt'), esc(fmtPrice(sq?.price))],
-        [t('afterTax', { tax: fmtTax(tax) }), esc(fmtPrice(net))],
-        [t('flipProfit'), esc(fmtPrice(profit)), pctClass(profit)],
-        [t('flipMargin'), esc(fmtPct(margin)), pctClass(margin)],
-      ]) +
-      (floored
-        ? `<p class="banner banner-warn small" data-testid="npc-floor">${esc(
-            t('npcFloorApplied', { npc: fmtPrice(info?.npcSell), bid: fmtPrice(bid) }),
-          )}</p>`
-        : '') +
-      `<p class="note small">${esc(t('yourNote'))}</p>`;
-
+  function volumeHtml(p: Product): string {
     const q = p.quick;
-    const volume =
+    return (
       kv([
         [t('instaBuysWeek'), esc(fmtInt(p.instaBuysWeek))],
         [t('instaSellsWeek'), esc(fmtInt(p.instaSellsWeek))],
@@ -290,42 +475,60 @@ export function createItemView(): View {
         [t('sellOfferCount'), esc(fmtInt(q.buyOrders))],
         [t('buyOrderUnits'), esc(fmtInt(q.sellVolume))],
         [t('sellOfferUnits'), esc(fmtInt(q.buyVolume))],
-      ]) + `<p class="note small">${esc(t('volumeNote'))}</p>`;
+      ]) + note(t('volumeNote'))
+    );
+  }
 
+  function quickHtml(p: Product): string {
+    const { bid, ask, quick: q } = p;
     const diff = (avg: number, top: number | null) => (top != null && top > 0 && avg > 0 ? (avg - top) / top : null);
-    const dBuy = diff(q.buyPrice, ask);
-    const dSell = diff(q.sellPrice, bid);
-    const quick =
+    const row = (label: string, top: number | null, avg: number) =>
+      `<tr><td>${esc(label)}</td><td class="num">${esc(fmtPrice(top))}</td><td class="num">${esc(fmtPrice(avg || null))}</td><td class="num">${esc(
+        fmtSignedPct(diff(avg, top)),
+      )}</td></tr>`;
+    return (
       `<div class="item-quick"><table class="tbl-plain"><thead><tr><th>${esc(t('quickSide'))}</th><th class="num">${esc(
         t('quickBook'),
       )}</th><th class="num">${esc(t('quickAvg'))}</th><th class="num">${esc(t('quickDiff'))}</th></tr></thead><tbody>` +
-      `<tr><td>${esc(t('quickInstaBuy'))}</td><td class="num">${esc(fmtPrice(ask))}</td><td class="num">${esc(
-        fmtPrice(q.buyPrice || null),
-      )}</td><td class="num">${esc(fmtSignedPct(dBuy))}</td></tr>` +
-      `<tr><td>${esc(t('quickInstaSell'))}</td><td class="num">${esc(fmtPrice(bid))}</td><td class="num">${esc(
-        fmtPrice(q.sellPrice || null),
-      )}</td><td class="num">${esc(fmtSignedPct(dSell))}</td></tr>` +
-      `</tbody></table></div><p class="note small">${esc(t('quickNote'))}</p>`;
+      row(t('quickInstaBuy'), ask, q.buyPrice) +
+      row(t('quickInstaSell'), bid, q.sellPrice) +
+      `</tbody></table></div>` +
+      note(t('quickNote'))
+    );
+  }
 
-    let npc: string;
-    if (!s.catalog) {
-      npc = `<p class="note">${esc(s.catalogError ? t('catalogError', { err: s.catalogError }) : t('catalogLoading'))}</p>`;
-    } else if (info?.npcSell == null && info?.npcBuy == null) {
-      npc = `<p class="note">${esc(t('npcNone'))}</p>`;
-    } else {
-      npc = kv([
-        [t('npcSell'), esc(fmtPrice(info?.npcSell))],
-        [t('npcBuy'), esc(fmtPrice(info?.npcBuy))],
-      ]);
+  function riskHtml(p: Product): string {
+    const risk = assessRisk(p, ctx!.history.stats(id));
+    const flags = risk.flags.length
+      ? `<ul class="item-flags">${risk.flags
+          .map((f) => `<li><span class="mono small muted">${esc(f)}</span> ${esc(riskFlagText(f))}</li>`)
+          .join('')}</ul>`
+      : `<p class="note">${esc(t('riskNone'))}</p>`;
+    return `<p class="item-risk-head">${riskBadge(risk)} <span class="small muted">${esc(t('riskScore', { n: risk.score }))}</span></p>${flags}`;
+  }
+
+  function renderFacts(p: Product | null, s: AppState): void {
+    const parts: string[] = [];
+    if (p) {
+      parts.push(
+        card(t('marketTitle'), marketHtml(p)),
+        card(t('yourTitle'), yourFlipHtml(p, s), ' data-testid="item-flip"', 'item-flip-card'),
+        card(t('statsTitle'), statsHtml(), ' data-testid="item-stats"'),
+      );
     }
-
-    const card = (title: string, body: string, cls = '') => `<section class="card ${cls}"><h3>${esc(title)}</h3>${body}</section>`;
-    factsEl.innerHTML =
-      card(t('marketTitle'), market) +
-      card(t('yourTitle'), yours) +
-      card(t('volumeTitle'), volume) +
-      card(t('quickTitle'), quick, 'item-quick-card') +
-      card(t('npcTitle'), npc);
+    const ah = ahHtml(s);
+    if (ah) parts.push(card(t('ahTitle'), ah, ' data-testid="item-ah"'));
+    const shard = shardHtml(s);
+    if (shard) parts.push(card(t('shardTitle'), shard, ' data-testid="item-shard"'));
+    if (p) {
+      parts.push(
+        card(t('riskTitle'), riskHtml(p), ' data-testid="item-risk"', 'item-risk'),
+        card(t('volumeTitle'), volumeHtml(p)),
+        card(t('quickTitle'), quickHtml(p), '', 'item-quick-card'),
+      );
+    }
+    parts.push(card(t('npcTitle'), npcHtml(s)));
+    factsEl.innerHTML = parts.join('');
   }
 
   function renderRecipes(s: AppState): void {
@@ -357,6 +560,91 @@ export function createItemView(): View {
     tblIn.setRows(all.slice(0, USING_LIMIT));
     recInMsg.hidden = all.length <= USING_LIMIT;
     recInMsg.textContent = all.length > USING_LIMIT ? t('recipesInMore', { n: USING_LIMIT, m: all.length }) : '';
+  }
+
+  // ---------------------------------------------------------------- quick alert
+  /** Current value of the selected metric (same numbers the alert runner will compare against). */
+  function currentMetric(): number | null {
+    const m = metricSel.value as AlertMetric;
+    const c = ctx!.derived.calcCtx();
+    if (c) return metricValue(m, id, c);
+    // without a catalog only the book metrics can be read
+    const p = st().snapshot?.products[id];
+    if (!p) return null;
+    if (m === 'ask') return p.ask;
+    if (m === 'bid') return p.bid;
+    if (m === 'spreadPct') return p.ask != null && p.bid != null && p.bid > 0 ? (p.ask - p.bid) / p.bid : null;
+    return null;
+  }
+
+  const fmtMetric = (m: string, v: number) => (PCT_METRICS.has(m) ? fmtPct(v, 2) : fmtPrice(v));
+
+  function syncAlertHint(): void {
+    const v = currentMetric();
+    const m = metricSel.value;
+    const pctHint = PCT_METRICS.has(m) ? ` (${t('alertPctHint')})` : '';
+    valueHint.textContent = (v == null ? t('alertNowNone') : t('alertNow', { v: fmtMetric(m, v) })) + pctHint;
+  }
+
+  function prefillAlert(): void {
+    const v = currentMetric();
+    valueInput.value = v == null ? '' : String(alertPrefill(metricSel.value, opSel.value as 'lt' | 'gt', v));
+    valueInput.removeAttribute('aria-invalid');
+    syncAlertHint();
+  }
+
+  function openAlertForm(): void {
+    if (!alertForm) return;
+    alertForm.hidden = false;
+    alertBtn.setAttribute('aria-expanded', 'true');
+    prefillAlert();
+    metricSel.focus();
+  }
+
+  function closeAlertForm(focusBtn = false): void {
+    if (!alertForm || alertForm.hidden) return;
+    alertForm.hidden = true;
+    alertBtn.setAttribute('aria-expanded', 'false');
+    if (focusBtn) alertBtn.focus();
+  }
+
+  function saveAlert(): void {
+    const n = parseNumberInput(valueInput.value);
+    if (n == null) {
+      valueInput.setAttribute('aria-invalid', 'true');
+      valueHint.textContent = t('alertInvalid');
+      valueInput.focus();
+      return;
+    }
+    const metric = metricSel.value as AlertMetric;
+    const op = opSel.value as 'lt' | 'gt';
+    const value = alertValueFromInput(metric, n);
+    const rule: AlertRule = {
+      key: `${id}|${metric}|${op}|${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`,
+      id,
+      metric,
+      op,
+      value,
+      enabled: true,
+      cooldownMin: ALERTS.defaultCooldownMin,
+    };
+    ctx!.store.set((s) => ({ alerts: [...s.alerts, rule] }));
+    ctx!.toast(
+      t('alertAdded', { name: nameOf(id), metric: ctx!.t(`alerts.m_${metric}`), op: ctx!.t(`alerts.op_${op}`), v: fmtMetric(metric, value) }),
+      'ok',
+    );
+    closeAlertForm(true);
+  }
+
+  async function copyId(): Promise<void> {
+    const c = ctx;
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error('no clipboard');
+      await navigator.clipboard.writeText(id);
+      c?.toast(c.t('common.copied'), 'ok');
+    } catch {
+      c?.toast(c.t('item.copyFail'), 'err');
+    }
   }
 
   // ---------------------------------------------------------------- chart
@@ -417,6 +705,7 @@ export function createItemView(): View {
     suggIds = [];
     active = -1;
     searchInput.setAttribute('aria-expanded', 'false');
+    searchInput.removeAttribute('aria-activedescendant');
   }
 
   function renderSugg(): void {
@@ -469,6 +758,75 @@ export function createItemView(): View {
   }
 
   // ---------------------------------------------------------------- build
+  function buildAlertForm(): HTMLFormElement {
+    alertTitle = h('h2', { class: 'item-card-h' });
+    metricLabel = h('span', { class: 'field-label' });
+    metricSel = h('select', { 'data-testid': 'alert-metric' });
+    for (const m of METRICS) metricSel.append(h('option', { value: m }));
+    opLabel = h('span', { class: 'field-label' });
+    opSel = h('select', { 'data-testid': 'alert-op' }, h('option', { value: 'lt' }), h('option', { value: 'gt' }));
+    valueLabel = h('span', { class: 'field-label' });
+    valueInput = h('input', {
+      type: 'text',
+      inputmode: 'decimal',
+      autocomplete: 'off',
+      'data-testid': 'alert-value',
+      'aria-describedby': 'item-alert-hint',
+    });
+    valueHint = h('span', { class: 'field-help', id: 'item-alert-hint', 'aria-live': 'polite' });
+    alertSave = h('button', { type: 'submit', class: 'btn btn-sm btn-primary', 'data-testid': 'alert-save' });
+    alertCancel = h('button', { type: 'button', class: 'btn btn-sm btn-ghost' });
+    alertCancel.addEventListener('click', () => closeAlertForm(true));
+    metricSel.addEventListener('change', prefillAlert);
+    opSel.addEventListener('change', prefillAlert);
+    const form = h(
+      'form',
+      { class: 'card item-alert-form', id: 'item-alert-form', hidden: true, 'data-testid': 'item-alert-form', novalidate: true },
+      alertTitle,
+      h(
+        'div',
+        { class: 'item-alert-fields' },
+        h('label', { class: 'field' }, metricLabel, metricSel),
+        h('label', { class: 'field' }, opLabel, opSel),
+        h('label', { class: 'field' }, valueLabel, valueInput, valueHint),
+        h('div', { class: 'item-alert-btns' }, alertSave, alertCancel),
+      ),
+    );
+    form.addEventListener('submit', (ev) => {
+      ev.preventDefault();
+      saveAlert();
+    });
+    form.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape') {
+        ev.preventDefault();
+        closeAlertForm(true);
+      }
+    });
+    return form;
+  }
+
+  function buildHead(): HTMLElement {
+    nameEl = h('h1', { class: 'item-name', 'data-testid': 'item-name' });
+    badgesEl = h('div', { class: 'item-badges' });
+    idEl = h('span', { class: 'id-sub item-id' });
+    watchBtn = h('button', { type: 'button', class: 'btn btn-sm item-watch', 'data-testid': 'item-watch', 'aria-pressed': 'false' });
+    watchBtn.addEventListener('click', () => ctx?.watch.toggle(id));
+    alertBtn = h('button', {
+      type: 'button',
+      class: 'btn btn-sm',
+      'data-testid': 'item-alert-btn',
+      'aria-expanded': 'false',
+      'aria-controls': 'item-alert-form',
+    });
+    alertBtn.addEventListener('click', () => (alertForm?.hidden ? openAlertForm() : closeAlertForm()));
+    copyBtn = h('button', { type: 'button', class: 'btn btn-sm btn-ghost', 'data-testid': 'item-copy' });
+    copyBtn.addEventListener('click', () => void copyId());
+    linksEl = h('span', { class: 'item-links' });
+    actionsEl = h('div', { class: 'item-actions', role: 'group' }, watchBtn, alertBtn, copyBtn, linksEl);
+    alertCountEl = h('p', { class: 'small muted item-alert-count', hidden: true });
+    return h('header', { class: 'item-head' }, h('div', { class: 'item-title' }, nameEl, badgesEl), idEl, actionsEl, alertCountEl);
+  }
+
   function build(el: HTMLElement): void {
     backLink = h('a', { class: 'btn btn-ghost btn-sm item-back', href: '#/flip', 'data-testid': 'item-back' });
     backLink.addEventListener('click', (ev) => {
@@ -516,26 +874,27 @@ export function createItemView(): View {
     const searchBox = h('label', { class: 'field item-search' }, searchLabel, h('div', { class: 'item-search-box' }, searchInput, suggList));
 
     msgEl = h('div', { class: 'item-msg', hidden: true });
-    headEl = h('header', { class: 'item-head' });
+    const head = buildHead();
+    alertForm = buildAlertForm();
+    offNote = h('p', { class: 'banner banner-info small', hidden: true, 'data-testid': 'off-bazaar' });
     factsEl = h('div', { class: 'item-facts' });
-    riskEl = h('section', { class: 'card item-risk', 'data-testid': 'item-risk' });
 
     tblBids = bookTable();
     tblAsks = bookTable();
-    bookTitle = h('h3');
-    bidsTitle = h('h4', { class: 'item-side item-side-bid' });
-    asksTitle = h('h4', { class: 'item-side item-side-ask' });
+    bookTitle = h('h2', { class: 'item-card-h' });
+    bidsTitle = h('h3', { class: 'item-side item-side-bid' });
+    asksTitle = h('h3', { class: 'item-side item-side-ask' });
     bookNote = h('p', { class: 'note small' });
-    const book = h(
+    bookSec = h(
       'section',
-      { class: 'card item-book', 'data-testid': 'order-book' },
+      { class: 'card item-card item-book', 'data-testid': 'order-book' },
       bookTitle,
       h('div', { class: 'item-book-grid' }, h('div', null, bidsTitle, tblBids.el), h('div', null, asksTitle, tblAsks.el)),
       bookNote,
     );
 
     chart = createLineChart();
-    chartTitle = h('h3');
+    chartTitle = h('h2', { class: 'item-card-h' });
     chartLegend = h('div', { class: 'lc-legend' });
     chartNote = h('p', { class: 'note small' });
     rangeSeg = h('div', { class: 'seg', role: 'group' });
@@ -544,9 +903,9 @@ export function createItemView(): View {
         h('button', { type: 'button', 'data-range': r, 'aria-pressed': String(r === range), onclick: () => setRange(r) }),
       );
     }
-    const chartSec = h(
+    chartSec = h(
       'section',
-      { class: 'card item-chart' },
+      { class: 'card item-card item-chart' },
       h('div', { class: 'item-chart-head' }, chartTitle, chartLegend, rangeSeg),
       h('div', { class: 'item-chart-box', 'data-testid': 'price-chart' }, chart.el),
       chartNote,
@@ -579,18 +938,18 @@ export function createItemView(): View {
         craftCol,
       ],
     });
-    recOutTitle = h('h3');
+    recOutTitle = h('h2', { class: 'item-card-h' });
     recOutMsg = h('p', { class: 'note', hidden: true });
-    recInTitle = h('h3');
+    recInTitle = h('h2', { class: 'item-card-h' });
     recInMsg = h('p', { class: 'note small', hidden: true });
     const recipes = h(
       'div',
       { class: 'item-recipes' },
-      h('section', { class: 'card', 'data-testid': 'recipes-out' }, recOutTitle, recOutMsg, tblOut.el),
-      h('section', { class: 'card', 'data-testid': 'recipes-in' }, recInTitle, tblIn.el, recInMsg),
+      h('section', { class: 'card item-card', 'data-testid': 'recipes-out' }, recOutTitle, recOutMsg, tblOut.el),
+      h('section', { class: 'card item-card', 'data-testid': 'recipes-in' }, recInTitle, tblIn.el, recInMsg),
     );
 
-    mainEl = h('div', { class: 'item-main', hidden: true }, headEl, factsEl, riskEl, book, chartSec, recipes);
+    mainEl = h('div', { class: 'item-main', hidden: true }, head, alertForm, offNote, factsEl, bookSec, chartSec, recipes);
     const view = h('div', { class: 'item-view', 'data-testid': 'item-view' }, h('div', { class: 'item-top' }, backLink, searchBox), msgEl, mainEl);
     el.append(view);
     root = view;
@@ -598,7 +957,7 @@ export function createItemView(): View {
 
   function outputCell(r: Recipe): string {
     const count = r.outCount !== 1 ? ` <span class="muted small">×${esc(fmtQty(r.outCount))}</span>` : '';
-    return itemCell(r.output, nameOf(r.output), !!st().snapshot?.products[r.output]).replace('</a>', `</a>${count}`);
+    return itemCell(r.output, nameOf(r.output), linkable(r.output)).replace('</a>', `</a>${count}`);
   }
 
   const schedule = rafDebounce(render);
@@ -619,11 +978,19 @@ export function createItemView(): View {
 
       cleanups.push(
         c.store.subscribe((s, prev) => {
-          if (s.snapshot !== prev.snapshot || s.catalog !== prev.catalog || s.catalogError !== prev.catalogError || s.settings !== prev.settings) {
+          if (
+            s.snapshot !== prev.snapshot ||
+            s.catalog !== prev.catalog ||
+            s.catalogError !== prev.catalogError ||
+            s.settings !== prev.settings ||
+            s.ah !== prev.ah ||
+            s.watchlist !== prev.watchlist ||
+            s.alerts !== prev.alerts
+          ) {
             schedule();
           }
           if (s.historyTick !== prev.historyTick) {
-            schedule(); // stats (24h change, spike flag) changed
+            schedule(); // stats (24h change, spike flag, market stats) changed
             void loadSeries();
           }
         }),
@@ -645,6 +1012,7 @@ export function createItemView(): View {
       id = next;
       searchInput.value = '';
       closeSugg();
+      closeAlertForm();
       render();
       void loadSeries();
       window.scrollTo?.(0, 0);
@@ -661,6 +1029,8 @@ export function createItemView(): View {
       root?.remove();
       root = null;
       ctx = null;
+      alertForm = null;
+      flipIndex = null;
     },
   };
 }

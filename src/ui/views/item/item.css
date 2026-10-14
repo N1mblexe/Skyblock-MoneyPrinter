@@ -1,7 +1,7 @@
-/* item view styles (owner: E4). Colors only via theme tokens. */
+/* item view styles. Colors only via theme tokens. Dense terminal grid; works down to 390px. */
 .item-view {
   display: grid;
-  gap: 14px;
+  gap: var(--s-3);
   min-width: 0;
 }
 .item-view > *,
@@ -10,7 +10,26 @@
 }
 .item-main {
   display: grid;
-  gap: 14px;
+  gap: var(--s-3);
+}
+.item-view .item-card {
+  padding: var(--s-3);
+  min-width: 0;
+}
+.item-card-h {
+  margin: 0 0 var(--s-2);
+  font-size: var(--fs-sm);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.item-view .kv {
+  font-size: var(--fs-md);
+  row-gap: 2px;
+}
+.item-view .card .note {
+  margin-top: var(--s-2);
 }
 
 /* ---- top bar: back + search */
@@ -19,7 +38,7 @@
   flex-wrap: wrap;
   align-items: end;
   justify-content: space-between;
-  gap: 10px 16px;
+  gap: var(--s-2) var(--s-4);
 }
 .item-back {
   padding-inline: 4px;
@@ -36,7 +55,7 @@
 }
 .item-sugg {
   position: absolute;
-  z-index: 20;
+  z-index: var(--z-sticky);
   top: calc(100% + 4px);
   left: 0;
   right: 0;
@@ -46,7 +65,7 @@
   background: var(--panel);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow), 0 8px 24px rgb(0 0 0 / 0.12);
+  box-shadow: var(--elev-2);
   max-height: 340px;
   overflow: auto;
 }
@@ -65,27 +84,59 @@
 .item-sugg-none {
   padding: 8px;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: var(--fs-sm);
 }
 
-/* ---- header */
+/* ---- header: name, badges, id, actions */
 .item-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.item-title {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 12px;
+  gap: var(--s-1) var(--s-3);
 }
-.item-head h2 {
+.item-name {
   margin: 0;
+  font-size: var(--fs-2xl);
+  line-height: 1.1;
+  overflow-wrap: anywhere;
 }
-.item-head .id-sub {
-  flex-basis: 100%;
-  font-size: 0.78rem;
+.item-id {
+  font-size: var(--fs-xs);
+}
+.item-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  margin-top: var(--s-1);
+}
+.item-watch[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.item-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1);
+}
+.item-alert-count {
+  margin: 0;
 }
 .item-badges {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
+}
+.item-cat {
+  background: var(--panel-2);
+  color: var(--muted);
+  border: 1px solid var(--line);
 }
 .item-tier.tier-common {
   background: var(--line);
@@ -115,15 +166,41 @@
   color: var(--bad);
 }
 
-/* ---- key facts */
+/* ---- quick alert form */
+.item-alert-form {
+  padding: var(--s-3);
+}
+.item-alert-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), 1fr));
+  gap: var(--s-2) var(--s-3);
+  align-items: end;
+}
+.item-alert-fields select,
+.item-alert-fields input {
+  width: 100%;
+}
+.item-alert-btns {
+  display: flex;
+  gap: var(--s-2);
+  align-items: center;
+}
+.item-alert-form input[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+
+/* ---- key facts grid */
 .item-facts {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(270px, 100%), 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr));
+  gap: var(--s-3);
   align-items: start;
 }
 .item-facts .banner {
-  margin: 0;
+  margin: var(--s-2) 0 0;
+}
+.item-mode {
+  margin: 0 0 var(--s-1);
 }
 .item-quick-card {
   grid-column: span 2;
@@ -141,25 +218,26 @@
 }
 
 /* ---- risk */
-.item-risk h3 {
+.item-risk-head {
+  margin: 0 0 var(--s-2);
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: var(--s-2);
 }
 .item-flags {
   margin: 0;
   padding-left: 1.1em;
   display: grid;
   gap: 4px;
-  font-size: 0.9rem;
+  font-size: var(--fs-sm);
 }
 
 /* ---- order book */
 .item-book-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(380px, 100%), 1fr));
-  gap: 14px;
+  gap: var(--s-3);
 }
 .item-book-grid > div {
   display: grid;
@@ -172,7 +250,7 @@
 }
 .item-side {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: var(--fs-xs);
   text-transform: uppercase;
   letter-spacing: 0.05em;
   display: flex;
@@ -197,9 +275,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 16px;
+  gap: var(--s-2) var(--s-4);
+  margin-bottom: var(--s-2);
 }
-.item-chart-head h3 {
+.item-chart-head h2 {
   margin: 0;
   margin-right: auto;
 }
@@ -312,7 +391,7 @@
   color: var(--ink);
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  box-shadow: var(--shadow), 0 6px 18px rgb(0 0 0 / 0.12);
+  box-shadow: var(--elev-2);
   padding: 6px 10px;
   font-size: 0.8rem;
   display: grid;
@@ -338,7 +417,7 @@
 /* ---- recipes */
 .item-recipes {
   display: grid;
-  gap: 14px;
+  gap: var(--s-3);
 }
 .item-recipes .tbl {
   --tbl-max-h: 520px;

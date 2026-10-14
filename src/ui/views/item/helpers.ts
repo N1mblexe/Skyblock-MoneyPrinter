@@ -53,3 +53,28 @@ export function fmtStamp(ts: number): string {
 export function fmtQty(n: number): string {
   return numFmt('qty', { maximumFractionDigits: 2 }).format(n);
 }
+
+/** Alert metrics entered and shown as percentages (stored as ratios). */
+export const PCT_METRICS: ReadonlySet<string> = new Set(['spreadPct', 'flipMargin']);
+
+/**
+ * Quick-alert prefill in input units: the current value moved 5% toward the trigger (lt: −5%, gt: +5%).
+ * Percent metrics are returned in percent (2 decimals), prices with 1 decimal.
+ */
+export function alertPrefill(metric: string, op: 'lt' | 'gt', current: number): number {
+  const d = Math.abs(current) * 0.05;
+  const v = op === 'lt' ? current - d : current + d;
+  return PCT_METRICS.has(metric) ? Math.round(v * 10_000) / 100 : Math.round(v * 10) / 10;
+}
+
+/** Input units -> stored rule value (percent metrics become ratios). */
+export const alertValueFromInput = (metric: string, n: number): number => (PCT_METRICS.has(metric) ? n / 100 : n);
+
+/** Volume-trend multiplier: ×1,25 / ×0,8. */
+export function fmtTrend(x: number | null | undefined): string {
+  if (x == null || !Number.isFinite(x)) return fmtPct(null);
+  return `×${numFmt('trend', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(x)}`;
+}
+
+/** Enchanted book ids (ENCHANTMENT_<NAME>_<LEVEL>) have a row on the Books tab. */
+export const isBookId = (id: string): boolean => id.startsWith('ENCHANTMENT_');
