@@ -1,6 +1,6 @@
-import { API_BAZAAR } from '../config.ts';
-import { onLangChange, t } from '../i18n/index.ts';
-import { esc } from './dom.ts';
+import { API_BAZAAR } from '../../config.ts';
+import { onLangChange, t } from '../../i18n/index.ts';
+import { esc } from '../dom.ts';
 
 /** Collapsible fallback: paste API JSON or pick a .json file. Calls onText with the text; shows returned error message if any. */
 export function createManualLoad(onText: (text: string) => string | null): { el: HTMLElement; open(): void; destroy(): void } {
