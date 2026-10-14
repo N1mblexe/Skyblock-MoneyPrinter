@@ -1,0 +1,46 @@
+{
+  "$source": "Hand-curated from Hypixel SkyBlock game mechanics (Hypixel SkyBlock wiki enchantment pages and in-game anvil behaviour), not from an API. Each value is the highest level an enchanted book can reach by combining two books of the level below in an anvil (or the Hex). Levels above it exist only as drops / rewards / shop items and cannot be made from two lower books. Read by scripts/build-data.ts into catalog.books[base].m; catalog.bookRule() reports these as verified.",
+  "$policy": "Only enchants we are confident about are listed. Anything missing falls back to the NEU enchanting-table max (catalog.books[base].t) and is reported as unverified, which the books view hides by default. Do not add an entry from a guess.",
+  "$format": "groups[].max maps ENCHANTMENT_<BASE> (bazaar id without the level suffix) to the anvil max level. Keys starting with $ are comments.",
+  "groups": [
+    {
+      "$source": "Normal enchants whose anvil max equals the enchanting-table max. The next levels are drop-only (e.g. Sharpness VI/VII from Dungeons and Kuudra, Smite VI/VII from Revenant Horror, Bane of Arthropods VI from Tarantula Broodfather, Ender Slayer VI/VII from Voidgloom, Giant Killer/Growth/Power/Protection/Critical VI from Dungeons); two max-table books do not combine further. Efficiency books stop at V; VI and above is only applied to tools by Silex. Confidence: high.",
+      "max": {
+        "ENCHANTMENT_SHARPNESS": 5,
+        "ENCHANTMENT_SMITE": 5,
+        "ENCHANTMENT_BANE_OF_ARTHROPODS": 5,
+        "ENCHANTMENT_CRITICAL": 5,
+        "ENCHANTMENT_ENDER_SLAYER": 5,
+        "ENCHANTMENT_GIANT_KILLER": 5,
+        "ENCHANTMENT_POWER": 5,
+        "ENCHANTMENT_PROTECTION": 5,
+        "ENCHANTMENT_GROWTH": 5,
+        "ENCHANTMENT_EFFICIENCY": 5,
+        "ENCHANTMENT_FIRST_STRIKE": 4,
+        "ENCHANTMENT_TRIPLE_STRIKE": 4,
+        "ENCHANTMENT_HARVESTING": 5
+      }
+    },
+    {
+      "$source": "Ultimate enchants: not on the enchanting table; level I books come from drops/shops and two books of level N combine into N+1 up to V (the classic 16x Ultimate Wise I -> Ultimate Wise V). One for All has a single level. Confidence: high for the long-standing ultimates listed here; newer ultimates (Flash, Refrigerate, Bobbin' Time, Missile, First Impression, Sunset, Flowstate, Habanero Tactics, Crop Fever, The One) are left out on purpose.",
+      "max": {
+        "ENCHANTMENT_ULTIMATE_WISE": 5,
+        "ENCHANTMENT_ULTIMATE_WISDOM": 5,
+        "ENCHANTMENT_ULTIMATE_LEGION": 5,
+        "ENCHANTMENT_ULTIMATE_LAST_STAND": 5,
+        "ENCHANTMENT_ULTIMATE_CHIMERA": 5,
+        "ENCHANTMENT_ULTIMATE_SOUL_EATER": 5,
+        "ENCHANTMENT_ULTIMATE_SWARM": 5,
+        "ENCHANTMENT_ULTIMATE_COMBO": 5,
+        "ENCHANTMENT_ULTIMATE_BANK": 5,
+        "ENCHANTMENT_ULTIMATE_REND": 5,
+        "ENCHANTMENT_ULTIMATE_NO_PAIN_NO_GAIN": 5,
+        "ENCHANTMENT_ULTIMATE_JERRY": 5,
+        "ENCHANTMENT_ULTIMATE_FATAL_TEMPO": 5,
+        "ENCHANTMENT_ULTIMATE_INFERNO": 5,
+        "ENCHANTMENT_ULTIMATE_REITERATE": 5,
+        "ENCHANTMENT_ULTIMATE_ONE_FOR_ALL": 1
+      }
+    }
+  ]
+}

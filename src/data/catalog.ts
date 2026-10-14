@@ -1,10 +1,12 @@
 import { CATALOG_URL } from '../config.ts';
 import { deriveName } from '../domain/ids.ts';
-import type { Catalog, CatalogFile, ItemInfo, Recipe } from '../types/contracts.ts';
+import type { BookRule, Catalog, CatalogFile, ItemInfo, Recipe, ShopOffer } from '../types/contracts.ts';
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const posNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
 const finNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const str = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+const posInt = (v: unknown): v is number => posNum(v) && Number.isInteger(v);
 
 /** Throw a descriptive Error unless `x` is a v1/v2 catalog file. */
 export function validateCatalogFile(x: unknown): CatalogFile {
@@ -47,6 +49,10 @@ export function catalogFromFile(f: CatalogFile): Catalog {
     if (typeof e.t === 'string' && e.t) info.tier = e.t;
     if (finNum(e.ns) && e.ns >= 0) info.npcSell = e.ns;
     if (posNum(e.nb)) info.npcBuy = e.nb;
+    if (str(e.c)) info.category = e.c;
+    if (e.ah === 1) info.auctionable = true;
+    const shard = parseShard(e.sh);
+    if (shard) info.shard = shard;
     items[id] = info;
   }
 
@@ -77,6 +83,9 @@ export function catalogFromFile(f: CatalogFile): Catalog {
 
   const meta: Catalog['meta'] = { generatedAt: typeof f.generatedAt === 'string' ? f.generatedAt : '' };
   if (f.neuCommit) meta.neuCommit = f.neuCommit;
+  if (posNum(f.itemsApiUpdated)) meta.itemsApiUpdated = f.itemsApiUpdated;
+
+  const books = parseBooks(f.books);
 
   return {
     meta,
@@ -85,8 +94,38 @@ export function catalogFromFile(f: CatalogFile): Catalog {
     byOutput,
     byInput,
     name: (id: string) => items[id]?.name || deriveName(id),
-    // v2 fields: parsed by the catalog package (Wave 1)
-    shops: [],
-    bookRule: () => null,
+    shops: parseShops(f.shops),
+    bookRule: (base: string) => books.get(base) ?? null,
   };
+}
+
+function parseShard(x: unknown): ItemInfo['shard'] | undefined {
+  if (!isObj(x) || !str(x.r)) return undefined;
+  const family = Array.isArray(x.f) ? x.f.filter(str) : [];
+  const out: NonNullable<ItemInfo['shard']> = { rarity: x.r, family };
+  if (str(x.a)) out.alignment = x.a;
+  return out;
+}
+
+/** v2 `shops` -> ShopOffer[] (malformed entries dropped; v1 -> []). */
+function parseShops(x: unknown): ShopOffer[] {
+  if (!Array.isArray(x)) return [];
+  const out: ShopOffer[] = [];
+  for (const e of x as unknown[]) {
+    if (!isObj(e) || !str(e.s) || !str(e.cur) || !str(e.o) || !posNum(e.cq) || !posNum(e.oq)) continue;
+    out.push({ shop: e.s, currency: e.cur, costQty: e.cq, output: e.o, outQty: e.oq });
+  }
+  return out;
+}
+
+/** v2 `books` -> base -> BookRule: curated anvil max `m` (verified) wins over enchanting-table max `t` (unverified). */
+function parseBooks(x: unknown): Map<string, BookRule> {
+  const out = new Map<string, BookRule>();
+  if (!isObj(x)) return out;
+  for (const [base, r] of Object.entries(x)) {
+    if (!isObj(r)) continue;
+    if (posInt(r.m)) out.set(base, { maxLevel: r.m, verified: true });
+    else if (posInt(r.t)) out.set(base, { maxLevel: r.t, verified: false });
+  }
+  return out;
 }
