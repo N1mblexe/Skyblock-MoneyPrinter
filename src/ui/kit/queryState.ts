@@ -30,6 +30,11 @@ export function encodeField(f: QueryField, v: Val): string | undefined {
 /** Parse one URL/localStorage string; invalid -> the field default. */
 export function decodeField(f: QueryField, raw: string | undefined): Val {
   if (raw == null) return cloneDef(f);
+  // localStorage may hold pre-kit prefs (numbers, booleans, {key,dir} sort objects)
+  if (typeof raw !== 'string') {
+    const o = raw as unknown;
+    raw = o && typeof o === 'object' && 'key' in o && 'dir' in o ? `${(o as { key: unknown }).key}.${(o as { dir: unknown }).dir}` : String(o);
+  }
   switch (f.kind) {
     case 'string':
       return raw;

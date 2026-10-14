@@ -141,3 +141,12 @@ describe('bindQueryState', () => {
     expect(decodeField({ kind: 'number', def: 3 }, '')).toBeNull();
   });
 });
+
+describe('decodeField with pre-kit stored values', () => {
+  it('accepts numbers, booleans and {key,dir} sort objects', () => {
+    const raw = (v: unknown) => v as string;
+    expect(decodeField({ kind: 'number', def: null }, raw(5))).toBe(5);
+    expect(decodeField({ kind: 'bool', def: false }, raw(true))).toBe(true);
+    expect(decodeField({ kind: 'sort', def: { key: 'a', dir: 'desc' } }, raw({ key: 'pph', dir: 'asc' }))).toEqual({ key: 'pph', dir: 'asc' });
+  });
+});
