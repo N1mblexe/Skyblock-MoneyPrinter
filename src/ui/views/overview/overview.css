@@ -1,0 +1,163 @@
+/* overview dashboard (view-specific only; shared kit lives in components.css) */
+.overview-view {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.overview-view .ov-head h1 {
+  margin: 0;
+  font-size: var(--fs-xl);
+}
+.overview-view .ov-intro {
+  margin: var(--s-1) 0 0;
+  max-width: 75ch;
+}
+.overview-view .ov-grid {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr));
+  align-items: start;
+  min-width: 0;
+}
+.overview-view .ov-card {
+  display: grid;
+  gap: var(--s-2);
+  min-width: 0;
+  align-content: start;
+}
+.overview-view .ov-card-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+  justify-content: space-between;
+}
+.overview-view .ov-card-head h2 {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+.overview-view .ov-card-head h2 a {
+  color: inherit;
+  text-decoration: none;
+}
+.overview-view .ov-card-head h2 a::after {
+  content: ' →';
+  color: var(--muted);
+}
+.overview-view .ov-card-head h2 a:hover,
+.overview-view .ov-card-head h2 a:focus-visible {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.overview-view .ov-seg button {
+  min-height: 1.75rem;
+  font-size: var(--fs-xs);
+}
+.overview-view .ov-desc {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--fs-xs);
+  line-height: 1.4;
+}
+.overview-view .ov-body {
+  min-width: 0;
+}
+.overview-view .ov-empty {
+  margin: 0;
+  padding: var(--s-3);
+  color: var(--muted);
+  font-size: var(--fs-sm);
+  background: var(--panel-2);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius-sm);
+}
+
+/* compact tables */
+.overview-view .ov-mini {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+  table-layout: auto;
+}
+.overview-view .ov-mini th {
+  text-align: left;
+  font-weight: 500;
+  font-size: var(--fs-xs);
+  color: var(--muted);
+  padding: 0 var(--s-1) var(--s-1);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+}
+.overview-view .ov-mini td {
+  padding: var(--s-1);
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+.overview-view .ov-mini tr:last-child td {
+  border-bottom: 0;
+}
+.overview-view .ov-mini td:first-child {
+  max-width: 0;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.overview-view .ov-mini .num {
+  text-align: right;
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.overview-view .ov-mini .id-sub {
+  display: inline;
+  margin-left: var(--s-1);
+}
+.overview-view .ov-mini .spark {
+  display: block;
+}
+.overview-view .ov-forge {
+  font-size: var(--fs-xs);
+}
+
+/* movers: two sides */
+.overview-view .ov-sides {
+  display: grid;
+  gap: var(--s-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr));
+}
+.overview-view .ov-side h3,
+.overview-view .ov-sub {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+.overview-view .ov-sub {
+  margin-top: var(--s-2);
+}
+
+.overview-view .ov-kv {
+  margin: 0;
+}
+.overview-view .ov-more {
+  margin: var(--s-1) 0 0;
+  font-size: var(--fs-sm);
+}
+.overview-view .ov-alerts,
+.overview-view .ov-perks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+}
+.overview-view .ov-alerts li {
+  display: grid;
+  grid-template-columns: minmax(5.5em, auto) 1fr;
+  gap: var(--s-2);
+  align-items: baseline;
+}
+.overview-view .ov-perks li {
+  line-height: 1.4;
+}
