@@ -823,6 +823,9 @@ table.tbl-plain tbody tr:hover > td {
   display: grid;
   gap: 0;
   min-width: 0;
+  /* table alignment classes (.num/.center) don't apply to label/value pairs */
+  text-align: left;
+  justify-items: start;
 }
 .kcard-kv dt {
   font-size: var(--fs-xs);
@@ -843,7 +846,7 @@ table.tbl-plain tbody tr:hover > td {
   font-family: var(--f-mono);
   font-variant-numeric: tabular-nums;
 }
-.kcard-actions {
+.tbl-kit .kcard-actions {
   display: flex;
   justify-content: flex-end;
   gap: var(--s-2);

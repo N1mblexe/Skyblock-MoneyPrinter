@@ -143,7 +143,7 @@
   margin: var(--s-1) 0 0;
   font-size: var(--fs-sm);
 }
-.overview-view .ov-alerts,
+.overview-view .ov-alert-list,
 .overview-view .ov-perks {
   margin: 0;
   padding: 0;
@@ -152,7 +152,7 @@
   gap: var(--s-1);
   font-size: var(--fs-sm);
 }
-.overview-view .ov-alerts li {
+.overview-view .ov-alert-list li {
   display: grid;
   grid-template-columns: minmax(5.5em, auto) 1fr;
   gap: var(--s-2);

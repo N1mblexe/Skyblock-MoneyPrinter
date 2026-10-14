@@ -252,7 +252,7 @@ export function createOverviewView(): View {
         if (!s.alertLog.length) return empty(t(s.alerts.length ? 'overview.e_alerts' : 'overview.e_alertsNoRules'));
         const now = Date.now();
         return (
-          `<ul class="ov-alerts">` +
+          `<ul class="ov-alert-list">` +
           s.alertLog
             .slice(0, ALERTS_N)
             .map(
