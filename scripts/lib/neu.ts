@@ -29,6 +29,17 @@ export interface NpcOffer {
   shop: string;
 }
 
+/** A single-cost npc_shop offer (v2 shops): pay `costQty` x `currency`, get `qty` x `result` (NEU ids). */
+export interface ShopOfferRaw {
+  /** the shop's NEU id */
+  shop: string;
+  /** NEU id of the only cost stack (SKYBLOCK_COIN, SKYBLOCK_BIT, SKYBLOCK_COPPER, an item id, ...) */
+  currency: string;
+  costQty: number;
+  result: string;
+  qty: number;
+}
+
 const SLOTS = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'] as const;
 
 function stack(v: unknown): { id: string; qty: number } | null {
@@ -105,6 +116,19 @@ export function extractNpcOffers(item: NeuItem): NpcOffer[] {
     const coins = costs.reduce((a, c) => a + c!.qty, 0);
     if (!(coins > 0)) continue;
     out.push({ result: res.id, qty: res.qty, coins, shop: item.internalname });
+  }
+  return out;
+}
+
+/** npc_shop offers paid with exactly one stack (any currency or item); multi-cost offers are skipped. */
+export function extractShopOffers(item: NeuItem): ShopOfferRaw[] {
+  const out: ShopOfferRaw[] = [];
+  for (const r of item.recipes ?? []) {
+    if (!r || r.type !== 'npc_shop' || !Array.isArray(r.cost) || r.cost.length !== 1) continue;
+    const res = stack(r.result);
+    const cost = stack(r.cost[0]);
+    if (!res || !cost) continue;
+    out.push({ shop: item.internalname, currency: cost.id, costQty: cost.qty, result: res.id, qty: res.qty });
   }
   return out;
 }
