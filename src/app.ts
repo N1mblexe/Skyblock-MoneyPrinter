@@ -188,8 +188,10 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   election.start();
   store.subscribe((s, prev) => {
     if (s.settings.ahEnabled === prev.settings.ahEnabled) return;
-    if (s.settings.ahEnabled) ah.start();
-    else ah.stop();
+    if (s.settings.ahEnabled) {
+      ah.start();
+      void ah.scanNow();
+    } else ah.stop();
   });
 
   store.subscribe((s, prev) => {

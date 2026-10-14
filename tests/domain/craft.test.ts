@@ -345,6 +345,14 @@ describe('computeCrafts off-bazaar outputs', () => {
     expect(u).toMatchObject({ outputOffBazaar: true, unpriced: ['GEAR_U'], cost: 0, value: 0, profitPerHour: 0, margin: null });
   });
 
+  it('NPC vs AH: the higher value wins', () => {
+    const both = (price: number) => (id: string): AhPrice | null => (id === 'GEAR_N' ? { price, count: 5 } : null);
+    const hi = rowsBy(computeCrafts({ ...ctx({}, { ah: both(80) }), catalog: cat })).get('GEAR_N#0')!;
+    expect(hi).toMatchObject({ valueSource: 'ah', value: 80 });
+    const lo = rowsBy(computeCrafts({ ...ctx({}, { ah: both(20) }), catalog: cat })).get('GEAR_N#0')!;
+    expect(lo).toMatchObject({ valueSource: 'npc', value: 50 });
+  });
+
   it('enough AH listings -> no AH flag; no ctx.ah -> unpriced', () => {
     expect(run({}, 5).get('GEAR_A#1')!.risk.flags).toEqual([]);
     const plain = rowsBy(computeCrafts({ ...ctx(), catalog: cat }));

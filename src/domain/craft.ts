@@ -158,7 +158,7 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
     }
     let cost = lines.reduce((s, l) => s + l.total, 0);
 
-    // Output value. Bazaar output: best of bazaar (after tax) and NPC sell. Off-bazaar: NPC sell, else AH lowest BIN.
+    // Output value. Bazaar output: best of bazaar (after tax) and NPC sell. Off-bazaar: best of NPC sell and AH lowest BIN.
     const out = recipe.output;
     const outputOffBazaar = !catalog.items[out]?.bazaar;
     const outP = outputOffBazaar ? undefined : snap.products[out];
@@ -166,7 +166,7 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
     const bzVal = sq && Number.isFinite(sq.price) ? recipe.outCount * afterTax(sq.price, taxRate) : null;
     const ns = catalog.items[out]?.npcSell;
     const npcVal = ns != null && ns > 0 ? recipe.outCount * ns : null;
-    const ah = outputOffBazaar && npcVal == null ? ctx.ah?.(out) : null;
+    const ah = outputOffBazaar ? ctx.ah?.(out) : null;
     const ahVal = ah && ah.price > 0 && Number.isFinite(ah.price) ? recipe.outCount * ah.price : null;
     let value = 0;
     let valueSource: CraftRow['valueSource'] = 'bazaar';
@@ -181,7 +181,7 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
       if (sellMode === 'offer') outOrderUnits = recipe.outCount;
       const outRisk = productRisk(out);
       if (outRisk) risks.unshift(outRisk);
-    } else if (npcVal != null) {
+    } else if (npcVal != null && (ahVal == null || npcVal >= ahVal)) {
       // Sold to an NPC: the output's bazaar market (and its risk) does not matter.
       value = npcVal;
       valueSource = 'npc';
