@@ -237,6 +237,8 @@ export type RiskFlag =
   | 'QUICK_DIVERGENCE'
   | 'VOLUME_IMBALANCE'
   | 'PRICE_SPIKE'
+  /** off-bazaar output valued from fewer than AH.minCount auction listings */
+  | 'AH_THIN'
   | 'NO_HISTORY';
 
 export type RiskLevel = 'ok' | 'caution' | 'suspect';

@@ -338,7 +338,7 @@ describe('computeCrafts off-bazaar outputs', () => {
     const a = by.get('GEAR_A#1')!;
     expect(a).toMatchObject({ outputOffBazaar: true, valueSource: 'ah', value: 2000, cost: 3, unpriced: [] });
     expect(a.outCraftsPerHour).toBe(Infinity);
-    expect(a.risk.flags).toEqual(['LOW_VOLUME']); // fewer than AH.minCount listings
+    expect(a.risk.flags).toEqual(['AH_THIN']); // fewer than AH.minCount listings
     expect(a.tp.unitsPerHour).toBe(2);
 
     const u = by.get('GEAR_U#2')!;

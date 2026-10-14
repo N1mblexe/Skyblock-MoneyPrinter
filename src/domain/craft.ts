@@ -189,8 +189,7 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
       // TODO: AH listing/claim tax is not modelled; the lowest BIN is taken as the sale price.
       value = ahVal;
       valueSource = 'ah';
-      // TODO(lead): use an 'AH_THIN' risk flag once contracts have one; LOW_VOLUME stands in for it.
-      if (ah!.count < AH.minCount) risks.unshift(reportFromFlags(['LOW_VOLUME']));
+      if (ah!.count < AH.minCount) risks.unshift(reportFromFlags(['AH_THIN']));
     } else {
       unpriced.push(out);
       outCraftsPerHour = 0;

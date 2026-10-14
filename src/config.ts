@@ -80,6 +80,7 @@ export const RISK = {
     THIN_TOP: 1,
     QUICK_DIVERGENCE: 1,
     VOLUME_IMBALANCE: 1,
+    AH_THIN: 2,
     NO_HISTORY: 0,
   },
 } as const;

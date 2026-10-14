@@ -28,6 +28,7 @@ import {
   saveWatchlist,
 } from './storage/local.ts';
 import type { AppState, Route, Snapshot, ToastKind, View, ViewContext } from './types/contracts.ts';
+import { toast as kitToast } from './ui/kit/index.ts';
 import { createRouter, parseHash, routeToHash } from './ui/router.ts';
 import { mountShell } from './ui/shell.ts';
 import { views } from './ui/views/index.ts';
@@ -56,8 +57,7 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     if (s.alertLog !== prev.alertLog) saveAlertLog(s.alertLog);
   });
 
-  // Wave 0: toasts go to the console until the kit's toast() lands (lead wires it after Wave 1).
-  const toast = (msg: string, kind: ToastKind = 'info') => console.info(`[toast:${kind}] ${msg}`);
+  const toast = (msg: string, kind: ToastKind = 'info') => void kitToast(msg, kind);
   const watch = {
     has: (id: string) => store.get().watchlist.some((w) => w.id === id),
     toggle(id: string) {
