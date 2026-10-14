@@ -68,8 +68,8 @@ describe('loadCatalog', () => {
     await expect(loadCatalog('/c.json')).rejects.toThrow('Catalog HTTP 404 (/c.json)');
     vi.stubGlobal('fetch', vi.fn(async () => new Response('<html>')));
     await expect(loadCatalog('/c.json')).rejects.toThrow(/not valid JSON/);
-    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ...fixture, v: 2 }))));
-    await expect(loadCatalog('/c.json')).rejects.toThrow(/Unsupported catalog version: 2/);
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ ...fixture, v: 3 }))));
+    await expect(loadCatalog('/c.json')).rejects.toThrow(/Unsupported catalog version: 3/);
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify({ v: 1, recipes: [] }))));
     await expect(loadCatalog('/c.json')).rejects.toThrow(/items/);
     vi.stubGlobal(

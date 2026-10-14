@@ -33,7 +33,44 @@
   --radius-sm: 8px;
   --gutter: 16px;
   --maxw: 1200px;
+
+  /* Wave 0 layout tokens (trading-terminal shell) */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 24px;
+  --s-6: 32px;
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.8125rem;
+  --fs-md: 0.875rem;
+  --fs-lg: 1rem;
+  --fs-xl: 1.25rem;
+  --fs-2xl: 1.625rem;
+  --row-h: 36px;
+  --sidebar-w: 220px;
+  --sidebar-w-collapsed: 56px;
+  --topbar-h: 52px;
+  --bottomnav-h: 60px;
+  --detail-w: 420px;
+  --z-sticky: 10;
+  --z-nav: 20;
+  --z-drawer: 40;
+  --z-palette: 50;
+  --z-toast: 60;
+  --elev-1: var(--shadow);
+  --elev-2: 0 4px 16px rgb(21 33 31 / 0.12);
+  --elev-3: 0 12px 40px rgb(21 33 31 / 0.2);
+  --focus-ring: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   color-scheme: light;
+}
+
+:root[data-density="compact"] {
+  --row-h: 28px;
+  --s-3: 8px;
+  --s-4: 12px;
+  --fs-md: 0.8125rem;
 }
 
 @media (prefers-color-scheme: dark) {

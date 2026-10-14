@@ -6,10 +6,10 @@ const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object
 const posNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
 const finNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 
-/** Throw a descriptive Error unless `x` is a v1 catalog file. */
+/** Throw a descriptive Error unless `x` is a v1/v2 catalog file. */
 export function validateCatalogFile(x: unknown): CatalogFile {
   if (!isObj(x)) throw new Error('Catalog is not a JSON object');
-  if (x.v !== 1) throw new Error(`Unsupported catalog version: ${JSON.stringify(x.v)} (expected 1)`);
+  if (x.v !== 1 && x.v !== 2) throw new Error(`Unsupported catalog version: ${JSON.stringify(x.v)} (expected 1 or 2)`);
   if (!isObj(x.items)) throw new Error('Catalog has no "items" object');
   if (!Array.isArray(x.recipes)) throw new Error('Catalog has no "recipes" array');
   return x as unknown as CatalogFile;
@@ -85,5 +85,8 @@ export function catalogFromFile(f: CatalogFile): Catalog {
     byOutput,
     byInput,
     name: (id: string) => items[id]?.name || deriveName(id),
+    // v2 fields: parsed by the catalog package (Wave 1)
+    shops: [],
+    bookRule: () => null,
   };
 }

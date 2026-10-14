@@ -6,6 +6,13 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],
-    coverage: { provider: 'v8', include: ['src/domain/**'] },
+    coverage: {
+      provider: 'v8',
+      include: ['src/domain/**', 'src/storage/**', 'src/state/**', 'src/api/**', 'src/ui/kit/**'],
+      thresholds: {
+        'src/domain/**': { lines: 95, branches: 90 },
+        'src/{storage,state,api,ui/kit}/**': { lines: 85 },
+      },
+    },
   },
 });

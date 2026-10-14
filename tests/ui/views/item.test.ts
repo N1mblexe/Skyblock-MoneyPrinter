@@ -23,6 +23,7 @@ import { bookRows, createItemView, searchProducts } from '../../../src/ui/views/
 import { lineChartSvg, nearestIndex, timeTicks } from '../../../src/ui/views/item/lineChart.ts';
 import bazaarJson from '../../fixtures/bazaar.json';
 import catalogJson from '../../fixtures/catalog.json';
+import { ctxExtras, historyExtras } from '../../helpers/fakes.ts';
 
 const SNAP: Snapshot = toSnapshot(validateRaw(bazaarJson as unknown), 1_700_000_000_000, 'fixture');
 const CATALOG: Catalog = catalogFromFile(validateCatalogFile(catalogJson as unknown));
@@ -56,6 +57,7 @@ function fakeHistory() {
     stats: (id: string) => (id === 'ENCHANTED_MELON' ? { n: 30, medianAsk: 325, medianBid: 300, madAsk: 1, madBid: 1, change24h: 0.05 } : null),
     saveLatest: async () => {},
     loadLatest: async () => null,
+    ...historyExtras,
   };
   return repo satisfies HistoryRepo;
 }
@@ -89,6 +91,7 @@ beforeEach(() => {
     navigate: vi.fn((r: Route) => view.update?.(r)),
     t,
     refresh: async () => {},
+    ...ctxExtras(store, history),
   };
 });
 

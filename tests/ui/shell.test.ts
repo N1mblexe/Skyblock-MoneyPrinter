@@ -42,8 +42,8 @@ describe('mountShell', () => {
     shell = mountShell(root, ctx);
     expect(q('h1').textContent).toBe('Bazaar Masası');
     expect(q('h1 span').textContent).toBe('Masası');
-    expect(tabTexts()).toEqual(['Flip bulucu', 'Craft flip', 'Shard fusion', 'NPC flip']);
-    expect(q('[data-testid="tab-flip"]').getAttribute('aria-selected')).toBe('true');
+    expect(tabTexts()).toEqual(['Genel bakış', 'Flip bulucu', 'Kitap birleştirme', 'Craft flip', 'Shard fusion', 'NPC flip', 'Planlayıcı', 'İzleme listesi']);
+    expect(q('[data-testid="tab-overview"]').getAttribute('aria-selected')).toBe('true');
     expect(shell.viewRoot.children).toHaveLength(0);
     expect(root.contains(shell.viewRoot)).toBe(true);
     expect(q('footer').textContent).toContain('macro');
@@ -58,14 +58,14 @@ describe('mountShell', () => {
     expect(store.get().settings.lang).toBe('en');
     expect(getLang()).toBe('en');
     expect(document.documentElement.lang).toBe('en');
-    expect(tabTexts()).toEqual(['Flip finder', 'Craft flip', 'Shard fusion', 'NPC flip']);
+    expect(tabTexts()).toEqual(['Overview', 'Flip finder', 'Book combining', 'Craft flip', 'Shard fusion', 'NPC flip', 'Planner', 'Watchlist']);
     expect(q('[data-testid="lang-en"]').getAttribute('aria-pressed')).toBe('true');
     expect(q('.refresh-lbl').textContent).toBe('Refresh');
     expect(q('.settings-panel summary').textContent).toContain('Global settings');
     expect(q('[data-field="capital"] .field-label').textContent).toBe('Capital (coins)');
     expect(q('[data-testid="status-pill"]').textContent).toBe('Loading');
     q('[data-testid="lang-tr"]').click();
-    expect(tabTexts()[0]).toBe('Flip bulucu');
+    expect(tabTexts()[0]).toBe('Genel bakış');
   });
 
   it('applies initial lang from settings', () => {

@@ -14,6 +14,7 @@ import { filterCrafts } from '../../../src/ui/views/craft/helpers.ts';
 
 import bazaarJson from '../../fixtures/bazaar.json';
 import catalogJson from '../../fixtures/catalog.json';
+import { ctxExtras, historyExtras } from '../../helpers/fakes.ts';
 
 const fixture = (name: 'bazaar.json' | 'catalog.json'): unknown =>
   structuredClone(name === 'bazaar.json' ? bazaarJson : catalogJson);
@@ -33,6 +34,7 @@ const fakeHistory: HistoryRepo = {
   stats: () => null,
   saveLatest: async () => {},
   loadLatest: async () => null,
+  ...historyExtras,
 };
 
 const flush = () => new Promise((r) => setTimeout(r, 30));
@@ -59,7 +61,7 @@ beforeEach(() => {
   store = createStore(initialState({ ...defaultSettings }));
   root = document.createElement('div');
   document.body.append(root);
-  ctx = { store, history: fakeHistory, navigate: vi.fn(), t, refresh: vi.fn(async () => {}) };
+  ctx = { store, history: fakeHistory, navigate: vi.fn(), t, refresh: vi.fn(async () => {}), ...ctxExtras(store, fakeHistory) };
   view = null;
 });
 

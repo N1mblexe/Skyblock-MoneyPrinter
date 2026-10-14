@@ -47,6 +47,8 @@ export function buildCatalog(f: CatalogFile): Catalog {
     byOutput,
     byInput,
     name: (id) => items[id]?.name || deriveName(id),
+    shops: [],
+    bookRule: () => null,
   };
 }
 
@@ -103,6 +105,12 @@ export const baseSettings: Settings = {
   autoRefresh: true,
   lang: 'en',
   theme: 'auto',
+  orderSlots: 14,
+  npcDailyLimit: 640,
+  fillModel: 'sequential',
+  density: 'comfortable',
+  notify: false,
+  ahEnabled: true,
 };
 
 export function ctx(over: Partial<Settings> = {}, extra: Partial<CalcCtx> = {}): CalcCtx {

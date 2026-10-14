@@ -12,6 +12,7 @@ import type { AppState, CatalogFile, FusionRecipe, HistoryRepo, Store, ViewConte
 import { fmtCoins } from '../../../src/ui/format.ts';
 import { createFusionView } from '../../../src/ui/views/fusion/fusionView.ts';
 import { itemSuggestions } from '../../../src/ui/views/fusion/fusionCalc.ts';
+import { ctxExtras, historyExtras } from '../../helpers/fakes.ts';
 
 const snap = toSnapshot(validateRaw(bazaarRaw), 1_700_000_000_000, 'fixture');
 const catalog = catalogFromFile(catalogRaw as unknown as CatalogFile);
@@ -24,6 +25,7 @@ const history: HistoryRepo = {
   stats: () => null,
   saveLatest: async () => {},
   loadLatest: async () => null,
+  ...historyExtras,
 };
 
 let store: Store<AppState>;
@@ -43,7 +45,7 @@ const RECIPE: FusionRecipe = { a: 'SHARD_SALMON', qa: 2, b: 'Wiki Tiki Shard', q
 
 function mount(state: Partial<AppState> = {}) {
   store = createStore<AppState>({ ...initialState({ ...defaultSettings }), snapshot: snap, catalog, ...state });
-  const ctx: ViewContext = { store, history, navigate: vi.fn(), t, refresh: vi.fn(async () => {}) };
+  const ctx: ViewContext = { store, history, navigate: vi.fn(), t, refresh: vi.fn(async () => {}), ...ctxExtras(store, history) };
   view = createFusionView();
   view.mount(root, ctx, { id: 'fusion' });
 }

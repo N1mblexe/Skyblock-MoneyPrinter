@@ -11,6 +11,7 @@ import type { AppState, Catalog, HistoryPoint, HistoryRepo, Snapshot, Store, Vie
 import { createFlipView } from '../../../src/ui/views/flip/flipView.ts';
 import bazaarJson from '../../fixtures/bazaar.json';
 import catalogJson from '../../fixtures/catalog.json';
+import { ctxExtras, historyExtras } from '../../helpers/fakes.ts';
 
 const SNAP: Snapshot = toSnapshot(validateRaw(bazaarJson as unknown), 1_700_000_000_000, 'fixture');
 const CATALOG: Catalog = catalogFromFile(validateCatalogFile(catalogJson as unknown));
@@ -34,6 +35,7 @@ function fakeHistory(): HistoryRepo & { statsCalls: number } {
     },
     saveLatest: async () => {},
     loadLatest: async () => null,
+    ...historyExtras,
   };
   return repo;
 }
@@ -57,7 +59,8 @@ beforeEach(() => {
   store = createStore(initialState({ ...defaultSettings }));
   root = document.createElement('div');
   document.body.append(root);
-  ctx = { store, history: fakeHistory(), navigate: vi.fn(), t: (k: string) => k, refresh: async () => {} } as never;
+  const history = fakeHistory();
+  ctx = { store, history, navigate: vi.fn(), t: (k: string) => k, refresh: async () => {}, ...ctxExtras(store, history) } as never;
   view = createFlipView();
 });
 afterEach(() => {

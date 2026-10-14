@@ -13,6 +13,7 @@ import { createNpcMemo, filterRows, defaultPrefs } from '../../../src/ui/views/n
 import { computeNpcFlips } from '../../../src/domain/npc.ts';
 import rawBazaar from '../../fixtures/bazaar.json';
 import catalogJson from '../../fixtures/catalog.json';
+import { ctxExtras, historyExtras } from '../../helpers/fakes.ts';
 
 const snapshot: Snapshot = toSnapshot(validateRaw(rawBazaar as unknown), Date.now(), 'fixture');
 const catalog: Catalog = catalogFromFile(catalogJson as unknown as CatalogFile);
@@ -25,6 +26,7 @@ const history: HistoryRepo = {
   stats: () => null,
   saveLatest: async () => {},
   loadLatest: async () => null,
+  ...historyExtras,
 };
 
 let store: Store<AppState>;
@@ -43,7 +45,7 @@ const setInput = (el: HTMLInputElement, v: string) => {
 
 function mount(state: Partial<AppState> = { snapshot, catalog }): void {
   store = createStore<AppState>({ ...initialState({ ...defaultSettings }), ...state });
-  ctx = { store, history, navigate: vi.fn(), t: (k) => k, refresh: async () => {} };
+  ctx = { store, history, navigate: vi.fn(), t: (k) => k, refresh: async () => {}, ...ctxExtras(store, history) };
   view = createNpcView();
   view.mount(root, ctx, { id: 'npc' });
 }

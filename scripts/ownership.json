@@ -1,0 +1,49 @@
+{
+  "$comment": "Wave -> agent -> globs it may touch. Checked by scripts/check-ownership.ts against `git diff round2...<branch>`.",
+  "w1": {
+    "estimates": [
+      "src/domain/pricing.ts", "src/domain/flip.ts", "src/domain/craft.ts", "src/domain/npc.ts", "src/domain/fusion.ts",
+      "src/domain/risk.ts", "src/domain/book.ts", "src/domain/stats.ts",
+      "tests/domain/pricing.test.ts", "tests/domain/flip.test.ts", "tests/domain/craft.test.ts", "tests/domain/npc.test.ts",
+      "tests/domain/fusion.test.ts", "tests/domain/risk.test.ts", "tests/domain/book.test.ts", "tests/domain/stats.test.ts"
+    ],
+    "catalog": [
+      "scripts/**", "!scripts/smoke.ts", "!scripts/ownership.json", "!scripts/check-ownership.ts",
+      "public/data/catalog.json", "src/data/catalog.ts", "src/domain/ids.ts",
+      "tests/data/**", "tests/scripts/**", "tests/fixtures/catalog-v2.json", "tests/fixtures/smoke/**", "tests/fixtures/ah-page.json", "tests/fixtures/election.json"
+    ],
+    "opportunities": [
+      "src/domain/books.ts", "src/domain/shops.ts", "src/domain/optimizer.ts",
+      "tests/domain/books.test.ts", "tests/domain/shops.test.ts", "tests/domain/optimizer.test.ts"
+    ],
+    "history": [
+      "src/storage/**", "src/domain/marketStats.ts", "src/domain/alerts.ts", "src/state/derived.ts", "src/state/alertsRunner.ts",
+      "tests/storage/**", "tests/state/**", "tests/domain/marketStats.test.ts", "tests/domain/alerts.test.ts"
+    ],
+    "market-apis": [
+      "src/api/auctions.ts", "src/api/nbt.ts", "src/api/election.ts", "src/api/ahWorker.ts", "src/api/ahStore.ts",
+      "tests/api/auctions.test.ts", "tests/api/nbt.test.ts", "tests/api/election.test.ts", "tests/api/ahStore.test.ts", "tests/fixtures/api/**"
+    ],
+    "kit": [
+      "src/ui/table.ts", "src/ui/kit/**", "src/ui/dom.ts", "src/ui/format.ts", "src/ui/cells.ts", "src/ui/sparkline.ts",
+      "src/styles/components.css",
+      "tests/ui/table.test.ts", "tests/ui/format.test.ts", "tests/ui/sparkline.test.ts", "tests/ui/kit/**"
+    ]
+  },
+  "w2": {
+    "shell": [
+      "src/ui/shell.ts", "src/ui/shell/**", "src/ui/statusPill.ts", "src/ui/settingsPanel.ts", "src/ui/manualLoad.ts",
+      "src/styles/base.css", "tests/ui/shell.test.ts", "tests/ui/shell/**"
+    ],
+    "overview-watch": ["src/ui/views/overview/**", "src/ui/views/watch/**", "tests/ui/views/overview.test.ts", "tests/ui/views/watch.test.ts"],
+    "flip-books": ["src/ui/views/flip/**", "src/ui/views/books/**", "tests/ui/views/flip.test.ts", "tests/ui/views/books.test.ts"],
+    "craft": ["src/ui/views/craft/**", "tests/ui/views/craft.test.ts"],
+    "npc-fusion": ["src/ui/views/npc/**", "src/ui/views/fusion/**", "tests/ui/views/npc.test.ts", "tests/ui/views/fusion.test.ts"],
+    "item-plan": ["src/ui/views/item/**", "src/ui/views/plan/**", "tests/ui/views/item.test.ts", "tests/ui/views/plan.test.ts"]
+  },
+  "w3": {
+    "smoke": ["scripts/smoke.ts", "tests/fixtures/smoke/**"],
+    "integration": ["tests/integration/**"],
+    "docs": ["README.md", "docs/**"]
+  }
+}

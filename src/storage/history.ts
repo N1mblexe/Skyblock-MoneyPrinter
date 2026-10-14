@@ -7,7 +7,7 @@ import {
   LATEST_BOOK_DEPTH,
 } from '../config.ts';
 import { pctChange } from '../domain/stats.ts';
-import type { HistoryPoint, HistoryRange, HistoryRepo, PriceStats, Product, Snapshot } from '../types/contracts.ts';
+import type { HistoryPoint, HistoryRange, HistoryRepo, MarketStat, PriceStats, Product, Snapshot } from '../types/contracts.ts';
 import { openDb, reqP, txDone } from './db.ts';
 
 /*
@@ -475,5 +475,20 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       if (!looksLikeSnapshot(s)) s = latestMem;
       return looksLikeSnapshot(s) ? { ...s, source: 'cache' } : null;
     },
+
+    // Wave 0 stub: implemented by the history package (Wave 1).
+    marketStats(_taxRate: number): ReadonlyMap<string, MarketStat> {
+      return EMPTY_STATS;
+    },
+
+    info() {
+      const oldest = Math.min(raw[0]?.ts ?? Infinity, q15[0]?.at ?? Infinity);
+      return { raw: raw.length, q15: q15.length, oldest: Number.isFinite(oldest) ? oldest : null, persistent: !!db };
+    },
+
+    // Wave 0 stub: implemented by the history package (Wave 1).
+    async clear(): Promise<void> {},
   };
 }
+
+const EMPTY_STATS: ReadonlyMap<string, MarketStat> = new Map();

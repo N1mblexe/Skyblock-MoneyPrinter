@@ -1,6 +1,6 @@
-import { LS_FUSION, LS_SETTINGS } from '../config.ts';
+import { ALERTS, LS_ALERT_LOG, LS_ALERTS, LS_FUSION, LS_SETTINGS, LS_WATCH } from '../config.ts';
 import { sanitizeSettings } from '../state/appState.ts';
-import type { FusionRecipe, Settings } from '../types/contracts.ts';
+import type { AlertEvent, AlertRule, FusionRecipe, Settings, WatchEntry } from '../types/contracts.ts';
 
 function storage(): Storage | null {
   try {
@@ -59,3 +59,20 @@ export function loadFusion(): FusionRecipe[] {
 export function saveFusion(r: FusionRecipe[]): void {
   lsSet(LS_FUSION, r);
 }
+
+// ---- watchlist / alerts (Wave 0: shape checks only; history package hardens validation)
+const arr = <T>(key: string, ok: (x: unknown) => boolean): T[] => {
+  const raw = lsGet<unknown>(key, []);
+  return Array.isArray(raw) ? (raw.filter(ok) as T[]) : [];
+};
+const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object';
+
+export const loadWatchlist = (): WatchEntry[] => arr(LS_WATCH, (x) => isObj(x) && typeof x.id === 'string' && x.id !== '');
+export const saveWatchlist = (w: WatchEntry[]): void => lsSet(LS_WATCH, w);
+export const loadAlerts = (): AlertRule[] => arr(LS_ALERTS, (x) => isObj(x) && typeof x.key === 'string' && typeof x.id === 'string');
+export const saveAlerts = (a: AlertRule[]): void => lsSet(LS_ALERTS, a);
+export const loadAlertLog = (): AlertEvent[] => arr<AlertEvent>(LS_ALERT_LOG, isObj).slice(0, ALERTS.logMax);
+export const saveAlertLog = (l: AlertEvent[]): void => lsSet(LS_ALERT_LOG, l.slice(0, ALERTS.logMax));
+
+/** One-time migration of legacy single-file tool keys (fusion recipes, last tab). Wave 0 stub. */
+export function migrateLegacy(): void {}
