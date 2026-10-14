@@ -40,6 +40,9 @@ export interface RawItem {
   tier?: string;
   category?: string;
   npc_sell_price?: number;
+  /** present (almost always false) only when non-default */
+  can_auction?: boolean;
+  soulbound?: 'SOLO' | 'COOP' | string;
 }
 
 export interface RawItems {
