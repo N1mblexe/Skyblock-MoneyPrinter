@@ -1,9 +1,9 @@
 // Last AH lowest-BIN snapshot, in its own IndexedDB database (the history DB is never touched). Owner: market-apis package.
+import { AH_DB_NAME } from '../config.ts';
 import { openDb, reqP, txDone } from '../storage/db.ts';
 import type { AhSnapshot } from '../types/contracts.ts';
 
-// TODO(lead): move to config.ts next to HISTORY_DB_NAME
-export const AH_DB_NAME = 'bazaar-masasi-ah';
+export { AH_DB_NAME };
 const DB_VERSION = 1;
 const STORE = 'latest';
 const KEY = 'snapshot';

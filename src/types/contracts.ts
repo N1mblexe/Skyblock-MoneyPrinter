@@ -490,6 +490,8 @@ export interface AhSnapshot {
   /** Hypixel lastUpdated of page 0 */
   lastUpdated: number;
   lowestBin: Record<string, AhPrice>;
+  /** pages skipped after a retry (partial scan) */
+  failedPages?: number[];
 }
 
 export interface AhScanProgress {

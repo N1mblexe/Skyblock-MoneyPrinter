@@ -24,6 +24,7 @@ export const OLD_AFTER_MS = 10 * 60_000;
 
 // ---- history
 export const HISTORY_DB_NAME = 'bazaar-masasi';
+export const AH_DB_NAME = 'bazaar-masasi-ah';
 export const HISTORY_RAW_KEEP_MS = 3 * 3600_000;
 export const HISTORY_Q15_BUCKET_MS = 15 * 60_000;
 export const HISTORY_Q15_KEEP_MS = 7 * 24 * 3600_000;

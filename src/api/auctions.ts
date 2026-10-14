@@ -54,7 +54,6 @@ export type AhPageFetcher = (page: number, signal?: AbortSignal) => Promise<RawA
 
 /** Result of one scan: the snapshot plus scan diagnostics (extra fields are harmless to AhSnapshot consumers). */
 export interface AhScanResult extends AhSnapshot {
-  // TODO(lead): move to contracts (AhSnapshot.failedPages?)
   /** pages that failed twice and were skipped */
   failedPages: number[];
   /** BIN listings counted */
