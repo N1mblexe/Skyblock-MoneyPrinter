@@ -15,6 +15,8 @@ export const risk: Messages['risk'] = {
   VOLUME_IMBALANCE: 'Dengesiz hacim: alım ve satım hacmi {imbalance} kattan fazla farklı.',
   PRICE_SPIKE: 'Fiyat sıçraması: son 24 saatin medyanından çok saptı.',
   AH_THIN: 'Müzayedede çok az ilan var: en düşük BIN fiyatı güvenilir olmayabilir.',
+  AH_VARIANT: 'Varyantlı ürün: petler seviyeye, ekipman ve aletler yıldız, reforge ve büyüye göre değişir. En ucuz kopya ikinciyle aynı ürün olmayabilir.',
+  AH_GAP: 'İkinci en düşük BIN çok yüksek: büyük ihtimalle farklı bir varyant ya da önce alınacak/çekilecek bir ilan.',
   NO_HISTORY: 'Henüz yeterli fiyat geçmişi yok (sıçrama kontrolü yapılamadı).',
   srcOrder: 'Buy order',
   srcInsta: 'Insta',

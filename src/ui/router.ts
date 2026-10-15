@@ -1,6 +1,6 @@
 import type { Route, RouteId } from '../types/contracts.ts';
 
-const IDS: ReadonlySet<RouteId> = new Set<RouteId>(['overview', 'flip', 'craft', 'forge', 'books', 'npc', 'fusion', 'plan', 'watch', 'item']);
+const IDS: ReadonlySet<RouteId> = new Set<RouteId>(['overview', 'flip', 'ahflip', 'craft', 'forge', 'books', 'npc', 'fusion', 'plan', 'watch', 'item']);
 export const DEFAULT_ROUTE: Route = { id: 'overview' };
 
 function safeDecode(s: string): string {

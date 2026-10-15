@@ -113,6 +113,7 @@ export const common: Messages['common'] = {
   nav_overview: 'Genel bakış',
   nav_flip: 'Flipler',
   nav_books: 'Kitaplar',
+  nav_ahflip: 'Müzayede flip',
   nav_craft: 'Craft',
   nav_forge: 'Forge',
   nav_fusion: 'Fusion',

@@ -87,9 +87,12 @@ export async function fetchAhPage(page: number, signal?: AbortSignal, timeoutMs 
 
 // ---------------------------------------------------------------- scan
 
+/** AhSnapshot.v written by this scanner (2: next / uuid / name per id). */
+export const AH_SCAN_VERSION = 2;
+
 const abortError = (signal: AbortSignal): unknown => signal.reason ?? new DOMException('Aborted', 'AbortError');
 
-/** Fold one page's unclaimed BIN listings into `acc` (lowest price + count per normalized id). */
+/** Fold one page's unclaimed BIN listings into `acc`: per normalized id the count, the two lowest prices and the cheapest listing's uuid and name. */
 export async function aggregatePage(
   auctions: readonly RawAuction[],
   acc: Record<string, AhPrice>,
@@ -113,10 +116,17 @@ export async function aggregatePage(
     }
     bins++;
     const cur = acc[id];
-    if (!cur) acc[id] = { price, count: 1 };
+    const who = { ...(a.uuid ? { uuid: a.uuid } : {}), ...(a.item_name ? { name: a.item_name } : {}) };
+    if (!cur) acc[id] = { price, count: 1, ...who };
     else {
       cur.count++;
-      if (price < cur.price) cur.price = price;
+      if (price < cur.price) {
+        cur.next = cur.price;
+        cur.price = price;
+        delete cur.uuid;
+        delete cur.name;
+        Object.assign(cur, who);
+      } else if (cur.next === undefined || price < cur.next) cur.next = price;
     }
   }
   return { bins, errors };
@@ -183,7 +193,7 @@ export async function scanAuctions(
   await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, totalPages - 1)) }, worker));
   failedPages.sort((a, b) => a - b);
   // Object.create(null) keeps odd ids like "__proto__" safe while aggregating; hand out a plain object.
-  return { fetchedAt: now(), lastUpdated: first.lastUpdated, lowestBin: { ...lowestBin }, failedPages, binCount, decodeErrors };
+  return { v: AH_SCAN_VERSION, fetchedAt: now(), lastUpdated: first.lastUpdated, lowestBin: { ...lowestBin }, failedPages, binCount, decodeErrors };
 }
 
 // ---------------------------------------------------------------- worker bridge

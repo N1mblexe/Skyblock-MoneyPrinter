@@ -167,6 +167,14 @@ The id is `ExtraAttributes.id`, with two adjustments: pets become `TYPE;RARITY` 
 
 AH values are used only for craft outputs that aren't bazaar products, and only while the AH scan is on. The item page also shows the lowest BIN.
 
+## AH flips
+
+The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) uses the AH scan's two lowest BIN prices per id (scan v2; an older cached scan shows a "rescan needed" note until the next scan). A row buys the lowest BIN and relists it at the second-lowest minus `AH_FLIP.undercut = 1` coin:
+
+`profit = ahNet(next − 1) − lowest`, `margin = profit / lowest`, using the AH fees above (×4 claim tax under Derpy).
+
+Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter is 5). Because one id covers every copy of an item, two flags warn about variants: `AH_VARIANT` for pets and for gear and tools (`AH_FLIP.variantCategories`), and `AH_GAP` when the second price is more than `AH_FLIP.gapRatio = 3` times the lowest. Both together make a row suspect, hidden while "Hide suspicious" is on. Prices can change before you reach the listing; the page copies `/viewauction <uuid>` for the cheapest listing.
+
 ## Book combining
 
 Two level-k books combine into one level-(k+1) book, so one level-L book takes `2^(L−k)` level-k books. For each output book, the app tries every `k` from `L − 1` down to `L − 4` (`BOOK.maxChainLevels = 4`, at most 16 input books) and keeps the most profitable chain. On a tie, it keeps the shorter chain. One unit is one output book: it costs `count` input books, and the input's fill rate and book depth are divided by `count`.

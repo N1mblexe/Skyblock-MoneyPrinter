@@ -241,6 +241,10 @@ export type RiskFlag =
   | 'PRICE_SPIKE'
   /** off-bazaar output valued from fewer than AH.minCount auction listings */
   | 'AH_THIN'
+  /** AH id that covers many variants (pets: level; gear and tools: stars, reforges, enchants) */
+  | 'AH_VARIANT'
+  /** the second-lowest BIN is far above the lowest: likely a different variant or a mispriced listing */
+  | 'AH_GAP'
   | 'NO_HISTORY';
 
 export type RiskLevel = 'ok' | 'caution' | 'suspect';
@@ -509,9 +513,17 @@ export interface AhPrice {
   price: number;
   /** number of BIN listings seen */
   count: number;
+  /** second-lowest BIN price (scan v2+; absent with a single listing) */
+  next?: number;
+  /** auction uuid of the cheapest listing (for /viewauction) */
+  uuid?: string;
+  /** display name of the cheapest listing (pets: "[Lvl 100] Ender Dragon") */
+  name?: string;
 }
 
 export interface AhSnapshot {
+  /** 2 = lowestBin entries carry next / uuid / name; older cached scans have none */
+  v?: number;
   fetchedAt: number;
   /** Hypixel lastUpdated of page 0 */
   lastUpdated: number;
@@ -599,7 +611,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'overview' | 'flip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'watch' | 'item';
+export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;

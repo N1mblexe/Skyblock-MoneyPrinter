@@ -4,6 +4,7 @@ const P: Record<string, string> = {
   flip: '<path d="M7 4 3 8l4 4"/><path d="M3 8h14"/><path d="m17 20 4-4-4-4"/><path d="M21 16H7"/>',
   books: '<path d="M4 19.5V5a2 2 0 0 1 2-2h13v16H6.5a2.5 2.5 0 0 0 0 5H19"/><path d="M9 7h6"/>',
   craft: '<path d="m14 7 3-3 3 3-3 3"/><path d="M15.5 8.5 6 18"/><path d="M4 20l2-2"/><path d="M3 10h6v6"/>',
+  ahflip: '<path d="m14 13-7.5 7.5a2.1 2.1 0 0 1-3-3L11 10"/><path d="m16 16 6-6"/><path d="m8 8 6-6"/><path d="m9 7 8 8"/>',
   // anvil
   forge: '<path d="M4 7h12a4 4 0 0 1-4 4H9"/><path d="M16 7h4"/><path d="M9 11v4"/><path d="M14 11v4"/><path d="M6 19a3 3 0 0 1 3-4h5a3 3 0 0 1 3 4Z"/>',
   fusion: '<circle cx="8" cy="12" r="5"/><circle cx="16" cy="12" r="5"/>',

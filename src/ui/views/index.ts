@@ -1,5 +1,6 @@
 // View registry + navigation model (owned by the lead; each view lives in its own folder).
 import type { RouteId, View } from '../../types/contracts.ts';
+import { createAhFlipView } from './ahflip/ahflipView.ts';
 import { createBooksView } from './books/booksView.ts';
 import { createCraftView } from './craft/craftView.ts';
 import { createFlipView } from './flip/flipView.ts';
@@ -14,6 +15,7 @@ import { createWatchView } from './watch/watchView.ts';
 export const views: Record<RouteId, () => View> = {
   overview: createOverviewView,
   flip: createFlipView,
+  ahflip: createAhFlipView,
   craft: createCraftView,
   forge: createForgeView,
   books: createBooksView,
@@ -37,6 +39,7 @@ export const NAV: NavEntry[] = [
   { id: 'overview', group: 'markets' },
   { id: 'flip', group: 'markets' },
   { id: 'books', group: 'markets' },
+  { id: 'ahflip', group: 'markets' },
   { id: 'craft', group: 'production' },
   { id: 'forge', group: 'production' },
   { id: 'fusion', group: 'production' },

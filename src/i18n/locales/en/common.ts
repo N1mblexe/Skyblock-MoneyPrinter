@@ -104,6 +104,7 @@ export const common = {
   nav_overview: 'Overview',
   nav_flip: 'Flips',
   nav_books: 'Books',
+  nav_ahflip: 'AH flips',
   nav_craft: 'Craft',
   nav_forge: 'Forge',
   nav_fusion: 'Fusion',

@@ -18,7 +18,9 @@ import { scanAuctions, type RawAhPage } from '../src/api/auctions.ts';
 import { toSnapshot, validateRaw } from '../src/api/normalize.ts';
 import { catalogFromFile, validateCatalogFile } from '../src/data/catalog.ts';
 import { computeBookCombines } from '../src/domain/books.ts';
+import { computeAhFlips } from '../src/domain/ahFlips.ts';
 import { bestPerLadder, computeChains } from '../src/domain/chains.ts';
+import { AHFLIP_SCHEMA, filterAhFlips, type AhFlipQuery } from '../src/ui/views/ahflip/model.ts';
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
@@ -36,7 +38,7 @@ import { findBrowser, freePort, loadSmokeFixtures, ROOT, sleep, startServer, wit
 const LIVE = process.argv.includes('--live');
 const DESKTOP = { width: 1280, height: 800 };
 const MOBILE = { width: 390, height: 844 };
-const ROUTES = ['overview', 'flip', 'books', 'craft', 'forge', 'fusion', 'npc', 'plan', 'watch'] as const;
+const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'plan', 'watch'] as const;
 const ITEM = 'ENCHANTED_GOLD';
 const FLIP_Q = 'enchanted';
 const T = 15_000;
@@ -85,6 +87,8 @@ interface Expected {
   craftForge: number;
   chainTotal: number;
   chainDefault: number;
+  ahFlipTotal: number;
+  ahFlipDefault: number;
   npc: Record<(typeof SEGMENTS)[number], number>;
   planPph: { base: string; big: string; baseN: number; bigN: number; positions: number };
   paletteId: string | null;
@@ -127,6 +131,15 @@ async function computeExpected(): Promise<Expected> {
     catalog,
   ).rows.length;
 
+  // AH flips page defaults, on the fixture scan (the fixture mayor is not Derpy)
+  const ahFlips = computeAhFlips(ah, catalog);
+  const afq = defaults<AhFlipQuery>(AHFLIP_SCHEMA);
+  const ahFlipDefault = filterAhFlips(
+    ahFlips,
+    { q: afq.q, minProfit: afq.minProfit, minMargin: afq.minMargin, minCount: afq.minCount, pets: afq.pets, hideSuspect: settings.hideSuspicious && !afq.suspect },
+    catalog,
+  ).rows.length;
+
   const npcAll = computeNpcFlips(ctx);
   const ff = defaults<FlipFilters>(NPC_FLIP_SCHEMA);
   const sf = defaults<ShopFilters>(SHOP_SCHEMA);
@@ -154,6 +167,8 @@ async function computeExpected(): Promise<Expected> {
     craftForge: craftCount('forge'),
     chainTotal: chains.length,
     chainDefault,
+    ahFlipTotal: ahFlips.length,
+    ahFlipDefault,
     npc,
     planPph: { base: fmtCoins(base.profitPerHour), big: fmtCoins(big.profitPerHour), baseN: base.profitPerHour, bigN: big.profitPerHour, positions: base.allocations.length },
     paletteId: resolveUserInput(catalog, 'enchanted gold', new Set(Object.keys(snap.products))),
@@ -470,7 +485,16 @@ async function craftSuite(env: Env, exp: Expected): Promise<void> {
     const all = await until(counts, (xs) => xs.includes(exp.craftAll) && xs.includes(exp.craftTotal));
     check(all.includes(exp.craftAll) && all.includes(exp.craftTotal), `${L} Craft page shows the domain count (${exp.craftAll} of ${exp.craftTotal}; UI ${all.join('/')})`);
   });
+  await step(`${L} AH flips page`, async () => {
+    await go(page, '#/ahflip');
+    const n = await until(async () => ints(await textOf(page.locator(tid('ahflip-count')))), (xs) => xs.includes(exp.ahFlipDefault) && xs.includes(exp.ahFlipTotal));
+    check(
+      n.includes(exp.ahFlipDefault) && n.includes(exp.ahFlipTotal),
+      `${L} AH flips page shows the domain count (${exp.ahFlipDefault} of ${exp.ahFlipTotal}; UI ${n.join('/')})`,
+    );
+  });
   await step(`${L} craft chains tab`, async () => {
+    await go(page, '#/craft');
     await page.click(tid('craft-tab-chains'));
     const h = await until(async () => hash(page), (x) => x.startsWith('#/craft?view=chains'));
     const n = await until(async () => ints(await textOf(page.locator(tid('chain-count')))), (xs) => xs.includes(exp.chainDefault) && xs.includes(exp.chainTotal));
@@ -838,7 +862,7 @@ try {
   if (exp) {
     console.log(
       `info  expected (fixture, default settings): flips ${exp.flipDefault}/${exp.flipRows.length}, q=${FLIP_Q} ${exp.flipQ}, ` +
-        `crafts ${exp.craftAll} of ${exp.craftTotal}, forges ${exp.craftForge} of ${exp.forgeTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
+        `crafts ${exp.craftAll} of ${exp.craftTotal}, forges ${exp.craftForge} of ${exp.forgeTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, AH flips ${exp.ahFlipDefault} of ${exp.ahFlipTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
         `plan ${exp.planPph.base} -> ${exp.planPph.big} at 1b (${exp.planPph.positions} positions)`,
     );
   }

@@ -83,6 +83,8 @@ export const RISK = {
     QUICK_DIVERGENCE: 1,
     VOLUME_IMBALANCE: 1,
     AH_THIN: 2,
+    AH_GAP: 2,
+    AH_VARIANT: 1,
     NO_HISTORY: 0,
   },
 } as const;
@@ -137,6 +139,18 @@ export const AH = {
   },
 } as const;
 
+/** AH flip finder (src/domain/ahFlips.ts): buy the lowest BIN, relist just under the second-lowest. */
+export const AH_FLIP = {
+  /** fewer BIN listings than this: no flip row (too few to trust the second price) */
+  minCount: 3,
+  /** relist this many coins under the second-lowest BIN */
+  undercut: 1,
+  /** second price more than this many times the lowest: AH_GAP risk flag */
+  gapRatio: 3,
+  /** item categories (Hypixel items API) whose copies differ by stars, reforges or enchants */
+  variantCategories: ['SWORD', 'LONGSWORD', 'BOW', 'WAND', 'HELMET', 'CHESTPLATE', 'LEGGINGS', 'BOOTS', 'DRILL', 'PICKAXE', 'GAUNTLET', 'AXE', 'HOE', 'SHOVEL', 'FISHING_ROD', 'FISHING_WEAPON', 'DEPLOYABLE', 'NECKLACE', 'CLOAK', 'BELT', 'GLOVES', 'BRACELET'],
+} as const;
+
 export const ELECTION_POLL_MS = 30 * 60_000;
 
 export const UI = {
@@ -160,7 +174,7 @@ export const HOTKEYS = {
   star: ['s'],
   export: ['e'],
   close: ['Escape'],
-  go: { overview: 'g o', flip: 'g f', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', watch: 'g w' },
+  go: { overview: 'g o', flip: 'g f', ahflip: 'g a', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', watch: 'g w' },
 } as const;
 
 // ---- localStorage keys
