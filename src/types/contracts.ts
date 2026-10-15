@@ -358,6 +358,24 @@ export interface FusionRow {
   profitPerHour?: number;
 }
 
+/** A multi-step crafting move along a chain: buy `fromId`, craft up through `path`, sell `toId`. */
+export interface ChainRow {
+  /** path ids joined with '>' */
+  key: string;
+  /** tiers from the bought item to the sold one, e.g. [WHEAT, ENCHANTED_WHEAT, ENCHANTED_HAY_BALE] */
+  path: string[];
+  fromId: string;
+  toId: string;
+  /** crafting steps (path.length - 1) */
+  steps: number;
+  /** units of fromId per unit of toId */
+  needFrom: number;
+  /** keys of the full ladders (root to top, ids joined with '>') this move lies on */
+  ladders: string[];
+  /** the move priced as one recipe: fromId (bought, never sub-crafted) + side ingredients -> 1 toId */
+  row: CraftRow;
+}
+
 export interface BookRow {
   /** output id, e.g. ENCHANTMENT_SHARPNESS_6 */
   id: string;

@@ -26,6 +26,21 @@ const INGREDIENT_FLAGS = new Set(['PRICE_SPIKE', 'QUICK_DIVERGENCE']);
  * In insta modes, direct bazaar ingredients and the output are re-quoted once at the planned batch size.
  */
 export function computeCrafts(ctx: CalcCtx): CraftRow[] {
+  const pricer = createCraftPricer(ctx);
+  return ctx.catalog.recipes.map((r) => pricer.price(r));
+}
+
+export interface PriceOptions {
+  /** inputs bought as they are (bazaar or NPC), never sub-crafted; a chain move uses it for its starting tier */
+  directIds?: ReadonlySet<string>;
+}
+
+export interface CraftPricer {
+  /** Price any recipe (catalog or synthetic) the way computeCrafts does; memos are shared across calls. */
+  price(recipe: Recipe, opts?: PriceOptions): CraftRow;
+}
+
+export function createCraftPricer(ctx: CalcCtx): CraftPricer {
   const { snap, catalog, settings } = ctx;
   const { costMode, sellMode, share, taxRate } = settings;
   const npcRate = npcBuyRate(settings.npcDailyLimit);
@@ -108,9 +123,9 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
     return { res: c && (!d || c.unit < d.unit) ? c : d, cut };
   };
 
-  return catalog.recipes.map(priceRecipe);
+  return { price: priceRecipe };
 
-  function priceRecipe(recipe: Recipe): CraftRow {
+  function priceRecipe(recipe: Recipe, opts?: PriceOptions): CraftRow {
     const unpriced: string[] = [];
     const lines: IngredientLine[] = [];
     const risks: RiskReport[] = [];
@@ -123,7 +138,7 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
     const capDepth = (v: number) => (depthCap = depthCap == null ? v : Math.min(depthCap, v));
 
     for (const inp of recipe.inputs) {
-      const { res } = resolve(inp.id, 0, new Set([recipe.output]));
+      const res = opts?.directIds?.has(inp.id) ? direct(inp.id) : resolve(inp.id, 0, new Set([recipe.output])).res;
       const line: IngredientLine = {
         id: inp.id,
         name: catalog.name(inp.id),

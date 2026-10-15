@@ -7,7 +7,9 @@ import {
   enchantBase,
   extractShardMeta,
   itemApiFlags,
+  mergeExtraRecipes,
   parseBookRules,
+  parseExtraRecipes,
   shopDisplayName,
   skymartOffers,
   tableMaxLevels,
@@ -185,5 +187,35 @@ describe('cache dir', () => {
     expect(cacheDir({ BAZAAR_CACHE_DIR: '/tmp/c' })).toBe('/tmp/c');
     expect(cachePath('bazaar.json', { BAZAAR_CACHE_DIR: '/tmp/c' })).toBe('/tmp/c/bazaar.json');
     expect(cachePath('items.json', {})).toBe('.cache/items.json');
+  });
+});
+
+describe('extra recipes', () => {
+  const ok = {
+    $source: 'x',
+    recipes: [{ output: 'TOP', outCount: 1, inputs: [{ id: 'B', qty: 2 }, { id: 'A', qty: 160 }], source: 'https://example.wiki/Top' }],
+  };
+
+  it('parses entries with sorted inputs and ignores $ comments', () => {
+    expect(parseExtraRecipes(ok)).toEqual([{ output: 'TOP', outCount: 1, inputs: [['A', 160], ['B', 2]] }]);
+    expect(parseExtraRecipes(JSON.parse(readFileSync(fileURLToPath(new URL('../../scripts/data/extra-recipes.json', import.meta.url)), 'utf8')))).toEqual(expect.any(Array));
+  });
+
+  it('rejects malformed entries', () => {
+    const one = (r: Record<string, unknown>) => ({ recipes: [{ ...ok.recipes[0], ...r }] });
+    expect(() => parseExtraRecipes({})).toThrow(/expected/);
+    expect(() => parseExtraRecipes(one({ source: '' }))).toThrow(/source/);
+    expect(() => parseExtraRecipes(one({ output: 'bad id' }))).toThrow(/bad output/);
+    expect(() => parseExtraRecipes(one({ outCount: 0 }))).toThrow(/outCount/);
+    expect(() => parseExtraRecipes(one({ inputs: [] }))).toThrow(/inputs/);
+    expect(() => parseExtraRecipes(one({ inputs: [{ id: 'A', qty: 0 }] }))).toThrow(/qty/);
+    expect(() => parseExtraRecipes({ recipes: [ok.recipes[0], ok.recipes[0]] })).toThrow(/duplicate/);
+  });
+
+  it('only fills outputs NEU has no recipe for', () => {
+    const x = parseExtraRecipes({ recipes: [ok.recipes[0], { ...ok.recipes[0], output: 'OTHER' }] });
+    const m = mergeExtraRecipes(x, (id) => id === 'OTHER');
+    expect(m.added.map((r) => r.output)).toEqual(['TOP']);
+    expect(m.skipped).toEqual(['OTHER']);
   });
 });

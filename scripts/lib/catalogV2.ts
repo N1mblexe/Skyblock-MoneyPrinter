@@ -147,6 +147,47 @@ export function parseBookRules(json: unknown): Map<string, number> {
   return out;
 }
 
+export interface ExtraRecipe {
+  output: string;
+  outCount: number;
+  inputs: [string, number][];
+}
+
+/**
+ * scripts/data/extra-recipes.json -> hand-kept craft recipes NEU lacks. Shape:
+ * `{ recipes: [{ output, outCount, inputs: [{ id, qty }], source }] }`; keys starting with "$" are comments.
+ * Every entry must name the `source` it was checked against. Throws on malformed entries (the file is hand-written).
+ */
+export function parseExtraRecipes(json: unknown): ExtraRecipe[] {
+  if (!isObj(json) || !Array.isArray(json.recipes)) throw new Error('extra-recipes: expected { recipes: [...] }');
+  const id = (v: unknown, what: string): string => {
+    if (typeof v !== 'string' || !/^[A-Z0-9_:]+$/.test(v)) throw new Error(`extra-recipes: bad ${what} id ${String(v)}`);
+    return v;
+  };
+  const seen = new Set<string>();
+  return (json.recipes as unknown[]).map((r) => {
+    if (!isObj(r) || !Array.isArray(r.inputs) || !r.inputs.length) throw new Error('extra-recipes: every recipe needs inputs');
+    const output = id(r.output, 'output');
+    if (typeof r.source !== 'string' || !r.source.trim()) throw new Error(`extra-recipes: ${output} needs a source`);
+    if (!posNum(r.outCount) || !Number.isInteger(r.outCount)) throw new Error(`extra-recipes: ${output} outCount must be a positive integer`);
+    if (seen.has(output)) throw new Error(`extra-recipes: duplicate ${output}`);
+    seen.add(output);
+    const inputs = (r.inputs as unknown[]).map((i): [string, number] => {
+      if (!isObj(i) || !posNum(i.qty)) throw new Error(`extra-recipes: ${output} input qty must be positive`);
+      return [id(i.id, 'input'), i.qty];
+    });
+    return { output, outCount: r.outCount, inputs: inputs.sort((a, b) => a[0].localeCompare(b[0])) };
+  });
+}
+
+/** Extra recipes for outputs NEU has no recipe for (`hasRecipe`); the rest are skipped and reported. */
+export function mergeExtraRecipes(extra: readonly ExtraRecipe[], hasRecipe: (id: string) => boolean): { added: ExtraRecipe[]; skipped: string[] } {
+  const added: ExtraRecipe[] = [];
+  const skipped: string[] = [];
+  for (const r of extra) (hasRecipe(r.output) ? skipped.push(r.output) : added.push(r));
+  return { added, skipped };
+}
+
 /**
  * Book rules for every ENCHANTMENT_<BASE>_<N> bazaar id: `t` = enchanting-table max (NEU), `m` = curated anvil max.
  * Bases with neither are omitted.

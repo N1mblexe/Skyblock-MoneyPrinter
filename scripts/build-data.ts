@@ -15,7 +15,9 @@ import {
   buildShops,
   extractShardMeta,
   itemApiFlags,
+  mergeExtraRecipes,
   parseBookRules,
+  parseExtraRecipes,
   shopDisplayName,
   skymartOffers,
   tableMaxLevels,
@@ -36,6 +38,7 @@ const CACHE = {
 };
 const OUT = 'public/data/catalog.json';
 const BOOK_RULES = 'scripts/data/book-rules.json';
+const EXTRA_RECIPES = 'scripts/data/extra-recipes.json';
 const SUBCRAFT_DEPTH = 3;
 const LIMITS = {
   bazaarRecipes: 440, forge: 100, nb: 400, ns: 2000, bytes: 600 * 1024, priceableTarget: 380,
@@ -200,6 +203,13 @@ async function main() {
       all.push(r);
     }
   }
+  // hand-kept recipes for outputs NEU has none for (scripts/data/extra-recipes.json)
+  const extra = mergeExtraRecipes(parseExtraRecipes(JSON.parse(readFileSync(EXTRA_RECIPES, 'utf8')) as unknown), (id) => all.some((r) => r.o === id));
+  for (const x of extra.added) {
+    all.push({ key: `craft|${x.output}|${x.outCount}|${x.inputs.map(([id, q]) => `${id}*${q}`).join(',')}`, o: x.output, c: x.outCount, i: x.inputs, k: 'craft' });
+  }
+  if (extra.added.length) console.log(`  extra recipes added: ${extra.added.map((x) => x.output).join(', ')}`);
+  if (extra.skipped.length) console.warn(`  extra recipes skipped (NEU has a recipe now): ${extra.skipped.join(', ')}`);
   const byOut = new Map<string, R[]>();
   for (const r of all) byOut.set(r.o, [...(byOut.get(r.o) ?? []), r]);
 
