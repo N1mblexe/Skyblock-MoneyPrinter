@@ -3,7 +3,7 @@
 import { lostTop, orderStatus } from '../domain/orders.ts';
 import { t } from '../i18n/index.ts';
 import type { AppState, Store, ToastKind } from '../types/contracts.ts';
-import { fmtCoins } from '../ui/format.ts';
+import { fmtPrice } from '../ui/views/item/helpers.ts';
 
 export interface OrdersRunnerOptions {
   store: Store<AppState>;
@@ -13,7 +13,7 @@ export interface OrdersRunnerOptions {
 
 /** Order-alert text: "Enchanted Gold: your buy order at 100 was outbid (best now 100.1)". */
 export function orderAlertText(name: string, side: 'buy' | 'sell', price: number, best: number | null): { title: string; body: string } {
-  const body = t(side === 'buy' ? 'trades.alertOutbid' : 'trades.alertUndercut', { name, price: fmtCoins(price), best: best == null ? '—' : fmtCoins(best) });
+  const body = t(side === 'buy' ? 'trades.alertOutbid' : 'trades.alertUndercut', { name, price: fmtPrice(price), best: best == null ? '—' : fmtPrice(best) });
   return { title: t('trades.alertTitle', { name }), body };
 }
 

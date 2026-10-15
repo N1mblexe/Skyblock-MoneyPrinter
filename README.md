@@ -56,9 +56,23 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
       Track items, set price or margin rules and get notified. History is kept for 7 days in your browser.
     </td>
   </tr>
+  <tr>
+    <td valign="top">
+      <h3>🔗 Craft chains</h3>
+      Multi-step ladders (Wheat → Ench. Wheat → Ench. Hay Bale, gem tiers, Magmafish…): where to start and where to sell.
+    </td>
+    <td valign="top">
+      <h3>💰 Sell or craft?</h3>
+      Enter what you own and compare insta-sell, sell offer, NPC, AH and crafting it up first.
+    </td>
+    <td valign="top">
+      <h3>📒 Trades</h3>
+      Track your own orders (outbid / undercut alerts, re-price) and log finished trades with profit per day and ROI.
+    </td>
+  </tr>
 </table>
 
-Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
+Plus AH flips (lowest BIN vs the next, after AH fees), a separate Forge page, market alerts for any opportunity, an installable offline app, NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
 
 ## 📸 Screenshots
 
@@ -74,6 +88,14 @@ Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion re
   <tr>
     <td><img src="docs/images/palette-light.png" alt="Command palette in the light theme"><p align="center"><b>Command palette</b> (<kbd>/</kbd>), shown in the light theme</p></td>
     <td><img src="docs/images/watchlist-dark.png" alt="Watchlist"><p align="center"><b>Watchlist</b>: live prices and alert rules</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/chains-dark.png" alt="Craft chains"><p align="center"><b>Craft chains</b>: a whole ladder with the step-by-step plan</p></td>
+    <td><img src="docs/images/sell-dark.png" alt="Sell or craft?"><p align="center"><b>Sell or craft?</b>: every way to cash out, best first</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/trades-dark.png" alt="My orders"><p align="center"><b>My orders</b>: top, tied, outbid or undercut, live</p></td>
+    <td><img src="docs/images/journal-dark.png" alt="Trade journal"><p align="center"><b>Trade journal</b>: profit today, this week and all time</p></td>
   </tr>
 </table>
 
@@ -200,6 +222,7 @@ npm test               # unit tests (vitest)
 npm run build          # typecheck + production build
 npm run smoke          # headless browser test of the build
 npm run screenshots    # regenerate the images in this README
+npm run pwa:check      # offline check of the installable app (after GITHUB_PAGES=1 npm run build)
 ```
 
 Scripts, data sources, storage keys, project layout and deployment are documented in **[docs/development.md](docs/development.md)**.

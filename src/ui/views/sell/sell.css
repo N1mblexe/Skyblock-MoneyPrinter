@@ -63,8 +63,11 @@
 .sell-tbl {
   width: 100%;
 }
-.sell-tbl th.name-cell {
-  font-weight: normal;
+.sell-tbl tbody th.name-cell {
+  font: inherit;
+  text-transform: none;
+  letter-spacing: normal;
+  color: inherit;
 }
 .sell-tbl tr.sell-best > * {
   background: var(--good-soft);

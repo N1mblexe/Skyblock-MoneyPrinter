@@ -11,6 +11,7 @@ import { esc } from '../../dom.ts';
 import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtPct } from '../../format.ts';
 import { createKitTable, downloadJson, type KitColumn, type KitTableHandle } from '../../kit/index.ts';
 import { fmtQty } from '../craft/helpers.ts';
+import { fmtPrice } from '../item/helpers.ts';
 import './trades.css';
 
 type Tab = 'orders' | 'journal';
@@ -51,8 +52,8 @@ function orderColumns(): KitColumn<OrderRow>[] {
       html: (r) =>
         `<a href="#/item/${encodeURIComponent(r.o.id)}">${esc(r.name)}</a><span class="id-sub">${esc(t(r.o.side === 'buy' ? 'trades.sideBuy' : 'trades.sideSell'))} · ${esc(fmtQty(r.o.qty))}×</span>`,
     },
-    { key: 'price', label: () => t('trades.col_price'), get: (r) => r.o.price, align: 'right', priority: 1, html: (r) => esc(fmtCoins(r.o.price)) },
-    { key: 'best', label: () => t('trades.col_best'), get: (r) => r.st.best, align: 'right', priority: 2, html: (r) => (r.st.best == null ? '—' : esc(fmtCoins(r.st.best))) },
+    { key: 'price', label: () => t('trades.col_price'), get: (r) => r.o.price, align: 'right', priority: 1, html: (r) => esc(fmtPrice(r.o.price)) },
+    { key: 'best', label: () => t('trades.col_best'), get: (r) => r.st.best, align: 'right', priority: 2, html: (r) => (r.st.best == null ? '—' : esc(fmtPrice(r.st.best))) },
     {
       key: 'status',
       label: () => t('trades.col_status'),
@@ -84,7 +85,7 @@ function orderColumns(): KitColumn<OrderRow>[] {
 }
 
 function journalColumns(cat: () => Catalog | null): KitColumn<JournalEntry>[] {
-  const coins = (k: 'buy' | 'sell' | 'fees') => (e: JournalEntry) => esc(fmtCoins(e[k]));
+  const coins = (k: 'buy' | 'sell' | 'fees') => (e: JournalEntry) => esc(k === 'fees' ? fmtCoins(e[k]) : fmtPrice(e[k]));
   return [
     {
       key: 'date',
@@ -195,7 +196,7 @@ export function createTradesView(): View {
     else if (action === 'reprice' && r.st.reprice != null) {
       const price = r.st.reprice;
       ctx!.store.set({ orders: s.orders.map((o) => (o.key === r.o.key ? { ...o, price, lastStatus: 'top' } : o)) });
-      ctx!.toast(t('trades.repriceDone', { price: fmtCoins(price) }), 'ok');
+      ctx!.toast(t('trades.repriceDone', { price: fmtPrice(price) }), 'ok');
     } else if (action === 'filled') {
       ctx!.store.set({ orders: s.orders.filter((o) => o.key !== r.o.key) });
       if (r.o.side === 'buy') {
@@ -240,8 +241,10 @@ export function createTradesView(): View {
     const items = byItem(s.journal);
     const list = (xs: typeof items) => xs.map((x) => `<li><span>${esc(nameOf(s.catalog, x.id))}</span> <strong class="${x.profit >= 0 ? 'pos' : 'neg'}">${esc(fmtCoins(x.profit))}</strong></li>`).join('');
     $('.trades-items').innerHTML = items.length
-      ? `<div><h3>${esc(t('trades.bestItems'))}</h3><ol>${list(items.slice(0, 3))}</ol></div>` +
-        (items.length > 3 ? `<div><h3>${esc(t('trades.worstItems'))}</h3><ol>${list(items.slice(-3).reverse())}</ol></div>` : '')
+      ? `<div><h3>${esc(t('trades.bestItems'))}</h3><ol>${list(items.filter((x) => x.profit > 0).slice(0, 3))}</ol></div>` +
+        (items.some((x) => x.profit < 0)
+          ? `<div><h3>${esc(t('trades.worstItems'))}</h3><ol>${list(items.filter((x) => x.profit < 0).slice(-3).reverse())}</ol></div>`
+          : '')
       : '';
     journalTable!.setRows(s.journal);
   }
@@ -368,7 +371,7 @@ export function createTradesView(): View {
         toolbar: { columns: true, exportName: 'my-orders' },
         rowActions: (r) =>
           (r.st.reprice != null && r.st.kind !== 'top'
-            ? `<button type="button" class="btn btn-sm" data-action="reprice">${esc(t('trades.reprice', { price: fmtCoins(r.st.reprice) }))}</button>`
+            ? `<button type="button" class="btn btn-sm" data-action="reprice">${esc(t('trades.reprice', { price: fmtPrice(r.st.reprice) }))}</button>`
             : '') +
           `<button type="button" class="btn btn-sm" data-action="filled">${esc(t('trades.filled'))}</button>` +
           `<button type="button" class="btn btn-ghost btn-sm" data-action="remove" aria-label="${esc(`${t('trades.remove')}: ${r.name}`)}" title="${esc(t('trades.remove'))}">×</button>`,

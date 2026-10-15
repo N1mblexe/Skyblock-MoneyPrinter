@@ -25,7 +25,9 @@ If live fetching fails, there are two fallbacks:
 | `npm run data` | Rebuilds `public/data/catalog.json` from the NEU repo, the Hypixel items API, the bazaar product list and `scripts/data/book-rules.json`. `npm run data -- --offline` reads only the cache and fetches nothing |
 | `npm run sanity` | Runs the domain layer against the live bazaar and the generated catalog, and checks the results. `npm run sanity -- --offline` reads the cached bazaar instead |
 | `npm run smoke` | Headless browser test of the built app (run `npm run build` first). It serves fixture data by default; `npm run smoke -- --live` uses the real API. It finds Chromium through `CHROME_PATH` or Playwright's cached browser |
-| `npm run screenshots` | Captures the README screenshots into `docs/images/` (run `npm run build` first). Uses the smoke fixtures, English UI, dark and light theme |
+| `npm run screenshots` | Captures the README screenshots into `docs/images/` (run `npm run build` first). Uses the smoke fixtures, English UI, dark and light theme, and example data for the Sell or craft? and Trades pages |
+| `npm run icons` | Renders `public/icons/icon.svg` to the PNG app icons (192, 512, maskable 512, 180 for iOS) |
+| `npm run pwa:check` | Offline check of the installable app: loads the Pages build once, stops the server, reloads (run `GITHUB_PAGES=1 npm run build` first) |
 | `npm run fixture` | Captures `tests/fixtures/bazaar.json`. `-- --smoke [--offline]` writes the smoke fixtures (bazaar, one AH page, election) |
 | `npm run check:owners -- <wave> <agent> [branch] [base]` | Fails if a branch touched files outside its globs in `scripts/ownership.json` (base defaults to `round2`) |
 
