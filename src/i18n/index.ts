@@ -29,10 +29,13 @@ export const getLang = (): Lang => lang;
 export const locale = (): string => languageOf(lang).locale;
 
 export function setLang(l: Lang): void {
-  if (l === lang) return;
+  const changed = l !== lang;
   lang = l;
-  if (typeof document !== 'undefined') document.documentElement.lang = l;
-  for (const fn of [...listeners]) fn(l);
+  if (typeof document !== 'undefined') {
+    document.documentElement.lang = l;
+    document.title = t('common.appTitle');
+  }
+  if (changed) for (const fn of [...listeners]) fn(l);
 }
 
 export function onLangChange(fn: (l: Lang) => void): () => void {

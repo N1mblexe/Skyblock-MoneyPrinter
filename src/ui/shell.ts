@@ -2,7 +2,7 @@
 // mayor, AH scan, language, refresh, settings), settings drawer, global hotkeys, and the view container.
 import type { AppState, Density, HistoryRepo, Lang, Route, RouteId, Store, Theme, ToastKind } from '../types/contracts.ts';
 import { HOTKEYS, LS_VIEWPREFS, UI } from '../config.ts';
-import { getLang, onLangChange, setLang, t } from '../i18n/index.ts';
+import { LANGUAGES, getLang, onLangChange, setLang, t } from '../i18n/index.ts';
 import { lsGet, lsSet } from '../storage/local.ts';
 import { esc } from './dom.ts';
 import { createDrawer, currentPalette, openPalette, registerHotkeys, toast as kitToast, type Drawer, type HotkeyMap } from './kit/index.ts';
@@ -51,7 +51,6 @@ export const OPEN_SETTINGS_EVENT = 'bm:open-settings';
 /** Media query for the mobile layout (bottom nav). */
 export const MOBILE_QUERY = `(max-width: ${UI.mobileBp - 0.02}px)`;
 
-const LANGS: Lang[] = ['tr', 'en'];
 
 /** Apply a theme setting to <html data-theme> (attribute removed for auto). */
 export function applyTheme(theme: Theme): void {
@@ -124,7 +123,7 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
     `<div class="tb-status"></div>` +
     `<div class="tb-market"></div>` +
     `<div class="tb-spacer"></div>` +
-    `<div class="seg seg-lang" role="group">${LANGS.map((l) => `<button type="button" data-lang="${l}" data-testid="lang-${l}">${l.toUpperCase()}</button>`).join('')}</div>` +
+    `<div class="seg seg-lang" role="group">${LANGUAGES.map((l) => `<button type="button" data-lang="${l.code}" data-testid="lang-${l.code}" lang="${l.code}" title="${esc(l.name)}" aria-label="${esc(l.name)}">${l.code.toUpperCase()}</button>`).join('')}</div>` +
     `<button type="button" class="tb-btn refresh-btn" data-testid="refresh-btn" aria-keyshortcuts="R">${icon('refresh', 'ico refresh-ico')}<span class="refresh-lbl"></span></button>` +
     `<button type="button" class="tb-btn tb-icon settings-btn" data-testid="settings-btn" aria-haspopup="dialog">${icon('settings')}<span class="kit-sr settings-lbl"></span></button>` +
     `</header>` +
@@ -337,7 +336,11 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
         label: () => t('shell.act_theme'),
         run: () => patchSettings({ theme: effectiveTheme(store.get().settings.theme) === 'dark' ? 'light' : 'dark' }),
       },
-      { id: 'lang', label: () => t('shell.act_lang'), run: () => patchSettings({ lang: store.get().settings.lang === 'tr' ? 'en' : 'tr' }) },
+      ...LANGUAGES.filter((l) => l.code !== s.settings.lang).map((l) => ({
+        id: `lang-${l.code}`,
+        label: () => t('shell.act_langTo', { name: l.name }),
+        run: () => patchSettings({ lang: l.code }),
+      })),
       {
         id: 'density',
         label: () => t('shell.act_density'),

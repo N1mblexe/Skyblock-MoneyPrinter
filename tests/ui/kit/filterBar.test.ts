@@ -29,7 +29,10 @@ function setup() {
   return { qs, bar, setQuery, $ };
 }
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  setLang('tr'); // starts in Turkish; one test switches to English
+});
 afterEach(() => {
   vi.useRealTimers();
   setLang('tr');

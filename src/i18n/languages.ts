@@ -20,7 +20,7 @@ export const LANGUAGES = [
 
 export type Lang = (typeof LANGUAGES)[number]['code'];
 
-export const DEFAULT_LANG: Lang = 'tr';
+export const DEFAULT_LANG: Lang = 'en';
 
 export const isLang = (x: unknown): x is Lang => LANGUAGES.some((l) => l.code === x);
 

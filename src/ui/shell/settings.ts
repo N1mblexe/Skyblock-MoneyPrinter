@@ -1,6 +1,6 @@
 // Settings form for the drawer: Market / Display / Notifications sections bound to store.settings.
 import { ORDER_SLOTS_MAX } from '../../config.ts';
-import { onLangChange, t } from '../../i18n/index.ts';
+import { LANGUAGES, onLangChange, t } from '../../i18n/index.ts';
 import type { AppState, Density, Lang, Settings, Store, TaxRate, Theme } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
 import { fmtInt } from '../format.ts';
@@ -124,14 +124,28 @@ function values(s: Settings): Record<FieldName, string | boolean> {
   };
 }
 
-const SEGS: { key: 'lang' | 'theme' | 'density'; label: string; opts: [string, string][] }[] = [
-  { key: 'lang', label: 'common.language', opts: [['tr', 'Türkçe'], ['en', 'English']] },
+/** A segment option shows either a translation key or literal text (language names are always shown natively). */
+type SegOpt = { val: string } & ({ key: string } | { text: string });
+
+const SEGS: { key: 'lang' | 'theme' | 'density'; label: string; opts: SegOpt[] }[] = [
+  { key: 'lang', label: 'common.language', opts: LANGUAGES.map((l) => ({ val: l.code, text: l.name })) },
   {
     key: 'theme',
     label: 'common.theme',
-    opts: [['auto', 'common.themeAuto'], ['dark', 'common.themeDark'], ['light', 'common.themeLight']],
+    opts: [
+      { val: 'auto', key: 'common.themeAuto' },
+      { val: 'dark', key: 'common.themeDark' },
+      { val: 'light', key: 'common.themeLight' },
+    ],
   },
-  { key: 'density', label: 'common.density', opts: [['comfortable', 'common.densityComfortable'], ['compact', 'common.densityCompact']] },
+  {
+    key: 'density',
+    label: 'common.density',
+    opts: [
+      { val: 'comfortable', key: 'common.densityComfortable' },
+      { val: 'compact', key: 'common.densityCompact' },
+    ],
+  },
 ];
 
 export type NotifyPermission = NotificationPermission | 'unsupported';
@@ -192,7 +206,7 @@ export function createSettingsForm(store: Store<AppState>): SettingsForm {
   function segs(): string {
     return SEGS.map(({ key, label, opts }) => {
       const btns = opts
-        .map(([v, l]) => `<button type="button" data-set="${key}" data-val="${v}" data-testid="set-${key}-${v}">${esc(l.includes('.') ? t(l) : l)}</button>`)
+        .map((o) => `<button type="button" data-set="${key}" data-val="${o.val}" data-testid="set-${key}-${o.val}">${esc('key' in o ? t(o.key) : o.text)}</button>`)
         .join('');
       const help = key === 'density' ? `<span class="field-help">${esc(t('shell.densityHelp'))}</span>` : '';
       return `<div class="field" data-field="${key}"><span class="field-label" id="set-seg-${key}">${esc(t(label))}</span><div class="seg" role="group" aria-labelledby="set-seg-${key}">${btns}</div>${help}</div>`;

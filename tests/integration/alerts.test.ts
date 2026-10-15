@@ -79,7 +79,7 @@ describe('alerts end to end', () => {
     const rows = [...document.querySelectorAll<HTMLElement>('[data-testid="watch-log"] tbody [data-key]')];
     expect(rows).toHaveLength(1);
     expect(rows[0]!.textContent).toContain('Enchanted Melon');
-    expect(rows[0]!.textContent).toContain('3.247');
+    expect(rows[0]!.textContent).toContain('3,247');
 
     expectNoConsoleErrors(b);
     expect(b.warns).not.toHaveBeenCalled();

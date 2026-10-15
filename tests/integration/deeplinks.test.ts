@@ -18,8 +18,8 @@ function colIndex(label: string): number {
   if (i < 0) throw new Error(`no column ${label}: ${ths.map((t) => t.textContent).join(' | ')}`);
   return i;
 }
-/** "%6,6" (tr) -> 6.6 */
-const pct = (s: string) => Number(s.replace('%', '').replace(/\./g, '').replace(',', '.'));
+/** "6.6%" (en) -> 6.6 */
+const pct = (s: string) => Number(s.replace('%', '').replace(/,/g, ''));
 
 describe('deep links', () => {
   it('#/craft?kind=forge&q=gold mounts craft with both filters applied', async () => {
@@ -55,7 +55,7 @@ describe('deep links', () => {
     await settle(2);
     expect(b.store.get().route).toEqual({ id: 'flip', query: { minMargin: '5' } });
     expect(filter('minMargin').value).toBe('5');
-    const m = colIndex('Marj');
+    const m = colIndex('Margin');
     const margins = () => rows().map((r) => pct(r.querySelectorAll('td')[m]!.textContent!));
     const filtered = margins();
     expect(filtered.length).toBeGreaterThan(3);

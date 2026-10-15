@@ -316,7 +316,7 @@ describe('command palette', () => {
     expect(document.documentElement.dataset.density).toBe('compact');
 
     key('/');
-    key('Enter', {}, type(h, 'ingilizce'));
+    key('Enter', {}, type(h, 'english'));
     expect(h.store.get().settings.lang).toBe('en');
 
     key('/');

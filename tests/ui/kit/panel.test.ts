@@ -58,7 +58,7 @@ describe('createDetailPanel', () => {
     p.open('x', 'y');
     p.el.querySelector<HTMLButtonElement>('.kit-x')!.click();
     expect(closed).toHaveBeenCalledTimes(1);
-    expect(p.el.querySelector('.kit-x')!.getAttribute('aria-label')).toBe('Kapat');
+    expect(p.el.querySelector('.kit-x')!.getAttribute('aria-label')).toBe('Close');
     p.destroy();
     expect(p.el.isConnected).toBe(false);
   });

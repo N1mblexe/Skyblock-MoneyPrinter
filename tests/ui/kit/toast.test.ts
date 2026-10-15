@@ -40,7 +40,7 @@ describe('toast', () => {
 
     const dismiss = toast('x');
     const btn = document.querySelector<HTMLButtonElement>('.kit-toast-x')!;
-    expect(btn.getAttribute('aria-label')).toBe('Bildirimi kapat');
+    expect(btn.getAttribute('aria-label')).toBe('Dismiss notification');
     btn.click();
     expect(msgs()).toEqual([]);
     dismiss(); // idempotent

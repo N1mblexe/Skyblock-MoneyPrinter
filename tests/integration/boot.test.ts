@@ -25,7 +25,7 @@ describe('boot', () => {
 
     const view = document.querySelector('#view')!;
     expect(view.querySelectorAll('h1')).toHaveLength(1);
-    expect(view.querySelector('h1')!.textContent).toBe('Genel bakış');
+    expect(view.querySelector('h1')!.textContent).toBe('Overview');
     expect(document.querySelector('[data-testid="tab-overview"]')!.getAttribute('aria-current')).toBe('page');
     expect(view.textContent!.length).toBeGreaterThan(100);
 
@@ -60,7 +60,7 @@ describe('reload', () => {
     expect(pill.dataset.status).toBe('error');
     expect(document.querySelector('.status-err')!.textContent).toBe('HTTP 503');
     // data is still there: the overview renders and the manual-load panel stays closed
-    expect(document.querySelector('#view h1')!.textContent).toBe('Genel bakış');
+    expect(document.querySelector('#view h1')!.textContent).toBe('Overview');
     expect(document.querySelector('.manual-inline')!.children).toHaveLength(0);
     // AH comes from its own IndexedDB cache (no rescan within AH.pollMs)
     await waitFor(() => b.store.get().ah !== null, 'cached AH');
@@ -114,11 +114,11 @@ describe('auction house', () => {
     })();
     expect(document.querySelectorAll('#view h1')).toHaveLength(1);
     expect(document.querySelector('[data-testid="item-name"]')!.textContent).toMatch(/Aspect of the Void/i);
-    // the lowest BIN price (tr formatting: 22.500.000) and the listing count appear in the card
+    // the lowest BIN price (en formatting: 22,500,000) and the listing count appear in the card
     const { price, count } = b.store.get().ah!.lowestBin[AH_ID]!;
     expect(price).toBe(22_500_000);
-    expect(card.textContent).toContain('22.500.000');
-    expect(card.textContent).toContain(`BIN ilanı${count}`);
+    expect(card.textContent).toContain('22,500,000');
+    expect(card.textContent).toContain(`BIN listings${count}`);
     expectNoConsoleErrors(b);
   });
 });

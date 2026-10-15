@@ -1,4 +1,5 @@
 import { FILL_MODEL_DEFAULT, NPC_DAILY_LIMIT_DEFAULT, ORDER_SLOTS_DEFAULT, ORDER_SLOTS_MAX } from '../config.ts';
+import { DEFAULT_LANG, isLang } from '../i18n/languages.ts';
 import type { AppState, Settings } from '../types/contracts.ts';
 
 export const defaultSettings: Settings = {
@@ -11,7 +12,7 @@ export const defaultSettings: Settings = {
   forgeSlots: 2,
   hideSuspicious: true,
   autoRefresh: true,
-  lang: 'tr',
+  lang: DEFAULT_LANG,
   // dark-first terminal look; 'auto' follows the system
   theme: 'dark',
   orderSlots: ORDER_SLOTS_DEFAULT,
@@ -46,7 +47,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (r.sellMode === 'offer' || r.sellMode === 'insta') s.sellMode = r.sellMode;
   if (typeof r.hideSuspicious === 'boolean') s.hideSuspicious = r.hideSuspicious;
   if (typeof r.autoRefresh === 'boolean') s.autoRefresh = r.autoRefresh;
-  if (r.lang === 'tr' || r.lang === 'en') s.lang = r.lang;
+  if (isLang(r.lang)) s.lang = r.lang;
   if (r.theme === 'auto' || r.theme === 'light' || r.theme === 'dark') s.theme = r.theme;
   return s;
 }

@@ -66,7 +66,7 @@ export const shell = {
   grpActions: 'Commands',
   act_refresh: 'Refresh prices now',
   act_theme: 'Toggle theme (light/dark)',
-  act_lang: 'Switch language to Turkish (Türkçe)',
+  act_langTo: 'Language: {name}',
   act_density: 'Toggle density (comfortable/compact)',
   act_settings: 'Open settings',
   act_ah: 'Scan the auction house now',

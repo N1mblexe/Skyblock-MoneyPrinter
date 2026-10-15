@@ -71,7 +71,7 @@ export const shell: Messages['shell'] = {
   grpActions: 'Komutlar',
   act_refresh: 'Fiyatları şimdi yenile',
   act_theme: 'Temayı değiştir (açık/koyu)',
-  act_lang: 'Dili İngilizce yap (English)',
+  act_langTo: 'Dil: {name}',
   act_density: 'Yoğunluğu değiştir (rahat/sıkı)',
   act_settings: 'Ayarları aç',
   act_ah: 'Müzayedeyi şimdi tara',

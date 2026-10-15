@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ALERTS } from '../../src/config.ts';
 import { setLang } from '../../src/i18n/index.ts';
 import { alertMessage, fmtMetric, startAlerts } from '../../src/state/alertsRunner.ts';
@@ -40,6 +40,7 @@ function setup(state: Partial<AppState> = {}) {
   return { store, toast, notify, stop, clock };
 }
 
+beforeEach(() => setLang('tr')); // messages are checked in Turkish unless a test switches
 afterEach(() => setLang('tr'));
 
 describe('startAlerts', () => {
