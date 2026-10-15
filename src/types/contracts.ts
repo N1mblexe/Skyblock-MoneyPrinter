@@ -438,7 +438,7 @@ export interface MarketStat {
   sellVolTrend: number | null;
 }
 
-export type OpportunityKind = 'flip' | 'craft' | 'book' | 'npc';
+export type OpportunityKind = 'flip' | 'craft' | 'chain' | 'book' | 'npc';
 
 export interface Opportunity {
   kind: OpportunityKind;
@@ -636,6 +636,7 @@ export type TFn = (key: string, params?: Record<string, string | number>) => str
 export interface Derived {
   flips(): FlipRow[];
   crafts(): CraftRow[];
+  chains(): ChainRow[];
   npc(): NpcFlipRow[];
   books(): BookRow[];
   shops(): ShopRow[];

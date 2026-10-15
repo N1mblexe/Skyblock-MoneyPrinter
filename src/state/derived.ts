@@ -1,6 +1,7 @@
 // Memoized domain results shared by all views. Owner: history package.
 import { catalogFromFile } from '../data/catalog.ts';
 import { computeBookCombines } from '../domain/books.ts';
+import { computeChains } from '../domain/chains.ts';
 import { computeCrafts } from '../domain/craft.ts';
 import { computeFlips } from '../domain/flip.ts';
 import { computeFusion } from '../domain/fusion.ts';
@@ -77,6 +78,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     calcCtx: current,
     flips: cached('flips', [], computeFlips),
     crafts: cached('crafts', [], computeCrafts),
+    chains: cached('chains', [], computeChains),
     npc: cached('npc', [], computeNpcFlips),
     books: cached('books', [], computeBookCombines),
     shops: cached('shops', [], computeShopRows),
@@ -88,7 +90,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
       return fusionMemo.rows;
     },
     opportunities: cached('opps', [], (c) =>
-      toOpportunities({ flips: d.flips(), crafts: d.crafts(), books: d.books(), npc: d.npc() }, c.settings),
+      toOpportunities({ flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc() }, c.settings),
     ),
     marketStats: () => history.marketStats(store.get().settings.taxRate),
   };

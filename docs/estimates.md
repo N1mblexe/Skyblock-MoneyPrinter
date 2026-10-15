@@ -138,6 +138,18 @@ When the AH value wins and the item had fewer than `AH.minCount = 2` BIN listing
 
 **Risk.** A craft row combines the output's market risk (when sold on the bazaar) with only the `PRICE_SPIKE` and `QUICK_DIVERGENCE` flags of bazaar-bought ingredients. Dead bids are normal on raw materials, so the other ingredient flags are ignored.
 
+## Craft chains
+
+The **Chains** tab of Craft & Forge (`#/craft?view=chains`, `src/domain/chains.ts`) prices multi-step crafts along a ladder, such as Wheat → Enchanted Wheat → Enchanted Hay Bale.
+
+**Steps and ladders.** A `craft` recipe with a bazaar output is a chain step when its main input (the input with the largest quantity) is a bazaar item, makes up at least `CHAIN.mainShare = 0.5` of the recipe's input items, and goes in faster than the output comes out (`qty / outCount > 1`; this drops uncrafting such as Hay Bale → 9 Wheat). The other inputs are side ingredients. When several recipes link the same two items, the one with the fewest side inputs wins, then the one with the fewest main units per output. Steps join into ladders from a root (an item no step produces) to a top; a tier with two steps up gives two ladders.
+
+**Moves.** A move buys one tier and crafts it up at least `CHAIN.minSteps = 2` steps (single steps are the Recipes tab's rows). It is priced as one recipe: `need` units of the first tier plus every step's side ingredients, summed top-down (crafts at a step = units needed of its output / outCount), producing one unit of the top tier. Pricing is the craft model above, with one difference: the first tier is always bought (bazaar or NPC), never sub-crafted, so a move means what it says. Side ingredients still take their cheapest source.
+
+**Best per ladder.** By default the tab shows each ladder's move with the highest profit per hour. The planner gets every priced, profitable move as a `chain` opportunity; a move and the same item's craft row share the planner's one-position-per-item rule.
+
+**Recipe gaps.** `scripts/data/extra-recipes.json` adds hand-checked recipes for outputs NEU has none for. It is empty for now: the hay items without a NEU recipe (`ENCHANTED_HAY_BLOCK`, `TIGHTLY_TIED_HAY_BALE`) are legacy items that can no longer be crafted.
+
 ## Auction house values
 
 The AH scan reads every page of `/v2/skyblock/auctions`, keeps unclaimed BIN listings only, decodes each item's NBT and records the lowest price and listing count per id. A page that fails twice is skipped and the scan goes on.
@@ -184,7 +196,7 @@ Fusion recipes are entered by the user. Inputs are priced as bazaar buys and the
 
 The planner chooses how many units of each opportunity to run per cycle.
 
-**Inputs.** Profitable flips, priced crafts, book combines and NPC flips. Fusion and shop rows are not included. For each one:
+**Inputs.** Profitable flips, priced crafts, craft chain moves, book combines and NPC flips. Fusion and shop rows are not included. For each one:
 
 - `unitCost` = buy cost per unit, doubled under the pipelined fill model;
 - `maxUnits` = the batch size the market allows, with the capital bound removed. If a row's batch was limited by capital, it is scaled back up to `batchQty / fillHours × cycleHours`;

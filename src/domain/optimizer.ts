@@ -3,6 +3,7 @@ import { MAX_ORDER_UNITS } from '../config.ts';
 import type {
   Allocation,
   BookRow,
+  ChainRow,
   CraftRow,
   FlipRow,
   NpcFlipRow,
@@ -17,6 +18,8 @@ import type {
 export interface OpportunitySources {
   flips: readonly FlipRow[];
   crafts: readonly CraftRow[];
+  /** multi-step craft chain moves (optional: older callers pass none) */
+  chains?: readonly ChainRow[];
   books: readonly BookRow[];
   npc: readonly NpcFlipRow[];
 }
@@ -93,11 +96,15 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
   // flip: one unit = one item bought at buyAt and sold.
   for (const r of d.flips) push('flip', r.id, r, r.buyAt, (u) => orders(buyOrder, u) + orders(sellOffer, u));
   // craft: one unit = one craft; buy orders per bazaar-ordered ingredient, one sell leg when bazaar-valued.
+  const craftSlots = (r: CraftRow) => (u: number) =>
+    r.lines.reduce((n, l) => n + orders(l.source === 'order', l.qty * u), orders(r.valueSource === 'bazaar' && sellOffer, u * r.recipe.outCount));
   for (const r of d.crafts) {
     if (r.unpriced.length > 0) continue;
-    push('craft', r.recipe.key, r, r.cost, (u) =>
-      r.lines.reduce((n, l) => n + orders(l.source === 'order', l.qty * u), orders(r.valueSource === 'bazaar' && sellOffer, u * r.recipe.outCount)),
-    );
+    push('craft', r.recipe.key, r, r.cost, craftSlots(r));
+  }
+  for (const c of d.chains ?? []) {
+    if (c.row.unpriced.length > 0) continue;
+    push('chain', c.key, c.row, c.row.cost, craftSlots(c.row));
   }
   // book: one unit = one output book, made from `count` input books.
   for (const r of d.books) push('book', r.id, r, r.cost, (u) => orders(buyOrder, u * r.count) + orders(sellOffer, u));

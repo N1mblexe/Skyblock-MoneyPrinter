@@ -6,7 +6,7 @@ import { itemCell, riskBadge, sourceBadge } from '../../cells.ts';
 import { esc } from '../../dom.ts';
 import { fmtCoins, fmtHours, fmtInt, fmtList, fmtPct, locale } from '../../format.ts';
 import type { KitColumn } from '../../kit/index.ts';
-import { batchCrafts, fewOrders, fmtRate, ownFlipMargin, slippage } from './helpers.ts';
+import { batchCrafts, fewOrders, fmtQty, fmtRate, ownFlipMargin, slippage } from './helpers.ts';
 
 export interface RenderEnv {
   catalog(): Catalog | null;
@@ -22,7 +22,7 @@ export interface RenderEnv {
 }
 
 const isUnpriced = (r: CraftRow) => r.unpriced.length > 0;
-const signCls = (n: number | null | undefined) => (n == null ? '' : n > 0 ? 'pos' : n < 0 ? 'neg' : '');
+export const signCls = (n: number | null | undefined) => (n == null ? '' : n > 0 ? 'pos' : n < 0 ? 'neg' : '');
 const nameOf = (env: RenderEnv, id: string) => env.catalog()?.name(id) ?? id;
 const dash = '—';
 
@@ -228,7 +228,8 @@ function fewChip(p: Product | undefined): string {
   return ` <span class="chip craft-few" title="${esc(t('craft.fewOrdersTitle', { n: RISK.fewOrders }))}">${esc(t('craft.fewOrders'))}</span>`;
 }
 
-function linesTable(env: RenderEnv, r: CraftRow): string {
+/** Ingredient + output market table of a priced row. */
+export function linesTable(env: RenderEnv, r: CraftRow): string {
   const s = env.settings();
   const cat = env.catalog();
   const missing = new Set(r.unpriced);
@@ -242,7 +243,7 @@ function linesTable(env: RenderEnv, r: CraftRow): string {
       return `<tr class="craft-l-in${l.bottleneck ? ' craft-bott-row' : ''}" data-line="${esc(l.id)}">
         <th scope="row" class="name-cell"><span class="craft-role">${esc(t('craft.roleIn'))}</span> ${itemCell(l.id, l.name, true)}${fewChip(p)}${viaText(env, l.viaRecipe)}</th>
         <td>${src}</td>
-        <td class="num">${esc(fmtInt(l.qty))}</td>
+        <td class="num">${esc(fmtQty(l.qty))}</td>
         ${m.bidAsk}
         <td class="num">${priced ? esc(fmtCoins(l.unit)) : dash}</td>
         <td class="num">${priced ? esc(fmtCoins(l.total)) : dash}</td>
@@ -280,14 +281,14 @@ function linesTable(env: RenderEnv, r: CraftRow): string {
   </table></div>`;
 }
 
-function stepsHtml(env: RenderEnv, r: CraftRow): string {
+/** "Buy:" step with one line per ingredient and the total. */
+export function buyStepHtml(env: RenderEnv, r: CraftRow): string {
   const s = env.settings();
-  const li: string[] = [];
   const buys = r.lines
     .map(
       (l) =>
         `<li>${t('craft.stepBuy', {
-          qty: esc(fmtInt(l.qty)),
+          qty: esc(fmtQty(l.qty)),
           name: esc(l.name),
           unit: esc(fmtCoins(l.unit)),
           src: sourceBadge(l.source),
@@ -297,13 +298,13 @@ function stepsHtml(env: RenderEnv, r: CraftRow): string {
     .join('');
   const total = r.lines.length > 1 ? `<p class="craft-total">${t('craft.totalCost', { cost: esc(fmtCoins(r.cost)) })}</p>` : '';
   const how = t(s.costMode === 'insta' ? 'craft.howInsta' : 'craft.howOrder');
-  li.push(`${esc(t('craft.stepBuyHead', { how }))}<ul class="craft-buys">${buys}</ul>${total}`);
-  const n = esc(fmtInt(r.recipe.outCount));
-  const name = esc(r.name);
-  if (r.recipe.kind === 'forge') {
-    const d = r.recipe.durationSec ? fmtHours(r.recipe.durationSec / 3600) : '?';
-    li.push(t('craft.stepForge', { d: esc(d), slots: esc(fmtInt(s.forgeSlots)), n, name }));
-  } else li.push(t('craft.stepCraft', { n, name }));
+  return `${esc(t('craft.stepBuyHead', { how }))}<ul class="craft-buys">${buys}</ul>${total}`;
+}
+
+/** Sell step (bazaar offer / insta / NPC / AH) and the profit line. */
+export function sellStepsHtml(env: RenderEnv, r: CraftRow): string[] {
+  const s = env.settings();
+  const li: string[] = [];
   const value = esc(fmtCoins(r.value));
   const tax = esc(taxPct(s.taxRate));
   if (r.valueSource === 'npc') li.push(t('craft.stepSellNpc', { value }));
@@ -314,11 +315,24 @@ function stepsHtml(env: RenderEnv, r: CraftRow): string {
   } else if (s.sellMode === 'insta') li.push(t('craft.stepSellInsta', { tax, value }));
   else li.push(t('craft.stepSellOffer', { tax, value }));
   li.push(t('craft.stepProfit', { cls: signCls(r.profit), profit: esc(fmtCoins(r.profit)), margin: esc(fmtPct(r.margin)) }));
+  return li;
+}
+
+function stepsHtml(env: RenderEnv, r: CraftRow): string {
+  const s = env.settings();
+  const li: string[] = [buyStepHtml(env, r)];
+  const n = esc(fmtInt(r.recipe.outCount));
+  const name = esc(r.name);
+  if (r.recipe.kind === 'forge') {
+    const d = r.recipe.durationSec ? fmtHours(r.recipe.durationSec / 3600) : '?';
+    li.push(t('craft.stepForge', { d: esc(d), slots: esc(fmtInt(s.forgeSlots)), n, name }));
+  } else li.push(t('craft.stepCraft', { n, name }));
+  li.push(...sellStepsHtml(env, r));
   return `<ol class="craft-steps">${li.map((x) => `<li>${x}</li>`).join('')}</ol>`;
 }
 
 /** Slippage in insta modes: first unit vs batch average (from the snapshot's book via walkBook). */
-function slippageHtml(env: RenderEnv, r: CraftRow): string {
+export function slippageHtml(env: RenderEnv, r: CraftRow): string {
   const s = env.settings();
   const instaBuy = s.costMode === 'insta';
   const instaSell = s.sellMode === 'insta' && r.valueSource === 'bazaar';
@@ -352,7 +366,7 @@ function slippageHtml(env: RenderEnv, r: CraftRow): string {
   return `<section class="craft-sec craft-slip"><h3>${esc(t('craft.slipTitle'))}</h3><p class="muted small">${esc(t('craft.slipMode'))}</p>${body}</section>`;
 }
 
-function notesHtml(env: RenderEnv, r: CraftRow): string {
+export function notesHtml(env: RenderEnv, r: CraftRow): string {
   const s = env.settings();
   const notes: string[] = [];
   if (!isUnpriced(r)) {
