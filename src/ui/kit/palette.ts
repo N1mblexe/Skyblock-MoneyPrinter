@@ -1,7 +1,6 @@
 // Command palette: modal combobox + grouped listbox (aria-activedescendant), sync providers.
 import { t } from '../../i18n/index.ts';
 import { esc } from '../dom.ts';
-import './i18n.ts';
 import type { PaletteHandle, PaletteItem, PaletteOptions } from './types.ts';
 import { focusEl, uid } from './util.ts';
 

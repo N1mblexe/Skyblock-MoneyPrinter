@@ -1,5 +1,5 @@
 import type { AppState, DataStatus, Store } from '../../types/contracts.ts';
-import { onLangChange, t } from '../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../i18n/index.ts';
 import { ageStatus } from '../../state/status.ts';
 import { fmtAge } from '../format.ts';
 
@@ -62,7 +62,7 @@ export function createStatusPill(store: Store<AppState>): { el: HTMLElement; des
     setAttr(pill, 'class', `pill pill-${st}`);
     setAttr(pill, 'data-status', st);
     setText(pill, t(`common.st_${st}`));
-    const tip = st === 'error' && s.lastError ? `${t('common.st_errorTitle')}: ${s.lastError}` : t(`common.st_${st}Title`);
+    const tip = st === 'error' && s.lastError ? t('common.st_errorDetail', { err: msgText(s.lastError) }) : t(`common.st_${st}Title`);
     setAttr(pill, 'title', tip);
 
     let ageText = '';
@@ -80,8 +80,8 @@ export function createStatusPill(store: Store<AppState>): { el: HTMLElement; des
     next.hidden = !nextText;
 
     if (st === 'error' && s.lastError) {
-      setText(err, shortErr(s.lastError));
-      setAttr(err, 'title', s.lastError);
+      setText(err, shortErr(msgText(s.lastError)));
+      setAttr(err, 'title', msgText(s.lastError));
       err.hidden = false;
     } else {
       setText(err, '');

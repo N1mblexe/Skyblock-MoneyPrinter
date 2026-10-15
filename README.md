@@ -58,7 +58,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
   </tr>
 </table>
 
-Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation and a mobile layout.
+Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
 
 ## 📸 Screenshots
 
@@ -100,7 +100,7 @@ npm install
 npm run dev        # → http://localhost:5173
 ```
 
-Switch the language with the **TR / EN** toggle in the top bar, and set your capital, tax rate and order slots under ⚙️ **Settings**.
+The app opens in English. Switch to Turkish with the **EN / TR** buttons in the top bar, and set your capital, tax rate and order slots under ⚙️ **Settings**. Adding another language takes one folder of translations ([how](src/i18n/README.md)).
 
 > [!TIP]
 > If live prices can't be fetched, open Settings → Data → **Load prices manually** and paste or upload the JSON from <https://api.hypixel.net/v2/skyblock/bazaar>.

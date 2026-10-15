@@ -3,7 +3,7 @@
 // reset never switches the segment); row details open in the kit detail panel.
 import { PRICE_TICK } from '../../../config.ts';
 import { round1 } from '../../../domain/pricing.ts';
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, Route, ShopRow, View, ViewContext } from '../../../types/contracts.ts';
 import { itemCell, riskBadge, sourceBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -41,7 +41,6 @@ import {
   type ShopFilters,
 } from './npcData.ts';
 import './npc.css';
-import './i18n.ts';
 
 /** Best-rate chips shown above the shops table. */
 const RATE_CHIPS = 8;
@@ -202,7 +201,7 @@ export function createNpcView(): View {
       key: 'risk',
       label: () => t('npc.col_risk'),
       get: (r) => r.risk.score,
-      csv: (r) => r.risk.level,
+      csv: (r) => t(`risk.${r.risk.level}`),
       html: (r) => riskBadge(r.risk),
       align: 'center',
       priority: 2,
@@ -273,7 +272,7 @@ export function createNpcView(): View {
       key: 'risk',
       label: () => t('npc.col_risk'),
       get: (r) => r.risk?.score ?? null,
-      csv: (r) => r.risk?.level ?? '',
+      csv: (r) => (r.risk ? t(`risk.${r.risk.level}`) : ''),
       html: (r) => (r.risk ? riskBadge(r.risk) : '—'),
       align: 'center',
       priority: 2,
@@ -332,7 +331,7 @@ export function createNpcView(): View {
     shopTable.el.hidden = !ready;
     ratesEl.hidden = !ready;
     if (!s.catalog) {
-      if (s.catalogError) setState(t('npc.catalogError', { err: s.catalogError }), 'err');
+      if (s.catalogError) setState(t('npc.catalogError', { err: msgText(s.catalogError) }), 'err');
       else setState(t('npc.loadingCatalog'));
       return;
     }
@@ -383,7 +382,7 @@ export function createNpcView(): View {
     if (document.activeElement === curSel && sig === curSig) return;
     curSig = sig;
     const total = opts.reduce((n, o) => n + o.count, 0);
-    const list = opts.map((o) => ({ value: o.id, text: `${o.label} (${o.count})` }));
+    const list = opts.map((o) => ({ value: o.id, text: t('npc.currencyOpt', { label: o.label, n: o.count }) }));
     if (selected && !opts.some((o) => o.id === selected)) list.push({ value: selected, text: currencyLabel(selected, state().catalog) });
     curSel.replaceChildren(
       h('option', { value: '' }, t('npc.currencyAll', { n: total })),

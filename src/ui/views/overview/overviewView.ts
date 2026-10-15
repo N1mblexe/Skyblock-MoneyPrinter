@@ -1,13 +1,12 @@
 // Overview dashboard: compact cards summarising every tool, each linking to its full page.
 import { LS_VIEWPREFS, OPTIMIZER, STATS } from '../../../config.ts';
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, PlanResult, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
 import { fmtAge, fmtCoins, fmtCompact, fmtInt, fmtPct } from '../../format.ts';
 import { bindQueryState, type QuerySchema, type QueryState, type QueryValues } from '../../kit/index.ts';
 import { sparklineSvg } from '../../sparkline.ts';
 import { logMessage } from '../watch/alertText.ts';
-import './i18n.ts';
 import './overview.css';
 import { mostConsistent, movers, planSummary, topBooks, topCrafts, topFlips, type Mover, type MoverWindow } from './select.ts';
 
@@ -141,7 +140,7 @@ export function createOverviewView(): View {
         return mini(
           [H_ITEM(), H_MARGIN(), H_PPH()],
           rows.map((r) => [
-            itemLink(r.id, r.name) + `<span class="id-sub">${esc(`${r.count}× ${r.fromLevel} → ${r.toLevel}`)}</span>`,
+            itemLink(r.id, r.name) + `<span class="id-sub">${esc(t('books.chainCell', { k: r.fromLevel, l: r.toLevel, n: r.count }))}</span>`,
             esc(fmtPct(r.margin)),
             `<strong>${span('pos', fmtCoins(r.profitPerHour))}</strong>`,
           ]),
@@ -335,7 +334,7 @@ export function createOverviewView(): View {
     if (!root) return;
     const s = st();
     if (s.catalogError && !s.catalog) {
-      els.banner.textContent = t('common.catalogError', { err: s.catalogError });
+      els.banner.textContent = t('common.catalogError', { err: msgText(s.catalogError) });
       els.banner.hidden = false;
     } else els.banner.hidden = true;
     const win = qs.get().mw;

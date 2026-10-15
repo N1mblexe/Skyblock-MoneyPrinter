@@ -1,5 +1,6 @@
 // Global keyboard shortcuts: 'mod+k' (Ctrl or Cmd), '/', '?', 'Escape', single keys, and sequences
 // like 'g o' (second key within SEQ_TIMEOUT_MS). Ignored while typing in text fields, except Escape and mod combos.
+import { t } from '../../i18n/index.ts';
 import type { HotkeyMap } from './types.ts';
 import { isTypingTarget } from './util.ts';
 
@@ -49,16 +50,20 @@ function matches(c: Chord, ev: KeyboardEvent): boolean {
   return ev.key.toLowerCase() === c.key;
 }
 
+/** Keys whose label is a word (translated); other keys show their character or capitalised name. */
+const KEY_NAMES: Record<string, string> = { escape: 'kit.key_esc', ' ': 'kit.key_space', enter: 'kit.key_enter' };
+
 const MODIFIER_KEYS = new Set(['Shift', 'Control', 'Alt', 'Meta', 'CapsLock', 'AltGraph', 'Dead']);
 
 /** Human label for a spec, e.g. 'mod+k' -> 'Ctrl K' (⌘ K on Apple), 'g o' -> 'G then O'. */
 export function hotkeyLabel(spec: string, apple = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform ?? '')): string[] {
   return parseHotkey(spec).map((c) => {
     const parts: string[] = [];
-    if (c.mod) parts.push(apple ? '⌘' : 'Ctrl');
-    if (c.alt) parts.push(apple ? '⌥' : 'Alt');
-    if (c.shift) parts.push(apple ? '⇧' : 'Shift');
-    const k = c.key === 'escape' ? 'Esc' : c.key === ' ' ? 'Space' : c.key.length === 1 ? c.key.toUpperCase() : c.key[0]!.toUpperCase() + c.key.slice(1);
+    if (c.mod) parts.push(apple ? '⌘' : t('kit.key_ctrl'));
+    if (c.alt) parts.push(apple ? '⌥' : t('kit.key_alt'));
+    if (c.shift) parts.push(apple ? '⇧' : t('kit.key_shift'));
+    const named = KEY_NAMES[c.key];
+    const k = named ? t(named) : c.key.length === 1 ? c.key.toUpperCase() : c.key[0]!.toUpperCase() + c.key.slice(1);
     parts.push(k);
     return parts.join(' ');
   });

@@ -3,8 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toSnapshot, validateRaw } from '../../../src/api/normalize.ts';
 import { LS_VIEWPREFS } from '../../../src/config.ts';
 import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.ts';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang, t } from '../../../src/i18n/index.ts';
+import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AhSnapshot, AppState, Catalog, CatalogFile, CraftRow, Settings, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
@@ -93,11 +92,6 @@ afterEach(() => {
 });
 
 describe('craft view', () => {
-  it('has identical TR/EN keys', () => {
-    const k = dictKeys('craft');
-    expect(k.tr.length).toBeGreaterThan(50);
-    expect(k.en).toEqual(k.tr);
-  });
 
   it('renders an h1 and shows loading states before data and catalog arrive', async () => {
     mount();

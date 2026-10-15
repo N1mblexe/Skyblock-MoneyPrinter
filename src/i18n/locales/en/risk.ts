@@ -1,0 +1,21 @@
+// 'risk' namespace: risk levels, flag explanations and price-source badges (src/ui/cells.ts).
+export const risk = {
+  ok: 'Clean',
+  caution: 'Caution',
+  suspect: 'Suspect',
+  DEAD_BID: 'Dead bid: the best buy order is negligible next to the ask (e.g. 0.1).',
+  WIDE_SPREAD: 'Wide spread: more than {wide} between bid and ask.',
+  EXTREME_SPREAD: 'Extreme spread ({extreme}+): one side is almost surely stale or manipulated.',
+  LOW_VOLUME: 'Low volume: very few weekly trades, orders may not fill.',
+  FEW_ORDERS: 'Few orders: fewer than {few} orders on one side.',
+  THIN_TOP: 'Thin top: tiny amount at the best price, next level is far away.',
+  QUICK_DIVERGENCE: 'Average price (quick_status) is far from the best price.',
+  VOLUME_IMBALANCE: 'Imbalanced volume: buy and sell volume differ by more than {imbalance}x.',
+  PRICE_SPIKE: 'Price spike: far from the 24h median.',
+  AH_THIN: 'Very few auction listings: the lowest BIN may not be reliable.',
+  NO_HISTORY: 'Not enough price history yet (spike check skipped).',
+  srcOrder: 'Buy order',
+  srcInsta: 'Insta',
+  srcNpc: 'NPC',
+  srcCraft: 'Craft',
+};

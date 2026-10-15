@@ -5,8 +5,7 @@ import catalogRaw from '../../fixtures/catalog.json';
 import { toSnapshot, validateRaw } from '../../../src/api/normalize.ts';
 import { LS_FUSION, LS_LEGACY_FUSION } from '../../../src/config.ts';
 import { catalogFromFile } from '../../../src/data/catalog.ts';
-import { dictKeys, setLang, t } from '../../../src/i18n/index.ts';
-import '../../../src/i18n/common.ts';
+import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import { loadFusion, migrateLegacy } from '../../../src/storage/local.ts';
@@ -73,11 +72,6 @@ afterEach(() => {
 });
 
 describe('fusion view: editing', () => {
-  it('has identical TR/EN keys', () => {
-    const k = dictKeys('fusion');
-    expect(k.tr.length).toBeGreaterThan(40);
-    expect(k.en).toEqual(k.tr);
-  });
 
   it('shows an empty state, an h1 and adds a recipe', async () => {
     mount();
@@ -323,7 +317,7 @@ describe('fusion view: import / export', () => {
     text.value = JSON.stringify([{ a: 'SHARD_SALMON', aq: 4, b: 'SHARD_WIKI_TIKI', bq: 1, out: 'SHARD_BEEHEEMOTH', oq: 1 }, { bad: true }]);
     go.click();
     expect(store.get().fusion).toEqual([{ ...RECIPE }, { a: 'SHARD_SALMON', qa: 4, b: 'SHARD_WIKI_TIKI', qb: 1, out: 'SHARD_BEEHEEMOTH', qo: 1 }]);
-    expect(ctx.toast).toHaveBeenCalledWith(t('fusion.importSkipped', { n: 1, m: 1 }), 'warn');
+    expect(ctx.toast).toHaveBeenCalledWith('1 tarif içe aktarıldı, 1 geçersiz kayıt atlandı.', 'warn');
 
     btn('fu-import').click();
     document.querySelector<HTMLInputElement>('input[type=radio][value=replace]')!.checked = true;

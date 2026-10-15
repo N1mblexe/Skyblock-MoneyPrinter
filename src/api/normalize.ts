@@ -1,19 +1,20 @@
 import { BOOK_DEPTH } from '../config.ts';
 import type { RawBazaar, RawOrder, RawQuickStatus } from '../types/api.ts';
+import { LocalizedError } from '../i18n/errors.ts';
 import type { OrderLevel, Product, QuickStatus, Snapshot, SnapshotSource } from '../types/contracts.ts';
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
 /** Throw a descriptive Error unless `x` looks like a bazaar response ({success:true, products:{...}}). */
 export function validateRaw(x: unknown): RawBazaar {
-  if (!isObj(x)) throw new Error('Bazaar response is not a JSON object');
+  if (!isObj(x)) throw new LocalizedError('err.bazaarNotObject');
   if (x.success !== true) {
     const cause = typeof x.cause === 'string' && x.cause ? x.cause : null;
-    throw new Error(cause ? `Hypixel API error: ${cause}` : 'Bazaar response does not have "success": true');
+    throw cause ? new LocalizedError('err.apiError', { cause }) : new LocalizedError('err.noSuccess');
   }
-  if (!isObj(x.products)) throw new Error('Bazaar response has no "products" object');
+  if (!isObj(x.products)) throw new LocalizedError('err.noProducts');
   if (typeof x.lastUpdated !== 'number' || !Number.isFinite(x.lastUpdated)) {
-    throw new Error('Bazaar response has no numeric "lastUpdated"');
+    throw new LocalizedError('err.noLastUpdated');
   }
   return x as unknown as RawBazaar;
 }

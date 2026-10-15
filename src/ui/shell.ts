@@ -1,15 +1,13 @@
 // App shell (trading-terminal layout): sidebar nav / mobile bottom nav, top bar (palette search, status,
 // mayor, AH scan, language, refresh, settings), settings drawer, global hotkeys, and the view container.
 import type { AppState, Density, HistoryRepo, Lang, Route, RouteId, Store, Theme, ToastKind } from '../types/contracts.ts';
-import '../i18n/common.ts';
 import { HOTKEYS, LS_VIEWPREFS, UI } from '../config.ts';
-import { getLang, onLangChange, setLang, t } from '../i18n/index.ts';
+import { getLang, LANGUAGES, msgText, onLangChange, setLang, t } from '../i18n/index.ts';
 import { lsGet, lsSet } from '../storage/local.ts';
 import { esc } from './dom.ts';
-import { createDrawer, currentPalette, openPalette, registerHotkeys, toast as kitToast, type Drawer, type HotkeyMap } from './kit/index.ts';
+import { createDrawer, currentPalette, hotkeyLabel, openPalette, registerHotkeys, toast as kitToast, type Drawer, type HotkeyMap } from './kit/index.ts';
 import { routeToHash } from './router.ts';
 import { createDataPanel } from './shell/dataPanel.ts';
-import './shell/i18n.ts';
 import { icon } from './shell/icons.ts';
 import { createManualLoad } from './shell/manualLoad.ts';
 import { createAhStatus, createMayorChip } from './shell/marketChips.ts';
@@ -53,7 +51,6 @@ export const OPEN_SETTINGS_EVENT = 'bm:open-settings';
 /** Media query for the mobile layout (bottom nav). */
 export const MOBILE_QUERY = `(max-width: ${UI.mobileBp - 0.02}px)`;
 
-const LANGS: Lang[] = ['tr', 'en'];
 
 /** Apply a theme setting to <html data-theme> (attribute removed for auto). */
 export function applyTheme(theme: Theme): void {
@@ -87,6 +84,9 @@ const nextFrame = (fn: () => void): void => {
   if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => fn());
   else setTimeout(fn, 16);
 };
+
+/** Shortcut specs as short text: ['/', 'mod+k'] -> '/, Ctrl+K' (⌘+K on Apple). */
+const keysText = (specs: readonly string[]): string => specs.map((sp) => hotkeyLabel(sp).map((c) => c.replace(/ /g, '+')).join(' ')).join(', ');
 
 /**
  * Mount the shell into root. Applies settings.theme/density/lang, renders the nav (aria-current per store.route),
@@ -126,7 +126,7 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
     `<div class="tb-status"></div>` +
     `<div class="tb-market"></div>` +
     `<div class="tb-spacer"></div>` +
-    `<div class="seg seg-lang" role="group">${LANGS.map((l) => `<button type="button" data-lang="${l}" data-testid="lang-${l}">${l.toUpperCase()}</button>`).join('')}</div>` +
+    `<div class="seg seg-lang" role="group">${LANGUAGES.map((l) => `<button type="button" data-lang="${l.code}" data-testid="lang-${l.code}" lang="${l.code}" title="${esc(l.name)}" aria-label="${esc(l.name)}">${l.code.toUpperCase()}</button>`).join('')}</div>` +
     `<button type="button" class="tb-btn refresh-btn" data-testid="refresh-btn" aria-keyshortcuts="R">${icon('refresh', 'ico refresh-ico')}<span class="refresh-lbl"></span></button>` +
     `<button type="button" class="tb-btn tb-icon settings-btn" data-testid="settings-btn" aria-haspopup="dialog">${icon('settings')}<span class="kit-sr settings-lbl"></span></button>` +
     `</header>` +
@@ -232,16 +232,15 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
 
   function renderLabels(): void {
     const title = t('common.appTitle');
-    const sp = title.indexOf(' ');
-    brandName.innerHTML = sp > 0 ? `${esc(title.slice(0, sp))} <b>${esc(title.slice(sp + 1))}</b>` : esc(title);
+    brandName.innerHTML = `${esc(t('common.appTitleMain'))} <b>${esc(t('common.appTitleAccent'))}</b>`;
     brandSub.textContent = t('shell.brandSub');
     $('.tb-brand-lbl').textContent = title;
     skip.textContent = t('common.skipToContent');
     searchBtn.querySelector('.tb-search-lbl')!.textContent = t('shell.search');
     searchBtn.setAttribute('aria-label', t('common.commandPalette'));
-    searchBtn.title = `${t('common.commandPalette')} (/, Ctrl+K)`;
+    searchBtn.title = t('shell.withKeys', { label: t('common.commandPalette'), keys: keysText(HOTKEYS.palette) });
     refreshLbl.textContent = busy ? t('common.refreshing') : t('common.refresh');
-    refreshBtn.title = `${t('common.refreshTitle')} (R)`;
+    refreshBtn.title = t('shell.withKeys', { label: t('common.refreshTitle'), keys: keysText(HOTKEYS.refresh) });
     settingsBtn.querySelector('.settings-lbl')!.textContent = t('common.settings');
     settingsBtn.title = t('common.settings');
     langSeg.setAttribute('aria-label', t('common.language'));
@@ -275,7 +274,7 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
 
   function renderBanner(s: AppState): void {
     if (s.catalogError) {
-      banner.textContent = t('common.catalogError', { err: s.catalogError });
+      banner.textContent = t('common.catalogError', { err: msgText(s.catalogError) });
       banner.hidden = false;
     } else {
       banner.textContent = '';
@@ -333,20 +332,24 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
   function actions(): PaletteAction[] {
     const s = store.get();
     const list: PaletteAction[] = [
-      { id: 'refresh', label: () => t('shell.act_refresh'), hint: 'R', run: () => void doRefresh() },
+      { id: 'refresh', label: () => t('shell.act_refresh'), hint: keysText(HOTKEYS.refresh), run: () => void doRefresh() },
       {
         id: 'theme',
         label: () => t('shell.act_theme'),
         run: () => patchSettings({ theme: effectiveTheme(store.get().settings.theme) === 'dark' ? 'light' : 'dark' }),
       },
-      { id: 'lang', label: () => t('shell.act_lang'), run: () => patchSettings({ lang: store.get().settings.lang === 'tr' ? 'en' : 'tr' }) },
+      ...LANGUAGES.filter((l) => l.code !== s.settings.lang).map((l) => ({
+        id: `lang-${l.code}`,
+        label: () => t('shell.act_langTo', { name: l.name }),
+        run: () => patchSettings({ lang: l.code }),
+      })),
       {
         id: 'density',
         label: () => t('shell.act_density'),
         run: () => patchSettings({ density: store.get().settings.density === 'compact' ? 'comfortable' : 'compact' }),
       },
       { id: 'settings', label: () => t('shell.act_settings'), run: openSettings },
-      { id: 'shortcuts', label: () => t('shell.act_shortcuts'), hint: '?', run: openHelp },
+      { id: 'shortcuts', label: () => t('shell.act_shortcuts'), hint: keysText(HOTKEYS.help), run: openHelp },
     ];
     if (!mobile) list.push({ id: 'sidebar', label: () => t('shell.act_sidebar'), run: toggleSidebar });
     if (ctx.scanAh && s.settings.ahEnabled && !s.ahProgress) list.push({ id: 'ah', label: () => t('shell.act_ah'), run: () => ctx.scanAh?.() });

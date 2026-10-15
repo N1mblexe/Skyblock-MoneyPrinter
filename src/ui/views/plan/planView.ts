@@ -4,7 +4,7 @@
 // (opportunities identity, kinds, options).
 import { LS_VIEWPREFS, OPTIMIZER } from '../../../config.ts';
 import { allocate, type AllocateOptions } from '../../../domain/optimizer.ts';
-import { onLangChange } from '../../../i18n/index.ts';
+import { msgText, onLangChange } from '../../../i18n/index.ts';
 import type { AppState, Opportunity, PlanResult, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { itemCell, riskBadge, riskFlagText } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -21,7 +21,6 @@ import {
   type QueryState,
 } from '../../kit/index.ts';
 import { filterKinds, KINDS, PLAN_SCHEMA, planOptions, planRows, sourceHref, type PlanQuery, type PlanRow } from './model.ts';
-import './i18n.ts';
 import './plan.css';
 
 /** Input debounce before re-running allocate() (ms). */
@@ -55,7 +54,8 @@ export function createPlanView(): View {
   let shownRows: PlanRow[] | null = null;
   const cleanups: (() => void)[] = [];
 
-  const t = (k: string, p?: Record<string, string | number>) => ctx!.t(`plan.${k}`, p);
+  // keys without a namespace are 'plan.' keys; 'common.x' etc. pass through
+  const t = (k: string, p?: Record<string, string | number>) => ctx!.t(k.includes('.') ? k : `plan.${k}`, p);
   const st = (): AppState => ctx!.store.get();
 
   // persistent pieces
@@ -191,7 +191,7 @@ export function createPlanView(): View {
     bar?.refresh(); // help texts show the current settings defaults
     let msg = '';
     if (!s.snapshot) msg = t('waiting');
-    else if (!s.catalog) msg = s.catalogError ? t('catalogError', { err: s.catalogError }) : t('catalogLoading');
+    else if (!s.catalog) msg = s.catalogError ? t('catalogError', { err: msgText(s.catalogError) }) : t('catalogLoading');
     msgEl.hidden = !msg;
     msgEl.textContent = msg;
     summaryEl.hidden = !!msg;
@@ -260,7 +260,7 @@ export function createPlanView(): View {
         [t('dProfitShare'), esc(fmtPct(r.profitShare)), 'profitShare'],
         [t('dPerCoin'), esc(fmtPct(r.perCoin, 2)), 'perCoin'],
       ]) +
-      `<p class="note small" data-testid="plan-why-long"><b>${esc(t('dWhy'))}:</b> ${esc(whyShort(r, m.opts))}. ${esc(whyLong(r, m.opts))}</p>` +
+      `<p class="note small" data-testid="plan-why-long">${t('whyLine', { why: esc(t('dWhy')), short: esc(whyShort(r, m.opts)), long: esc(whyLong(r, m.opts)) })}</p>` +
       `<h3>${esc(t('detailOpp'))}</h3>` +
       kv([
         [t('dUnitCost'), esc(fmtCoins(o.unitCost)), 'unitCost'],
@@ -317,7 +317,7 @@ export function createPlanView(): View {
         align: 'right',
         priority: 2,
       },
-      { key: 'risk', label: () => t('colRisk'), get: (r) => r.opp.risk.score, html: (r) => riskBadge(r.opp.risk), csv: (r) => r.opp.risk.level, priority: 2 },
+      { key: 'risk', label: () => t('colRisk'), get: (r) => r.opp.risk.score, html: (r) => riskBadge(r.opp.risk), csv: (r) => t(`risk.${r.opp.risk.level}`), priority: 2 },
       {
         key: 'why',
         label: () => t('colWhy'),
@@ -334,7 +334,7 @@ export function createPlanView(): View {
     const on = ctx!.watch.has(r.opp.id);
     const label = on ? t('unwatch') : t('watch');
     return `<button type="button" class="btn btn-ghost btn-sm plan-star" data-action="watch" aria-pressed="${on}" aria-label="${esc(
-      `${label}: ${r.opp.name}`,
+      t(on ? 'common.unwatchItem' : 'common.watchItem', { name: r.opp.name }),
     )}" title="${esc(label)}">${on ? '★' : '☆'}</button>`;
   }
 

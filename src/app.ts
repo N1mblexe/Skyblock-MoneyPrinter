@@ -1,12 +1,11 @@
 // Bootstrap wiring: settings -> history/cache -> catalog -> shell -> router/views -> poller.
-import './i18n/common.ts';
 import { createAhScanner } from './api/auctions.ts';
 import { createElectionPoller } from './api/election.ts';
 import { createPoller } from './api/poller.ts';
 import { LS_LAST_ROUTE } from './config.ts';
 import { toSnapshot, validateRaw } from './api/normalize.ts';
 import { loadCatalog } from './data/catalog.ts';
-import { setLang, t } from './i18n/index.ts';
+import { msgOf, msgText, setLang, t } from './i18n/index.ts';
 import { startAlerts } from './state/alertsRunner.ts';
 import { initialState } from './state/appState.ts';
 import { createDerived } from './state/derived.ts';
@@ -33,7 +32,6 @@ import { createRouter, parseHash, routeToHash } from './ui/router.ts';
 import { mountShell } from './ui/shell.ts';
 import { views } from './ui/views/index.ts';
 
-const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export async function bootstrap(root: HTMLElement): Promise<void> {
   migrateLegacy();
@@ -93,12 +91,12 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   // Catalog loads in the background; flips work without it.
   loadCatalog()
     .then((catalog) => store.set({ catalog, catalogError: null }))
-    .catch((e) => store.set({ catalogError: errMsg(e) }));
+    .catch((e) => store.set({ catalogError: msgOf(e) }));
 
   const poller = createPoller({
     onSnapshot: (snap) => void applySnapshot(snap, 'live'),
     onSuccess: () => store.set({ status: 'live', lastError: null }),
-    onError: (e) => store.set({ status: 'error', lastError: e.message }),
+    onError: (e) => store.set({ status: 'error', lastError: msgOf(e) }),
     onSchedule: (nextAt) => store.set({ nextPollAt: nextAt }),
   });
 
@@ -113,7 +111,7 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
       void applySnapshot(toSnapshot(raw, Date.now(), 'manual'), 'manual');
       return null;
     } catch (e) {
-      return e instanceof SyntaxError ? t('common.manualBadJson') : errMsg(e);
+      return e instanceof SyntaxError ? t('common.manualBadJson') : msgText(msgOf(e));
     }
   }
 

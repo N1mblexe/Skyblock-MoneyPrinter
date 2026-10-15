@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang } from '../../../src/i18n/index.ts';
-import '../../../src/ui/kit/i18n.ts';
+import { setLang } from '../../../src/i18n/index.ts';
 import { createFilterBar, FILTER_DEBOUNCE_MS, parseNumberInput } from '../../../src/ui/kit/filterBar.ts';
 import { bindQueryState } from '../../../src/ui/kit/queryState.ts';
 import type { FilterSpec, QuerySchema } from '../../../src/ui/kit/types.ts';
@@ -31,7 +29,10 @@ function setup() {
   return { qs, bar, setQuery, $ };
 }
 
-beforeEach(() => vi.useFakeTimers());
+beforeEach(() => {
+  vi.useFakeTimers();
+  setLang('tr'); // starts in Turkish; one test switches to English
+});
 afterEach(() => {
   vi.useRealTimers();
   setLang('tr');
@@ -133,11 +134,15 @@ describe('createFilterBar', () => {
     expect(parseNumberInput('1,234.5')).toBe(1234.5);
     expect(parseNumberInput('1 000')).toBe(1000);
     expect(parseNumberInput('x')).toBeUndefined();
+    // a lone separator + 3 digits is grouping unless it is the locale's decimal separator
+    expect(parseNumberInput('1.000')).toBe(1000); // tr
+    expect(parseNumberInput('1,000')).toBe(1); // tr: decimal comma
+    setLang('en');
+    expect(parseNumberInput('1,000')).toBe(1000);
+    expect(parseNumberInput('1.000')).toBe(1);
+    expect(parseNumberInput('1,5')).toBe(1.5);
+    expect(parseNumberInput('1,000,000')).toBe(1_000_000);
+    setLang('tr');
   });
 
-  it('kit dictionary has TR/EN parity', () => {
-    const k = dictKeys('kit');
-    expect(k.tr.length).toBeGreaterThan(0);
-    expect(k.tr).toEqual(k.en);
-  });
 });

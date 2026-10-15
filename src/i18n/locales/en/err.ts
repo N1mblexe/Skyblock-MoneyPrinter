@@ -1,0 +1,27 @@
+// 'err' namespace: errors that can reach the UI (status pill, catalog banner, manual load, toasts).
+// The English text is also the Error.message used in logs (src/i18n/errors.ts).
+export const err = {
+  timeout: 'Bazaar request timed out after {s}s',
+  http: 'HTTP {status}',
+  bazaarBadJson: 'Bazaar response is not valid JSON: {detail}',
+  bazaarNotObject: 'Bazaar response is not a JSON object',
+  apiError: 'Hypixel API error: {cause}',
+  noSuccess: 'Bazaar response does not have "success": true',
+  noProducts: 'Bazaar response has no "products" object',
+  noLastUpdated: 'Bazaar response has no numeric "lastUpdated"',
+  catNotObject: 'Catalog is not a JSON object',
+  catVersion: 'Unsupported catalog version: {v} (expected 1 or 2)',
+  catNoItems: 'Catalog has no "items" object',
+  catNoRecipes: 'Catalog has no "recipes" array',
+  catRequest: 'Catalog request failed ({url}): {detail}',
+  catHttp: 'Catalog HTTP {status} ({url})',
+  catBadJson: 'Catalog is not valid JSON ({url}): {detail}',
+  idbUnavailable: 'IndexedDB is not available',
+  idbOpen: 'IndexedDB open failed: {name}',
+  idbBlocked: 'IndexedDB open blocked: {name}',
+  idbUpgrade: 'IndexedDB upgrade failed',
+  idbRequest: 'IndexedDB request failed',
+  idbTx: 'IndexedDB transaction failed',
+  idbTxAbort: 'IndexedDB transaction aborted',
+  bootFailed: 'The app could not start: {err}',
+};

@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
 import { collectPalette, currentPalette, openPalette } from '../../../src/ui/kit/palette.ts';
 import type { PaletteItem, PaletteProvider } from '../../../src/ui/kit/types.ts';
 
@@ -55,7 +54,7 @@ describe('openPalette', () => {
     input().value = 'ban';
     input().dispatchEvent(new Event('input'));
     expect(opts()).toHaveLength(1);
-    expect(document.querySelector('[role="status"]')!.textContent).toBe('1 sonuç');
+    expect(document.querySelector('[role="status"]')!.textContent).toBe('1 result');
     press('Enter');
     expect(runB).toHaveBeenCalledTimes(1);
     expect(document.querySelector('.kit-palette-root')).toBeNull();
@@ -70,7 +69,7 @@ describe('openPalette', () => {
     expect(openPalette({ providers: [] })).toBe(h);
     input().value = 'zzz';
     input().dispatchEvent(new Event('input'));
-    expect(document.querySelector('.kp-empty')!.textContent).toBe('Sonuç yok');
+    expect(document.querySelector('.kp-empty')!.textContent).toBe('No results');
     expect(input().hasAttribute('aria-activedescendant')).toBe(false);
     press('ArrowDown');
     press('Enter');

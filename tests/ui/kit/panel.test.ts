@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
 import { createDetailPanel } from '../../../src/ui/kit/panel.ts';
 import { createDrawer } from '../../../src/ui/kit/drawer.ts';
 import { focusables, isTypingTarget, trapTab } from '../../../src/ui/kit/util.ts';
@@ -59,7 +58,7 @@ describe('createDetailPanel', () => {
     p.open('x', 'y');
     p.el.querySelector<HTMLButtonElement>('.kit-x')!.click();
     expect(closed).toHaveBeenCalledTimes(1);
-    expect(p.el.querySelector('.kit-x')!.getAttribute('aria-label')).toBe('Kapat');
+    expect(p.el.querySelector('.kit-x')!.getAttribute('aria-label')).toBe('Close');
     p.destroy();
     expect(p.el.isConnected).toBe(false);
   });

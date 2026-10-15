@@ -94,7 +94,7 @@ describe('routes', () => {
       expect(b.store.get().route.id).toBe(r.split('/')[0]);
     }
     expect(seen).toEqual({
-      overview: 'Genel bakış',
+      overview: 'Overview',
       flip: expect.any(String),
       books: expect.any(String),
       craft: expect.any(String),

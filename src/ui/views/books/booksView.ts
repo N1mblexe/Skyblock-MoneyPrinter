@@ -3,7 +3,7 @@
 import { BOOK, HOTKEYS, LS_VIEWPREFS } from '../../../config.ts';
 import { parseBookId } from '../../../domain/books.ts';
 import { matchesQuery } from '../../../domain/search.ts';
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, BookRow, Catalog, Route, Snapshot, View, ViewContext } from '../../../types/contracts.ts';
 import { riskBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -25,7 +25,6 @@ import {
 import '../flip/flip.css';
 import { focusedRowKey, kv, limitedText, orderBookHtml, riskListHtml, section, signCls, span, tpPairs, watchButton } from '../flip/parts.ts';
 import './books.css';
-import './i18n.ts';
 
 export const BOOKS_PREFS_KEY = LS_VIEWPREFS + 'books';
 
@@ -148,7 +147,7 @@ export function createBooksView(): View {
       title: () => t('books.tip_risk'),
       get: (r) => r.risk.score,
       html: (r) => riskBadge(r.risk),
-      csv: (r) => r.risk.level,
+      csv: (r) => t(`risk.${r.risk.level}`),
       align: 'center',
       priority: 2,
     },
@@ -158,7 +157,7 @@ export function createBooksView(): View {
       title: () => t('books.tip_verified'),
       get: (r) => (r.verified ? 1 : 0),
       html: (r) => verBadge(r.verified),
-      csv: (r) => (r.verified ? 1 : 0),
+      csv: (r) => t(r.verified ? 'common.yes' : 'common.no'),
       align: 'center',
       priority: 2,
     },
@@ -212,8 +211,8 @@ export function createBooksView(): View {
           ]),
       ) +
       section(t('flip.riskTitle'), riskListHtml(r.risk)) +
-      section(t('flip.bookTitle') + ' · ' + t('books.inputBook', { name: inName }), orderBookHtml(snap?.products[r.inputId])) +
-      section(t('flip.bookTitle') + ' · ' + t('books.outputBook', { name: r.name }), orderBookHtml(snap?.products[r.id])) +
+      section(t('books.inputBook', { book: t('flip.bookTitle'), name: inName }), orderBookHtml(snap?.products[r.inputId])) +
+      section(t('books.outputBook', { book: t('flip.bookTitle'), name: r.name }), orderBookHtml(snap?.products[r.id])) +
       section(
         t('flip.linksTitle'),
         `<div class="dp-links"><a class="btn btn-sm" href="#/item/${encodeURIComponent(r.inputId)}">${esc(t('books.openInput'))}</a>` +
@@ -284,7 +283,7 @@ export function createBooksView(): View {
     const s = ctx.store.get();
     const failed = !!s.catalogError && !s.catalog;
     els.banner.hidden = !failed;
-    if (failed) els.banner.textContent = t('common.catalogError', { err: s.catalogError! });
+    if (failed) els.banner.textContent = t('common.catalogError', { err: msgText(s.catalogError!) });
 
     all = ctx.derived.books();
     const p = qs.get();

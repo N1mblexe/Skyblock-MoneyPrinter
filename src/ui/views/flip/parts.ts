@@ -5,7 +5,6 @@ import type { MarketStat, OrderLevel, Product, RiskReport, Throughput } from '..
 import { riskFlagText } from '../../cells.ts';
 import { esc } from '../../dom.ts';
 import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtPct, locale } from '../../format.ts';
-import './i18n.ts';
 
 /** 'pos' / 'neg' / '' for a signed number. */
 export const signCls = (n: number | null | undefined): string => (n == null || !Number.isFinite(n) || n === 0 ? '' : n > 0 ? 'pos' : 'neg');
@@ -30,7 +29,7 @@ export function fillText(tp: Throughput): string {
 
 /** ★ toggle for a table row (kit rowActions; data-action="watch"). */
 export function watchButton(watched: boolean, name: string): string {
-  const label = `${t(watched ? 'common.unwatch' : 'common.watch')}: ${name}`;
+  const label = t(watched ? 'common.unwatchItem' : 'common.watchItem', { name });
   return `<button type="button" class="btn btn-ghost btn-sm watch-btn${watched ? ' on' : ''}" data-action="watch" aria-pressed="${watched}" aria-label="${esc(label)}" title="${esc(label)}">${watched ? '★' : '☆'}</button>`;
 }
 

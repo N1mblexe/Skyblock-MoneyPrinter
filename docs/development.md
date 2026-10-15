@@ -75,7 +75,7 @@ The app is built with Vite and vanilla TypeScript, with no framework.
 | `src/domain/` | Pure calculations: pricing and throughput, flips, crafts, NPC, books, shops, fusion, optimizer, risk, market stats, alerts |
 | `src/state/` | Store, app state and default settings, memoized derived results, alert runner |
 | `src/storage/` | IndexedDB price history, localStorage helpers |
-| `src/i18n/` | Translations (tr, en) |
+| `src/i18n/` | Language registry, `t()`, and one folder of translations per language in `locales/` (English is the default and the source). See [src/i18n/README.md](../src/i18n/README.md) |
 | `src/ui/` | Shell (sidebar, top bar, palette, settings), UI kit (tables, filters, panels, hotkeys, toasts, CSV) and one folder per page in `views/` |
 | `src/styles/` | Theme and shared CSS |
 | `src/types/` | API and app contracts |

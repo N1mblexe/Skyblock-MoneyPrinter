@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
 import { clearToasts, toast, TOAST_MAX, TOAST_MS } from '../../../src/ui/kit/toast.ts';
 
 afterEach(() => {
@@ -41,7 +40,7 @@ describe('toast', () => {
 
     const dismiss = toast('x');
     const btn = document.querySelector<HTMLButtonElement>('.kit-toast-x')!;
-    expect(btn.getAttribute('aria-label')).toBe('Bildirimi kapat');
+    expect(btn.getAttribute('aria-label')).toBe('Dismiss notification');
     btn.click();
     expect(msgs()).toEqual([]);
     dismiss(); // idempotent

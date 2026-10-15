@@ -4,7 +4,6 @@ import type { AppState, ElectionInfo, Store } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
 import { fmtAge } from '../format.ts';
 import { icon } from './icons.ts';
-import './i18n.ts';
 
 /** AH age text refresh period. */
 export const AH_TICK_MS = 15_000;
@@ -26,7 +25,7 @@ export function perkSummary(e: ElectionInfo): string {
     lines.push(t('shell.mayorChip', { name: e.mayor.name }));
     for (const p of e.mayor.perks) lines.push(`• ${p.name}`);
   }
-  if (e.minister) lines.push(`${t('common.minister')}: ${e.minister.name} (${e.minister.perk.name})`);
+  if (e.minister) lines.push(t('common.ministerLine', { name: e.minister.name, perk: e.minister.perk.name }));
   return lines.join('\n');
 }
 
@@ -56,7 +55,10 @@ export function createMayorChip(store: Store<AppState>): MayorChip {
     nameEl.textContent = e.mayor.name;
     minEl.textContent = e.minister ? ` · ${e.minister.name}` : '';
     btn.title = perkSummary(e);
-    btn.setAttribute('aria-label', `${t('common.mayor')}: ${e.mayor.name}${e.minister ? `, ${t('common.minister')}: ${e.minister.name}` : ''}`);
+    btn.setAttribute(
+      'aria-label',
+      e.minister ? t('common.mayorMinisterAria', { mayor: e.mayor.name, minister: e.minister.name }) : t('common.mayorAria', { mayor: e.mayor.name }),
+    );
     const perks = e.mayor.perks.length
       ? `<ul class="perk-list">${e.mayor.perks.map((p) => `<li><b>${esc(p.name)}</b><span>${esc(p.description)}</span></li>`).join('')}</ul>`
       : `<p class="muted small">${esc(t('shell.noPerks'))}</p>`;

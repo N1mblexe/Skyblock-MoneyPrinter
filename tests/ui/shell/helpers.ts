@@ -28,8 +28,9 @@ export function snap(lastUpdated: number, products: Snapshot['products'] = {}): 
 
 /** Fresh store + root + ctx; call h.mount() to mount the shell. */
 export function harness(state: Partial<AppState> = {}): Harness {
+  // The shell suites check Turkish rendering; the English default is covered in tests/ui/i18n.test.ts and the integration tests.
   setLang('tr');
-  const store = createStore<AppState>({ ...initialState({ ...defaultSettings }), ...state });
+  const store = createStore<AppState>({ ...initialState({ ...defaultSettings, lang: 'tr' }), ...state });
   const root = document.createElement('div');
   document.body.append(root);
   const ctx = {

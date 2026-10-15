@@ -1,8 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LS_VIEWPREFS } from '../../../src/config.ts';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang } from '../../../src/i18n/index.ts';
+import { setLang } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AppState, BookRule, Catalog, Product, Route, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
@@ -94,11 +93,6 @@ afterEach(() => {
 });
 
 describe('books view', () => {
-  it('TR/EN dictionaries have identical keys', () => {
-    const k = dictKeys('books');
-    expect(k.tr.length).toBeGreaterThan(30);
-    expect(k.en).toEqual(k.tr);
-  });
 
   it('combineSteps halves down to one', () => {
     expect(combineSteps(8)).toEqual([4, 2, 1]);

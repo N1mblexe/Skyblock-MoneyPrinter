@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../src/i18n/common.ts';
 import { setLang } from '../../src/i18n/index.ts';
 import { createTable, sortRows, type Column } from '../../src/ui/table.ts';
 import { esc } from '../../src/ui/dom.ts';

@@ -11,7 +11,6 @@ import { t } from '../../i18n/index.ts';
 import { lsGet, lsSet } from '../../storage/local.ts';
 import { esc } from '../dom.ts';
 import { downloadCsv, toCsv as buildCsv } from './csv.ts';
-import './i18n.ts';
 import { isNullish, sortRows } from './sort.ts';
 import type { KitColumn, KitTableHandle, KitTableOptions, SortState } from './types.ts';
 import { focusEl, media, onMedia, uid } from './util.ts';
@@ -426,7 +425,7 @@ export function createKitTable<T>(opts: KitTableOptions<T>): KitTableHandle<T> {
     const shown = layout === 'cards' ? Math.min(view.length, cardLimit) : view.length;
     const total = layout === 'cards' ? view.length : rows.length;
     if (total > shown) {
-      foot.textContent = t('common.tableShowing', { n: shown, m: total });
+      foot.textContent = t('common.tableShowing', { n: shown, m: total, count: total });
       foot.hidden = false;
     } else {
       foot.textContent = '';

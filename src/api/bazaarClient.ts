@@ -1,10 +1,11 @@
 import { API_BAZAAR, FETCH_TIMEOUT_MS } from '../config.ts';
 import type { RawBazaar } from '../types/api.ts';
+import { LocalizedError } from '../i18n/errors.ts';
 import { validateRaw } from './normalize.ts';
 
-class TimeoutError extends Error {
+class TimeoutError extends LocalizedError {
   constructor(ms: number) {
-    super(`Bazaar request timed out after ${Math.round(ms / 100) / 10}s`);
+    super('err.timeout', { s: Math.round(ms / 100) / 10 });
     this.name = 'TimeoutError';
   }
 }
@@ -45,13 +46,13 @@ export async function fetchBazaar(signal?: AbortSignal, url: string = API_BAZAAR
   try {
     // 'no-cache' revalidates with the CDN instead of reusing the browser's max-age=60 copy.
     const res = await raceAbort(fetch(url, { signal: ctl.signal, cache: 'no-cache' }), ctl.signal);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    if (!res.ok) throw new LocalizedError('err.http', { status: res.status });
     let body: unknown;
     try {
       body = await raceAbort(res.json() as Promise<unknown>, ctl.signal);
     } catch (e) {
       if (ctl.signal.aborted) throw e;
-      throw new Error(`Bazaar response is not valid JSON: ${e instanceof Error ? e.message : String(e)}`);
+      throw new LocalizedError('err.bazaarBadJson', { detail: e instanceof Error ? e.message : String(e) });
     }
     return validateRaw(body);
   } catch (e) {

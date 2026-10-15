@@ -1,6 +1,6 @@
 // Craft & Forge view: buy ingredients -> craft/forge -> sell. Rows come from ctx.derived.crafts() (memoized);
 // filters live in the URL (bindQueryState), details open in the side panel.
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, CraftRow, Recipe, View, ViewContext } from '../../../types/contracts.ts';
 import { esc, rafDebounce } from '../../dom.ts';
 import { fmtInt } from '../../format.ts';
@@ -16,7 +16,6 @@ import {
 } from '../../kit/index.ts';
 import './craft.css';
 import { filterCrafts, migrateLegacyPrefs, PREFS_KEY, SCHEMA, type CraftQuery, type KindFilter, type MarketFilter } from './helpers.ts';
-import './i18n.ts';
 import { craftColumns, craftDetail, watchButton, type RenderEnv } from './render.ts';
 
 const NOTES = ['note1', 'note2', 'note3', 'note4'] as const;
@@ -108,7 +107,7 @@ export function createCraftView(): View {
 
     if (!s.catalog || !s.snapshot) {
       if (!s.catalog && s.catalogError) {
-        setState(`<div class="banner banner-err">${esc(t('common.catalogError', { err: s.catalogError }))}</div>`);
+        setState(`<div class="banner banner-err">${esc(t('common.catalogError', { err: msgText(s.catalogError) }))}</div>`);
       } else {
         const msg = !s.snapshot ? t('common.waitingData') : t('craft.loadingRecipes');
         setState(`<div class="empty card">${esc(msg)}</div>`);
@@ -148,7 +147,7 @@ export function createCraftView(): View {
     const canHide = s.settings.hideSuspicious && res.suspect > 0;
     hiddenBtn.hidden = !canHide;
     if (canHide) {
-      hiddenBtn.textContent = v.suspect ? `${t('common.hideHidden')} (${res.suspect})` : t('common.hiddenCount', { n: res.hidden });
+      hiddenBtn.textContent = v.suspect ? t('common.hideHiddenN', { n: res.suspect }) : t('common.hiddenCount', { n: res.hidden });
       hiddenBtn.title = v.suspect ? '' : t('common.showHidden');
       hiddenBtn.setAttribute('aria-pressed', String(v.suspect));
     }

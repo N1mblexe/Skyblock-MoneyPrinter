@@ -1,6 +1,6 @@
 // Filter bar bound to a QueryState: search / number / segment / toggle fields, "Filters (n)" + reset.
 // Below UI.mobileBp the fields collapse behind a disclosure button (CSS: .kit-filterbar[data-open]).
-import { t } from '../../i18n/index.ts';
+import { locale, t } from '../../i18n/index.ts';
 import type { FilterBar, FilterSpec, QueryState } from './types.ts';
 import { debounce, uid } from './util.ts';
 
@@ -9,16 +9,31 @@ export const FILTER_DEBOUNCE_MS = 250;
 
 type Values = Record<string, unknown>;
 
-/** Parse a user-typed number ('1.5', '1,5', ' 2 '); '' -> null; invalid -> undefined. */
+/** Decimal separator of the active locale ('.' en, ',' tr). */
+function decimalSep(): string {
+  return new Intl.NumberFormat(locale()).formatToParts(1.5).find((p) => p.type === 'decimal')?.value ?? '.';
+}
+
+/**
+ * Parse a user-typed number ('1.5', '1,5', '1,000', ' 2 '); '' -> null; invalid -> undefined.
+ * With both separators the last one is the decimal ("1.234,5" / "1,234.5"); a repeated separator is grouping.
+ * A single separator followed by exactly three digits is grouping when it isn't the locale's decimal separator
+ * ("1,000" = 1000 in English, "1.000" = 1000 in Turkish); otherwise it is a decimal point ("1,5" = "1.5" = 1.5).
+ */
 export function parseNumberInput(raw: string): number | null | undefined {
   const s = raw.trim().replace(/\s/g, '');
   if (s === '') return null;
-  // "1.234,5" (tr) or "1,234.5" (en): the last separator is the decimal one
-  const lastComma = s.lastIndexOf(',');
-  const lastDot = s.lastIndexOf('.');
+  const commas = (s.match(/,/g) ?? []).length;
+  const dots = (s.match(/\./g) ?? []).length;
   let norm = s;
-  if (lastComma >= 0 && lastDot >= 0) norm = lastComma > lastDot ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
-  else if (lastComma >= 0) norm = s.replace(',', '.');
+  if (commas && dots) norm = s.lastIndexOf(',') > s.lastIndexOf('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(/,/g, '');
+  else if (commas > 1) norm = s.replace(/,/g, '');
+  else if (dots > 1) norm = s.replace(/\./g, '');
+  else if (commas || dots) {
+    const sep = commas ? ',' : '.';
+    const grouping = sep !== decimalSep() && new RegExp(`\\${sep}\\d{3}$`).test(s);
+    norm = grouping ? s.replace(sep, '') : s.replace(',', '.');
+  }
   const n = Number(norm);
   return Number.isFinite(n) ? n : undefined;
 }

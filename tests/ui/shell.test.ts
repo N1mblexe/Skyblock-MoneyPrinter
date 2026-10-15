@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LS_VIEWPREFS } from '../../src/config.ts';
-import { dictKeys, getLang } from '../../src/i18n/index.ts';
+import { getLang } from '../../src/i18n/index.ts';
 import { currentPalette } from '../../src/ui/kit/index.ts';
 import { LS_SHELL } from '../../src/ui/shell.ts';
 import { PRIMARY_NAV } from '../../src/ui/shell/nav.ts';
@@ -316,7 +316,7 @@ describe('command palette', () => {
     expect(document.documentElement.dataset.density).toBe('compact');
 
     key('/');
-    key('Enter', {}, type(h, 'ingilizce'));
+    key('Enter', {}, type(h, 'english'));
     expect(h.store.get().settings.lang).toBe('en');
 
     key('/');
@@ -434,10 +434,3 @@ describe('mobile layout', () => {
   });
 });
 
-describe('shell i18n', () => {
-  it('TR/EN parity of the shell dictionary', () => {
-    const { tr, en } = dictKeys('shell');
-    expect(tr.length).toBeGreaterThan(20);
-    expect(en).toEqual(tr);
-  });
-});

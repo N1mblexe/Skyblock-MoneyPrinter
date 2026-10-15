@@ -161,7 +161,7 @@ interface Env {
 let BASE = '';
 
 async function openEnv(browser: Browser, label: string, viewport: { width: number; height: number }, bazaarMode: 'serve' | 'abort' = 'serve'): Promise<Env> {
-  const context = await browser.newContext({ viewport, acceptDownloads: true, locale: 'tr-TR', serviceWorkers: 'block' });
+  const context = await browser.newContext({ viewport, acceptDownloads: true, locale: 'en-US', serviceWorkers: 'block' });
   const env: Env = {
     label,
     context,
@@ -569,14 +569,15 @@ async function settingsSuite(env: Env, exp: Expected): Promise<void> {
   });
 
   await step(`${L} settings: language`, async () => {
-    const tr = await h1Text(page);
-    await page.click(`${drawer} ${tid('set-lang-en')}`);
-    const en = await until(() => h1Text(page), (x) => x !== tr);
-    const pressed = await page.getAttribute(tid('lang-en'), 'aria-pressed');
-    check(en !== tr && pressed === 'true', `${L} EN switch changes the h1 ("${tr}" -> "${en}", top-bar EN pressed=${pressed})`);
+    const en = await h1Text(page);
     await page.click(`${drawer} ${tid('set-lang-tr')}`);
-    const back = await until(() => h1Text(page), (x) => x === tr);
-    check(back === tr, `${L} TR switch restores the h1 ("${back}")`);
+    const tr = await until(() => h1Text(page), (x) => x !== en);
+    const pressed = await page.getAttribute(tid('lang-tr'), 'aria-pressed');
+    const htmlLang = await page.getAttribute('html', 'lang');
+    check(tr !== en && pressed === 'true' && htmlLang === 'tr', `${L} TR switch changes the h1 ("${en}" -> "${tr}", top-bar TR pressed=${pressed}, html lang=${htmlLang})`);
+    await page.click(`${drawer} ${tid('set-lang-en')}`);
+    const back = await until(() => h1Text(page), (x) => x === en);
+    check(back === en, `${L} EN switch restores the h1 ("${back}")`);
     await page.keyboard.press('Escape');
     const stillOpen = await until(() => isOpen(page, drawer), (x) => !x);
     check(!stillOpen, `${L} Escape closes the settings drawer`);
@@ -773,11 +774,11 @@ async function liveSuite(browser: Browser): Promise<void> {
   await routesSuite(env, false);
   await step(`${L} language`, async () => {
     await go(page, '#/flip');
-    const tr = await h1Text(page);
-    await page.click(tid('lang-en'));
-    const en = await until(() => h1Text(page), (x) => x !== tr);
-    check(en !== tr, `${L} EN toggle changes the h1 ("${tr}" -> "${en}")`);
+    const en = await h1Text(page);
     await page.click(tid('lang-tr'));
+    const tr = await until(() => h1Text(page), (x) => x !== en);
+    check(tr !== en, `${L} TR toggle changes the h1 ("${en}" -> "${tr}")`);
+    await page.click(tid('lang-en'));
   });
   await closeEnv(env);
 }

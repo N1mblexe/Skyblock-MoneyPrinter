@@ -1,4 +1,3 @@
-import '../../../src/i18n/common.ts';
 import { describe, expect, it, vi } from 'vitest';
 import { searchBazaar, pagesProvider } from '../../../src/ui/shell/palette.ts';
 import { catalog, snap } from '../../domain/helpers.ts';

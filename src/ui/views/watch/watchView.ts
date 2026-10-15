@@ -2,7 +2,7 @@
 import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
 import { metricValue } from '../../../domain/alerts.ts';
 import { matchesQuery, resolveUserInput, searchItems } from '../../../domain/search.ts';
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AlertEvent, AppState, ItemInfo, MarketStat, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { itemCell } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -22,7 +22,6 @@ import {
 } from '../../kit/index.ts';
 import { sparklineSvg } from '../../sparkline.ts';
 import { fmtTime, logMessage, ruleText } from './alertText.ts';
-import './i18n.ts';
 import { exportFileName, exportJson, makeRule, mergeImport, parseImport } from './model.ts';
 import { createRulesEditor, type RulesEditor } from './rulesEditor.ts';
 import './watch.css';
@@ -471,7 +470,7 @@ export function createWatchView(): View {
       return;
     }
     ctx.store.set({ watchlist: m.watchlist, alerts: m.alerts });
-    els.ioStatus.textContent = t('watch.imported', { items: m.items, rules: m.rules });
+    els.ioStatus.textContent = t('watch.imported', { items: t('watch.nItems', { n: m.items }), rules: t('watch.nRules', { n: m.rules }) });
     els.importText.value = '';
     ctx.toast(els.ioStatus.textContent, 'ok');
   }
@@ -503,7 +502,7 @@ export function createWatchView(): View {
     if (!root) return;
     const s = ctx.store.get();
     if (s.catalogError && !s.catalog) {
-      els.banner.textContent = t('common.catalogError', { err: s.catalogError });
+      els.banner.textContent = t('common.catalogError', { err: msgText(s.catalogError) });
       els.banner.hidden = false;
     } else els.banner.hidden = true;
     els.addHint.textContent = s.catalog ? t('watch.addHint') : t('watch.addCatalog');
