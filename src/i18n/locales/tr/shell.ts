@@ -52,6 +52,7 @@ export const shell: Messages['shell'] = {
   histRaw: 'Ham kayıt',
   histQ15: '15 dk kayıt',
   histOldest: 'En eski kayıt',
+  histOldestVal: '{date} ({age} önce)',
   histPersistent: 'Kalıcı depolama',
   histClear: 'Geçmişi sil',
   histConfirm: 'Emin misin? Silmek için tekrar tıkla',
@@ -74,6 +75,8 @@ export const shell: Messages['shell'] = {
   act_refresh: 'Fiyatları şimdi yenile',
   act_theme: 'Temayı değiştir (açık/koyu)',
   act_langTo: 'Dil: {name}',
+  // button title with its shortcuts: 'Refresh prices now (R)'
+  withKeys: '{label} ({keys})',
   act_density: 'Yoğunluğu değiştir (rahat/sıkı)',
   act_settings: 'Ayarları aç',
   act_ah: 'Müzayedeyi şimdi tara',

@@ -167,6 +167,7 @@ export type CostMode = 'order' | 'insta';
 export type SellMode = 'offer' | 'insta';
 export type { Lang } from '../i18n/languages.ts';
 import type { Lang } from '../i18n/languages.ts';
+import type { Msg } from '../i18n/errors.ts';
 export type Theme = 'auto' | 'light' | 'dark';
 export type TaxRate = 0.0125 | 0.01125 | 0.01;
 /** sequential: buy the batch, then sell it; pipelined: buy and sell overlap (needs 2x capital) */
@@ -589,9 +590,11 @@ export interface Route {
 export interface AppState {
   snapshot: Snapshot | null;
   status: DataStatus;
-  lastError: string | null;
+  /** last fetch error; render with msgText() */
+  lastError: Msg | null;
   catalog: Catalog | null;
-  catalogError: string | null;
+  /** render with msgText() */
+  catalogError: Msg | null;
   settings: Settings;
   fusion: FusionRecipe[];
   route: Route;

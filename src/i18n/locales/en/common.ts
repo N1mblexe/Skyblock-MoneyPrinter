@@ -2,6 +2,9 @@
 // View agents may reuse any key here via t('common.<key>').
 export const common = {
   appTitle: 'Bazaar Desk',
+  // the sidebar brand shows the title in two parts, the second one accented
+  appTitleMain: 'Bazaar',
+  appTitleAccent: 'Desk',
 
   // time units (ages, fill times, durations)
   u_sec: '{n}s',
@@ -158,6 +161,8 @@ export const common = {
   twoSentences: '{a} {b}',
   // separator for tag-like lists (shard families)
   listSep: ', ',
+  yes: 'Yes',
+  no: 'No',
   ahScanning: 'Scanning AH {p}/{n}',
   copied: 'Copied',
 
@@ -172,6 +177,7 @@ export const common = {
   hiddenCount: '{n} hidden',
   showHidden: 'Show hidden',
   hideHidden: 'Hide them again',
+  hideHiddenN: 'Hide them again ({n})',
   loading: 'Loading…',
   waitingData: 'Waiting for price data…',
   search: 'Search',

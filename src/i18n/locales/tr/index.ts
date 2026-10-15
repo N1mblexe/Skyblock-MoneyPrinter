@@ -1,5 +1,6 @@
 import type { Messages } from '../en/index.ts';
 import { common } from './common.ts';
+import { err } from './err.ts';
 import { shell } from './shell.ts';
 import { kit } from './kit.ts';
 import { alerts } from './alerts.ts';
@@ -14,4 +15,4 @@ import { overview } from './overview.ts';
 import { plan } from './plan.ts';
 import { watch } from './watch.ts';
 
-export const tr: Messages = { common, shell, kit, alerts, risk, flip, books, craft, fusion, item, npc, overview, plan, watch };
+export const tr: Messages = { common, err, shell, kit, alerts, risk, flip, books, craft, fusion, item, npc, overview, plan, watch };

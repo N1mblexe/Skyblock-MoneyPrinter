@@ -1,5 +1,6 @@
 import { CATALOG_URL } from '../config.ts';
 import { deriveName } from '../domain/ids.ts';
+import { LocalizedError } from '../i18n/errors.ts';
 import type { BookRule, Catalog, CatalogFile, ItemInfo, Recipe, ShopOffer } from '../types/contracts.ts';
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
@@ -10,10 +11,10 @@ const posInt = (v: unknown): v is number => posNum(v) && Number.isInteger(v);
 
 /** Throw a descriptive Error unless `x` is a v1/v2 catalog file. */
 export function validateCatalogFile(x: unknown): CatalogFile {
-  if (!isObj(x)) throw new Error('Catalog is not a JSON object');
-  if (x.v !== 1 && x.v !== 2) throw new Error(`Unsupported catalog version: ${JSON.stringify(x.v)} (expected 1 or 2)`);
-  if (!isObj(x.items)) throw new Error('Catalog has no "items" object');
-  if (!Array.isArray(x.recipes)) throw new Error('Catalog has no "recipes" array');
+  if (!isObj(x)) throw new LocalizedError('err.catNotObject');
+  if (x.v !== 1 && x.v !== 2) throw new LocalizedError('err.catVersion', { v: String(JSON.stringify(x.v)) });
+  if (!isObj(x.items)) throw new LocalizedError('err.catNoItems');
+  if (!Array.isArray(x.recipes)) throw new LocalizedError('err.catNoRecipes');
   return x as unknown as CatalogFile;
 }
 
@@ -22,14 +23,14 @@ export async function loadCatalog(url: string = CATALOG_URL): Promise<Catalog> {
   try {
     res = await fetch(url);
   } catch (e) {
-    throw new Error(`Catalog request failed (${url}): ${e instanceof Error ? e.message : String(e)}`);
+    throw new LocalizedError('err.catRequest', { url, detail: e instanceof Error ? e.message : String(e) });
   }
-  if (!res.ok) throw new Error(`Catalog HTTP ${res.status} (${url})`);
+  if (!res.ok) throw new LocalizedError('err.catHttp', { status: res.status, url });
   let body: unknown;
   try {
     body = await res.json();
   } catch (e) {
-    throw new Error(`Catalog is not valid JSON (${url}): ${e instanceof Error ? e.message : String(e)}`);
+    throw new LocalizedError('err.catBadJson', { url, detail: e instanceof Error ? e.message : String(e) });
   }
   return catalogFromFile(validateCatalogFile(body));
 }

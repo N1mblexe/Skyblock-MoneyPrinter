@@ -94,6 +94,8 @@ export const item: Messages['item'] = {
   colKind: 'Tür',
   colCraft: '',
   kindCraft: 'Craft',
+  // recipe requirement from the catalog (English game text), its 'requires:' prefix stripped
+  req: 'Gereksinim: {req}',
   kindForge: 'Forge',
   openCraft: 'Craft sekmesinde aç',
   openBooksLong: 'Kitaplar sekmesinde aç',

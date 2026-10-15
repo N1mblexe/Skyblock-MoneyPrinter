@@ -56,6 +56,8 @@ export const plan: Messages['plan'] = {
   // why
   whyBest: 'coin başına en iyi kâr',
   whyRank: 'coin başına kârda #{n}',
+  // detail panel: '<b>Neden:</b> …. …'
+  whyLine: '<b>{why}:</b> {short}. {long}',
   why_volume: 'hacimle sınırlı',
   why_share: 'sermayenin %{pct} sınırında',
   why_capital: 'kalan sermayeyi kullanıyor',

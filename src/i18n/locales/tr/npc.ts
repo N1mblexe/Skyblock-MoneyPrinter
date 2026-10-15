@@ -22,6 +22,7 @@ export const npc: Messages['npc'] = {
   minVolHelp: 'Bazaar tarafının haftalık işlem hacmi',
   currency: 'Para birimi',
   currencyAll: 'Tümü ({n})',
+  currencyOpt: '{label} ({n})',
 
   hiddenShowing: '{n} şüpheli gösteriliyor · gizle',
   hiddenTitle: 'Şüpheli (ölü alış, aşırı makas, sıçrama…) satırlar Genel ayarlar’daki “Şüphelileri gizle” yüzünden gizli. Bu sekmede göstermek için tıkla.',

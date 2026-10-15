@@ -48,6 +48,7 @@ export const shell = {
   histRaw: 'Raw points',
   histQ15: '15-min points',
   histOldest: 'Oldest point',
+  histOldestVal: '{date} ({age} ago)',
   histPersistent: 'Persistent storage',
   histClear: 'Clear history',
   histConfirm: 'Sure? Click again to clear',
@@ -69,6 +70,8 @@ export const shell = {
   act_refresh: 'Refresh prices now',
   act_theme: 'Toggle theme (light/dark)',
   act_langTo: 'Language: {name}',
+  // button title with its shortcuts: 'Refresh prices now (R)'
+  withKeys: '{label} ({keys})',
   act_density: 'Toggle density (comfortable/compact)',
   act_settings: 'Open settings',
   act_ah: 'Scan the auction house now',

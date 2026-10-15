@@ -3,7 +3,7 @@ import { t } from '../../../i18n/index.ts';
 import type { Catalog, RiskReport, Settings, ShopRow, Snapshot } from '../../../types/contracts.ts';
 import { riskBadge, riskFlagText, sourceBadge } from '../../cells.ts';
 import { esc } from '../../dom.ts';
-import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtPct } from '../../format.ts';
+import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtNum, fmtPct } from '../../format.ts';
 import { currencyLabel, type NpcRow } from './npcData.ts';
 
 interface Ctx {
@@ -115,7 +115,7 @@ export function shopDetailHtml(r: ShopRow, c: Ctx): string {
   const cp = c.snap.products[r.currency];
   if (cp && cp.ask != null && cp.ask > 0 && r.coinsPerCurrency != null) {
     compare = `<p class="small npc-d-compare">${esc(
-      t('npc.d_curOnBazaar', { cur, ask: fmtCoins(cp.ask), ratio: (r.coinsPerCurrency / cp.ask).toFixed(2) }),
+      t('npc.d_curOnBazaar', { cur, ask: fmtCoins(cp.ask), ratio: fmtNum(r.coinsPerCurrency / cp.ask, 2) }),
     )}</p>`;
   }
   const linkList = [{ href: itemHref(r.id), label: t('npc.d_itemPage') }];

@@ -55,7 +55,7 @@ describe('reload', () => {
     const s = b.store.get();
     expect(s.snapshot?.lastUpdated).toBe(lastUpdated);
     expect(s.snapshot?.source).toBe('cache');
-    expect(s.lastError).toBe('HTTP 503');
+    expect(s.lastError).toEqual({ key: 'err.http', params: { status: 503 } });
     const pill = document.querySelector<HTMLElement>('[data-testid="status-pill"]')!;
     expect(pill.dataset.status).toBe('error');
     expect(document.querySelector('.status-err')!.textContent).toBe('HTTP 503');

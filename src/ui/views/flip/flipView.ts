@@ -2,7 +2,7 @@
 // Rows come from ctx.derived.flips(); filters live in the URL (bindQueryState); a row opens the detail panel.
 import { HOTKEYS, LS_VIEWPREFS } from '../../../config.ts';
 import { matchesQuery } from '../../../domain/search.ts';
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, FlipRow, MarketStat, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { riskBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -186,7 +186,7 @@ export function createFlipView(): View {
       title: () => t('flip.tip_risk'),
       get: (r) => r.risk.score,
       html: (r) => riskBadge(r.risk),
-      csv: (r) => r.risk.level,
+      csv: (r) => t(`risk.${r.risk.level}`),
       align: 'center',
       priority: 1,
     },
@@ -291,7 +291,7 @@ export function createFlipView(): View {
 
     const failed = !!s.catalogError && !s.catalog;
     els.banner.hidden = !failed;
-    if (failed) els.banner.textContent = t('common.catalogError', { err: s.catalogError! });
+    if (failed) els.banner.textContent = t('common.catalogError', { err: msgText(s.catalogError!) });
 
     all = ctx.derived.flips();
     if (!s.snapshot || (!s.catalog && (!failed || !all.length))) {

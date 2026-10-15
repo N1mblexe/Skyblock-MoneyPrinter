@@ -45,6 +45,13 @@ export function fmtPct(ratio: number | null | undefined, digits = 1): string {
   );
 }
 
+/** Plain number with exactly `digits` decimals in the active locale: 1.234 => "1.23" (en) / "1,23" (tr). */
+export function fmtNum(n: number | null | undefined, digits = 2): string {
+  const s = special(n);
+  if (s != null) return s;
+  return nf(`num${digits}f`, { minimumFractionDigits: digits, maximumFractionDigits: digits }).format(n as number);
+}
+
 export function fmtInt(n: number | null | undefined): string {
   const s = special(n);
   if (s != null) return s;

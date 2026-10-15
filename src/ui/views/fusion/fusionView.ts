@@ -3,7 +3,7 @@
 // Each row's editor DOM is built once and kept across price updates and reorders (focus and caret survive);
 // only the result cells are re-rendered. Sorting never reorders while the user is typing in a field.
 import { LS_VIEWPREFS } from '../../../config.ts';
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, Catalog, FusionRecipe, FusionRow, ItemInfo, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { itemCell, riskBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -426,7 +426,7 @@ export function createFusionView(): View {
 
   function renderStatus(s: AppState): string | null {
     if (!s.catalog) {
-      const txt = s.catalogError ? t('fusion.catalogError', { err: s.catalogError }) : t('fusion.catalogLoading');
+      const txt = s.catalogError ? t('fusion.catalogError', { err: msgText(s.catalogError) }) : t('fusion.catalogLoading');
       statusEl.className = s.catalogError ? 'banner banner-err' : 'banner banner-info';
       statusEl.textContent = txt;
       statusEl.hidden = false;

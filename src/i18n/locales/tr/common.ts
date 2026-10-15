@@ -4,6 +4,9 @@ import type { Messages } from '../en/index.ts';
 // View agents may reuse any key here via t('common.<key>').
 export const common: Messages['common'] = {
   appTitle: 'Bazaar Masası',
+  // the sidebar brand shows the title in two parts, the second one accented
+  appTitleMain: 'Bazaar',
+  appTitleAccent: 'Masası',
 
   // time units (ages, fill times, durations)
   u_sec: '{n} sn',
@@ -168,6 +171,8 @@ export const common: Messages['common'] = {
   twoSentences: '{a} {b}',
   // separator for tag-like lists (shard families)
   listSep: ', ',
+  yes: 'Evet',
+  no: 'Hayır',
   ahScanning: 'Müzayede taranıyor {p}/{n}',
   copied: 'Kopyalandı',
 
@@ -183,6 +188,7 @@ export const common: Messages['common'] = {
   hiddenCount: '{n} gizli',
   showHidden: 'Gizlileri göster',
   hideHidden: 'Gizlileri sakla',
+  hideHiddenN: 'Gizlileri sakla ({n})',
   loading: 'Yükleniyor…',
   waitingData: 'Fiyat verisi bekleniyor…',
   search: 'Ara',

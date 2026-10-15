@@ -50,6 +50,8 @@ export const plan = {
 
   whyBest: 'best profit per coin',
   whyRank: '#{n} profit per coin',
+  // detail panel: '<b>Why:</b> best profit per coin. Takes every unit…'
+  whyLine: '<b>{why}:</b> {short}. {long}',
   why_volume: 'limited by volume',
   why_share: 'capped at {pct}% of capital',
   why_capital: 'uses the remaining capital',

@@ -1,5 +1,5 @@
 // Settings drawer "Data" section: catalog/snapshot facts, price-history info + clear, settings backup.
-import { onLangChange, t } from '../../i18n/index.ts';
+import { msgOf, msgText, onLangChange, t } from '../../i18n/index.ts';
 import { sanitizeSettings } from '../../state/appState.ts';
 import type { AppState, HistoryRepo, Store, ToastKind } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
@@ -81,7 +81,7 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
       if (c.meta.itemsApiUpdated) html += row(t('shell.itemsApi'), fmtDate(c.meta.itemsApiUpdated));
       html += row(t('shell.catalogItems'), fmtInt(Object.keys(c.items).length));
     } else {
-      html += row(t('shell.catalog'), s.catalogError ? t('shell.catalogFailed') : t('shell.catalogPending'), s.catalogError ?? undefined);
+      html += row(t('shell.catalog'), s.catalogError ? t('shell.catalogFailed') : t('shell.catalogPending'), s.catalogError ? msgText(s.catalogError) : undefined);
     }
     html += row(t('shell.products'), s.snapshot ? fmtInt(Object.keys(s.snapshot.products).length) : '—');
     if (s.snapshot) html += row(t('shell.snapshotAt'), fmtDate(s.snapshot.lastUpdated));
@@ -105,7 +105,7 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
     histKv.innerHTML = info
       ? row(t('shell.histRaw'), fmtInt(info.raw)) +
         row(t('shell.histQ15'), fmtInt(info.q15)) +
-        row(t('shell.histOldest'), info.oldest == null ? '—' : `${fmtDate(info.oldest)} (${fmtAge(Date.now() - info.oldest)})`) +
+        row(t('shell.histOldest'), info.oldest == null ? '—' : t('shell.histOldestVal', { date: fmtDate(info.oldest), age: fmtAge(Date.now() - info.oldest) })) +
         row(t('shell.histPersistent'), info.persistent ? t('shell.yes') : t('shell.no'))
       : `<dt class="muted">${esc(t('shell.histUnavailable'))}</dt>`;
     const confirming = Date.now() < confirmUntil;
@@ -144,7 +144,7 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
       store.set((s) => ({ historyTick: s.historyTick + 1 }));
       opts.toast(t('shell.histCleared'), 'ok');
     } catch (e) {
-      opts.toast(t('shell.histClearFail', { err: e instanceof Error ? e.message : String(e) }), 'err');
+      opts.toast(t('shell.histClearFail', { err: msgText(msgOf(e)) }), 'err');
     } finally {
       busy = false;
       renderHistory();

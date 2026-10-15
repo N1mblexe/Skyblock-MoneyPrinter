@@ -2,7 +2,7 @@
 import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
 import { metricValue } from '../../../domain/alerts.ts';
 import { matchesQuery, resolveUserInput, searchItems } from '../../../domain/search.ts';
-import { onLangChange, t } from '../../../i18n/index.ts';
+import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AlertEvent, AppState, ItemInfo, MarketStat, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { itemCell } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -502,7 +502,7 @@ export function createWatchView(): View {
     if (!root) return;
     const s = ctx.store.get();
     if (s.catalogError && !s.catalog) {
-      els.banner.textContent = t('common.catalogError', { err: s.catalogError });
+      els.banner.textContent = t('common.catalogError', { err: msgText(s.catalogError) });
       els.banner.hidden = false;
     } else els.banner.hidden = true;
     els.addHint.textContent = s.catalog ? t('watch.addHint') : t('watch.addCatalog');

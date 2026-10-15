@@ -134,6 +134,15 @@ describe('createFilterBar', () => {
     expect(parseNumberInput('1,234.5')).toBe(1234.5);
     expect(parseNumberInput('1 000')).toBe(1000);
     expect(parseNumberInput('x')).toBeUndefined();
+    // a lone separator + 3 digits is grouping unless it is the locale's decimal separator
+    expect(parseNumberInput('1.000')).toBe(1000); // tr
+    expect(parseNumberInput('1,000')).toBe(1); // tr: decimal comma
+    setLang('en');
+    expect(parseNumberInput('1,000')).toBe(1000);
+    expect(parseNumberInput('1.000')).toBe(1);
+    expect(parseNumberInput('1,5')).toBe(1.5);
+    expect(parseNumberInput('1,000,000')).toBe(1_000_000);
+    setLang('tr');
   });
 
 });

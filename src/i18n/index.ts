@@ -3,6 +3,7 @@
 //   t('common.rows', { n: 5 })      -> '{n} rows' with params filled in
 // Plurals: keys ending in _one / _other (any CLDR category) are picked by params.count ?? params.n.
 // Lookup: active language, then DEFAULT_LANG, then the key itself.
+import type { Msg } from './errors.ts';
 import { DEFAULT_LANG, languageOf, type Lang } from './languages.ts';
 import type { TFn } from '../types/contracts.ts';
 
@@ -70,3 +71,8 @@ export function onLangChange(fn: (l: Lang) => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
 }
+
+export { LocalizedError, msgOf, type Msg } from './errors.ts';
+
+/** Render a stored message (see msgOf) in the active language. */
+export const msgText = (m: Msg): string => (typeof m === 'string' ? m : t(m.key, m.params));

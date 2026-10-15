@@ -7,7 +7,7 @@ import { buyQuote } from '../../../domain/pricing.ts';
 import { assessRisk } from '../../../domain/risk.ts';
 import { matchesQuery, resolveUserInput, searchItems } from '../../../domain/search.ts';
 import { deriveName } from '../../../domain/ids.ts';
-import { onLangChange } from '../../../i18n/index.ts';
+import { msgText, onLangChange } from '../../../i18n/index.ts';
 import { lsGet, lsSet } from '../../../storage/local.ts';
 import type {
   AlertMetric,
@@ -122,7 +122,8 @@ export function createItemView(): View {
   /** flips() array -> rows by id (rebuilt only when derived recomputes) */
   let flipIndex: { src: readonly FlipRow[]; map: Map<string, FlipRow> } | null = null;
 
-  const t = (k: string, p?: Record<string, string | number>) => ctx!.t(`item.${k}`, p);
+  // keys without a namespace are 'item.' keys; 'common.x' etc. pass through
+  const t = (k: string, p?: Record<string, string | number>) => ctx!.t(k.includes('.') ? k : `item.${k}`, p);
   const st = (): AppState => ctx!.store.get();
   const nameOf = (x: string) => st().catalog?.name(x) ?? deriveName(x);
 
@@ -196,7 +197,7 @@ export function createItemView(): View {
   function kindHtml(r: Recipe): string {
     let s = `<span class="badge item-kind-${r.kind}">${esc(t(r.kind === 'forge' ? 'kindForge' : 'kindCraft'))}</span>`;
     if (r.kind === 'forge' && r.durationSec) s += ` <span class="small muted">${esc(fmtHours(r.durationSec / 3600))}</span>`;
-    if (r.req) s += `<span class="id-sub">${esc(r.req)}</span>`;
+    if (r.req) s += `<span class="id-sub">${esc(t('req', { req: r.req.replace(/^requires:\s*/i, '') }))}</span>`;
     return s;
   }
 
@@ -361,7 +362,7 @@ export function createItemView(): View {
       sell: t(set.sellMode === 'offer' ? 'modeOffer' : 'modeInstaSell'),
     });
     const head = `<p class="small muted item-mode" data-testid="flip-mode">${esc(mode)}</p>`;
-    if (!s.catalog) return head + note(s.catalogError ? t('catalogError', { err: s.catalogError }) : t('catalogLoading'));
+    if (!s.catalog) return head + note(s.catalogError ? t('catalogError', { err: msgText(s.catalogError) }) : t('catalogLoading'));
     const f = flipView();
     if (!f) return head + `<p class="note">${esc(t('bookEmpty'))}</p>`;
     const margin = f.buy > 0 ? f.profit / f.buy : null;
@@ -443,7 +444,7 @@ export function createItemView(): View {
 
   function npcHtml(s: AppState): string {
     const info = s.catalog?.items[id];
-    if (!s.catalog) return `<p class="note">${esc(s.catalogError ? t('catalogError', { err: s.catalogError }) : t('catalogLoading'))}</p>`;
+    if (!s.catalog) return `<p class="note">${esc(s.catalogError ? t('catalogError', { err: msgText(s.catalogError) }) : t('catalogLoading'))}</p>`;
     if (info?.npcSell == null && info?.npcBuy == null) return `<p class="note">${esc(t('npcNone'))}</p>`;
     return kv([
       [t('npcSell'), esc(fmtPrice(info?.npcSell))],
@@ -534,7 +535,7 @@ export function createItemView(): View {
   function renderRecipes(s: AppState): void {
     const cat = s.catalog;
     if (!cat) {
-      const txt = s.catalogError ? t('catalogError', { err: s.catalogError }) : t('catalogLoading');
+      const txt = s.catalogError ? t('catalogError', { err: msgText(s.catalogError) }) : t('catalogLoading');
       for (const [tbl, msg] of [
         [tblOut, recOutMsg],
         [tblIn, recInMsg],

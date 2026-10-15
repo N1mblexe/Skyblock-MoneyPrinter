@@ -20,6 +20,7 @@ export const npc = {
   minVolHelp: 'Weekly volume on the bazaar side',
   currency: 'Currency',
   currencyAll: 'All ({n})',
+  currencyOpt: '{label} ({n})',
 
   hiddenShowing: 'Showing {n} suspect · hide',
   hiddenTitle: 'Suspect rows (dead bid, extreme spread, spike…) are hidden by “Hide suspicious” in Global settings. Click to show them on this tab.',

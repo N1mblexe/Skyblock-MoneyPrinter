@@ -91,6 +91,8 @@ export const item = {
   colKind: 'Kind',
   colCraft: '',
   kindCraft: 'Craft',
+  // recipe requirement from the catalog (English game text), its 'requires:' prefix stripped
+  req: 'Requires: {req}',
   kindForge: 'Forge',
   openCraft: 'Open in Craft tab',
   openBooksLong: 'Open in Books tab',
