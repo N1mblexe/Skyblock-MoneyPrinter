@@ -36,7 +36,7 @@ import { findBrowser, freePort, loadSmokeFixtures, ROOT, sleep, startServer, wit
 const LIVE = process.argv.includes('--live');
 const DESKTOP = { width: 1280, height: 800 };
 const MOBILE = { width: 390, height: 844 };
-const ROUTES = ['overview', 'flip', 'books', 'craft', 'fusion', 'npc', 'plan', 'watch'] as const;
+const ROUTES = ['overview', 'flip', 'books', 'craft', 'forge', 'fusion', 'npc', 'plan', 'watch'] as const;
 const ITEM = 'ENCHANTED_GOLD';
 const FLIP_Q = 'enchanted';
 const T = 15_000;
@@ -78,8 +78,10 @@ interface Expected {
   flipRows: FlipRow[];
   flipDefault: number;
   flipQ: number;
+  /** Craft page: shown / all craft recipes; Forge page: shown / all forge recipes */
   craftTotal: number;
   craftAll: number;
+  forgeTotal: number;
   craftForge: number;
   chainTotal: number;
   chainDefault: number;
@@ -146,8 +148,9 @@ async function computeExpected(): Promise<Expected> {
     flipRows,
     flipDefault,
     flipQ,
-    craftTotal: crafts.length,
-    craftAll: craftCount('all'),
+    craftTotal: crafts.filter((r) => r.recipe.kind === 'craft').length,
+    craftAll: craftCount('craft'),
+    forgeTotal: crafts.filter((r) => r.recipe.kind === 'forge').length,
     craftForge: craftCount('forge'),
     chainTotal: chains.length,
     chainDefault,
@@ -452,18 +455,20 @@ async function craftSuite(env: Env, exp: Expected): Promise<void> {
   const { page } = env;
   const L = '[desktop]';
   const counts = async () => ints(await textOf(page.locator('.craft-count')));
-  await step(`${L} craft kind=forge`, async () => {
+  await step(`${L} forge page`, async () => {
+    // an old #/craft?kind=forge link opens the Forge page
     await go(page, '#/craft?kind=forge');
-    const n = await until(counts, (xs) => xs.includes(exp.craftForge) && xs.includes(exp.craftTotal));
+    const h1 = await until(() => h1Text(page), (x) => x === 'Forge');
+    const n = await until(counts, (xs) => xs.includes(exp.craftForge) && xs.includes(exp.forgeTotal));
     check(
-      n.includes(exp.craftForge) && n.includes(exp.craftTotal),
-      `${L} kind=forge in the URL filters craft rows to the domain count (${exp.craftForge} of ${exp.craftTotal}; UI ${n.join('/')})`,
+      h1 === 'Forge' && n.includes(exp.craftForge) && n.includes(exp.forgeTotal),
+      `${L} #/craft?kind=forge opens the Forge page with the domain count (${exp.craftForge} of ${exp.forgeTotal}; UI ${n.join('/')}, h1 "${h1}")`,
     );
     const rows = await page.locator('.craft-table tbody tr[data-key]').count();
     check(rows === exp.craftForge, `${L} forge table rows = domain count (${rows})`);
-    await go(page, '#/craft?kind=all');
-    const all = await until(counts, (xs) => xs.includes(exp.craftAll));
-    check(all.includes(exp.craftAll) && exp.craftAll !== exp.craftForge, `${L} kind=all shows the domain count (${exp.craftAll}; UI ${all.join('/')})`);
+    await go(page, '#/craft');
+    const all = await until(counts, (xs) => xs.includes(exp.craftAll) && xs.includes(exp.craftTotal));
+    check(all.includes(exp.craftAll) && all.includes(exp.craftTotal), `${L} Craft page shows the domain count (${exp.craftAll} of ${exp.craftTotal}; UI ${all.join('/')})`);
   });
   await step(`${L} craft chains tab`, async () => {
     await page.click(tid('craft-tab-chains'));
@@ -833,7 +838,7 @@ try {
   if (exp) {
     console.log(
       `info  expected (fixture, default settings): flips ${exp.flipDefault}/${exp.flipRows.length}, q=${FLIP_Q} ${exp.flipQ}, ` +
-        `crafts ${exp.craftAll} (forge ${exp.craftForge}) of ${exp.craftTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
+        `crafts ${exp.craftAll} of ${exp.craftTotal}, forges ${exp.craftForge} of ${exp.forgeTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
         `plan ${exp.planPph.base} -> ${exp.planPph.big} at 1b (${exp.planPph.positions} positions)`,
     );
   }

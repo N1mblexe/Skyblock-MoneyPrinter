@@ -24,10 +24,12 @@ export const overview: Messages['overview'] = {
   d_flips: 'Buy order ile alıp sell offer ile satınca saatlik kâra göre ilk {n}. Şüpheliler hariç.',
   e_flips: 'Şu anki ayarlarla kârlı ve temiz flip yok. Sermayeyi veya hacim payını değiştirmeyi dene.',
 
-  c_crafts: 'En iyi craft ve forge',
-  d_crafts: 'Malzemeleri alıp üretip satınca saatlik kâra göre ilk {n}. Fiyatlanamayan ve şüpheli tarifler hariç.',
-  e_crafts: 'Şu an kârlı ve temiz bir craft ya da forge tarifi yok.',
-  forge: 'Forge',
+  c_crafts: 'En iyi craftlar',
+  d_crafts: 'Malzemeleri alıp craftlayıp satınca saatlik kâra göre ilk {n}. Fiyatlanamayan ve şüpheli tarifler hariç.',
+  e_crafts: 'Şu an kârlı ve temiz bir craft tarifi yok.',
+  c_forges: 'En iyi forge tarifleri',
+  d_forges: 'Forge slotlarınla saatlik kâra göre ilk {n} forge tarifi. Fiyatlanamayan ve şüpheli tarifler hariç.',
+  e_forges: 'Şu an kârlı ve temiz bir forge tarifi yok.',
 
   c_books: 'En iyi kitap birleştirmeleri',
   d_books: 'Düşük seviyeli kitapları örste birleştirip satınca saatlik kâr. Yalnızca doğrulanmış zincirler.',

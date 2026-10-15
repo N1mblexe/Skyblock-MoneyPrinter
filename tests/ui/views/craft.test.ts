@@ -8,6 +8,7 @@ import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AhSnapshot, AppState, Catalog, CatalogFile, CraftRow, Settings, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { createCraftView } from '../../../src/ui/views/craft/craftView.ts';
+import { createForgeView } from '../../../src/ui/views/forge/forgeView.ts';
 import { filterChains, filterCrafts, migrateLegacyPrefs, ownFlipMargin, slippage } from '../../../src/ui/views/craft/helpers.ts';
 import { bestPerLadder } from '../../../src/domain/chains.ts';
 
@@ -62,6 +63,11 @@ function check(key: string, on: boolean): void {
 function mount(query?: Record<string, string>): void {
   view = createCraftView();
   view.mount(root, ctx, { id: 'craft', ...(query ? { query } : {}) });
+}
+
+function mountForge(query?: Record<string, string>): void {
+  view = createForgeView();
+  view.mount(root, ctx, { id: 'forge', ...(query ? { query } : {}) });
 }
 
 function openRow(key: string): HTMLElement {
@@ -120,7 +126,9 @@ describe('craft view', () => {
     expect(ks[0]).toBe('ENCHANTED_COAL#4');
     const pph = ctx.derived.crafts().filter((r) => ks.includes(r.recipe.key)).map((r) => r.profitPerHour);
     expect(Math.max(...pph)).toBe(ctx.derived.crafts().find((r) => r.recipe.key === ks[0])!.profitPerHour);
-    expect(q('.craft-count').textContent).toBe(t('craft.count', { n: ks.length, total: ctx.derived.crafts().length }));
+    const total = ctx.derived.crafts().filter((r) => r.recipe.kind === 'craft').length;
+    expect(q('.craft-count').textContent).toBe(t('craft.count', { n: ks.length, total }));
+    expect(keys().some((k) => k.startsWith('REFINED_MITHRIL'))).toBe(false); // forge recipes live on the Forge page
     expect(rows()[0]!.querySelector('a[href="#/item/ENCHANTED_COAL"]')).not.toBeNull();
     // unpriced hidden by default, with a hint
     expect(root.querySelector('tr.craft-unpriced')).toBeNull();
@@ -135,7 +143,28 @@ describe('craft view', () => {
     expect(root.querySelectorAll('.craft-table tbody [tabindex="0"]').length).toBe(1);
   });
 
-  it('kind, market and unpriced filters update rows and write the URL', async () => {
+  it('the Forge page lists forge recipes only, with the forge badge and a forge-time column', async () => {
+    store.set({ snapshot: snap, catalog });
+    mountForge({ minVol: 'none', minMargin: 'none' });
+    await flush();
+    expect(q('h1').textContent).toBe('Forge');
+    expect(root.querySelector('.craft-tabs')).toBeNull();
+    expect(keys().length).toBeGreaterThan(0);
+    expect(keys().every((k) => k.startsWith('REFINED_MITHRIL'))).toBe(true);
+    const cell = rows()[0]!.querySelector('td')!;
+    expect(cell.querySelector('.craft-forge')!.textContent).toBe('Forge · 6 sa');
+    const heads = [...root.querySelectorAll('.craft-table thead th')].map((th) => th.textContent);
+    expect(heads.some((h) => h?.includes(t('craft.colDuration')))).toBe(true);
+    const total = ctx.derived.crafts().filter((r) => r.recipe.kind === 'forge').length;
+    expect(q('.craft-count').textContent).toBe(t('craft.count', { n: keys().length, total }));
+    // its own saved filters, apart from the Craft page's
+    type('input[data-filter="q"]', 'mithril');
+    await flush();
+    expect(JSON.parse(localStorage.getItem(PREFS.replace(/craft$/, 'forge'))!)).toMatchObject({ q: 'mithril' });
+    expect(localStorage.getItem(PREFS)).toBeNull();
+  });
+
+  it('market and unpriced filters update rows and write the URL', async () => {
     store.set({ snapshot: snap, catalog });
     mount();
     await flush();
@@ -144,18 +173,9 @@ describe('craft view', () => {
     await flush();
     expect(urlState()).toMatchObject({ minVol: 'none', minMargin: 'none' });
 
-    segment('kind', 'forge');
-    await flush();
-    expect(urlState().kind).toBe('forge');
-    expect(keys().length).toBeGreaterThan(0);
-    expect(keys().every((k) => k.startsWith('REFINED_MITHRIL'))).toBe(true);
-    const cell = rows()[0]!.querySelector('td')!;
-    expect(cell.querySelector('.craft-forge')!.textContent).toBe('Forge · 6 sa');
-
-    segment('kind', 'all');
     segment('market', 'off');
     await flush();
-    expect(urlState()).toMatchObject({ kind: undefined, market: 'off' });
+    expect(urlState()).toMatchObject({ market: 'off' });
     expect(keys()).toHaveLength(0); // PAPER etc. are off-bazaar but unpriced
     check('unpriced', true);
     await flush();
@@ -213,16 +233,15 @@ describe('craft view', () => {
     expect(keys().length).toBeGreaterThan(0);
     expect(keys().every((k) => /MELON/.test(k))).toBe(true);
 
-    view!.update!({ id: 'craft', query: { q: 'coal', kind: 'craft', minVol: 'none' } });
+    view!.update!({ id: 'craft', query: { q: 'coal', minVol: 'none' } });
     await flush();
     expect(q<HTMLInputElement>('input[data-filter="q"]').value).toBe('coal');
     expect(keys().every((k) => /COAL/.test(k))).toBe(true);
-    expect(q('.kit-filterbar [data-filter="kind"] button[data-value="craft"]').getAttribute('aria-pressed')).toBe('true');
 
     const tbody = q('.craft-table tbody');
     const before = tbody.innerHTML;
     const spy = vi.spyOn(ctx.derived, 'crafts');
-    view!.update!({ id: 'craft', query: { q: 'coal', kind: 'craft', minVol: 'none' } });
+    view!.update!({ id: 'craft', query: { q: 'coal', minVol: 'none' } });
     await flush();
     expect(spy).not.toHaveBeenCalled();
     expect(tbody.innerHTML).toBe(before);
@@ -282,7 +301,7 @@ describe('craft view', () => {
 
   it('shows few-orders chips and forge notes with requirement text', async () => {
     store.set({ snapshot: snap, catalog });
-    mount({ kind: 'forge', minVol: 'none', minMargin: 'none' });
+    mountForge({ minVol: 'none', minMargin: 'none' });
     await flush();
     const panel = openRow(keys()[0]!);
     expect(panel.querySelector('.craft-steps')!.textContent).toContain(String(store.get().settings.forgeSlots));
@@ -331,7 +350,7 @@ describe('craft view', () => {
     const ah: AhSnapshot = { fetchedAt: Date.now(), lastUpdated: Date.now(), lowestBin: { TEST_DRILL: { price: 90_000_000, count: 1 } } };
     store.set({ snapshot: snap, catalog: cat, ah });
     setSettings({ ahEnabled: true });
-    mount({ market: 'off' });
+    mountForge({ market: 'off' });
     await flush();
     const drillKey = cat.recipes.find((r) => r.output === 'TEST_DRILL')!.key;
     const trinketKey = cat.recipes.find((r) => r.output === 'TEST_TRINKET')!.key;
@@ -429,13 +448,13 @@ describe('craft view', () => {
   it('migrates round-1 prefs from localStorage', async () => {
     localStorage.setItem(PREFS, JSON.stringify({ minVol: 0, minMargin: null, kind: 'forge', showUnpriced: true, sort: { key: 'margin', dir: 'asc' } }));
     migrateLegacyPrefs();
-    expect(JSON.parse(localStorage.getItem(PREFS)!)).toEqual({ minVol: '0', minMargin: 'none', kind: 'forge', unpriced: '1', sort: 'margin.asc' });
+    // the old kind filter is gone (forge recipes have their own page), the rest carries over
+    expect(JSON.parse(localStorage.getItem(PREFS)!)).toEqual({ minVol: '0', minMargin: 'none', unpriced: '1', sort: 'margin.asc' });
     store.set({ snapshot: snap, catalog });
     mount();
     await flush();
     expect(keys().length).toBeGreaterThan(0);
-    expect(keys().every((k) => k.startsWith('REFINED_MITHRIL'))).toBe(true);
-    expect(urlState()).toMatchObject({ kind: 'forge', unpriced: '1', sort: 'margin.asc' });
+    expect(urlState()).toMatchObject({ unpriced: '1', sort: 'margin.asc' });
   });
 
   it('switches language, refreshes an open panel, and cleans up on unmount', async () => {
@@ -448,7 +467,7 @@ describe('craft view', () => {
     setLang('en');
     await flush();
     expect(q('.craft-table thead th').textContent).toContain('Output');
-    expect(q('h1').textContent).toBe('Craft & Forge');
+    expect(q('h1').textContent).toBe('Craft');
     expect(q('.craft-note-body').textContent).toContain('How it works');
     expect(panel.querySelector('.craft-sec h3')!.textContent).toBe('Steps');
     expect(q('.kit-filterbar').textContent).toContain('Output market');

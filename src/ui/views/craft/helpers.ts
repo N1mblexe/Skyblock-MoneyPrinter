@@ -10,15 +10,16 @@ import { fmtInt, locale } from '../../format.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
 
 export type KindFilter = 'all' | 'craft' | 'forge';
+/** Recipes shown by a recipes pane: the Craft page or the Forge page. */
+export type RecipeKind = 'craft' | 'forge';
 export type MarketFilter = 'all' | 'bazaar' | 'off';
 
 /** Sortable table column keys (also the valid `sort` keys in the URL). */
-export const SORT_KEYS = ['name', 'count', 'cost', 'value', 'profit', 'margin', 'outRate', 'inRate', 'limited', 'slots', 'pph', 'risk'] as const;
+export const SORT_KEYS = ['name', 'duration', 'count', 'cost', 'value', 'profit', 'margin', 'outRate', 'inRate', 'limited', 'slots', 'pph', 'risk'] as const;
 
-/** Filters + sort, mirrored in the URL (#/craft?q=…&kind=forge) and in localStorage. */
+/** Filters + sort, mirrored in the URL (#/craft?q=…, #/forge?q=…) and in localStorage (one key per page). */
 export const SCHEMA = {
   q: { kind: 'string', def: '' },
-  kind: { kind: 'enum', def: 'all', values: ['all', 'craft', 'forge'] },
   market: { kind: 'enum', def: 'all', values: ['all', 'bazaar', 'off'] },
   /** min output volume, crafts/week (outCraftsPerHour * 168) */
   minVol: { kind: 'number', def: 1000, min: 0 },
@@ -34,6 +35,8 @@ export const SCHEMA = {
 export type CraftQuery = QueryValues<typeof SCHEMA>;
 
 export const PREFS_KEY = LS_VIEWPREFS + 'craft';
+export const FORGE_PREFS_KEY = LS_VIEWPREFS + 'forge';
+export const prefsKeyFor = (kind: RecipeKind) => (kind === 'forge' ? FORGE_PREFS_KEY : PREFS_KEY);
 
 /**
  * Round 1 stored typed prefs ({minVol: 1000, minMargin: null, showUnpriced: true, sort: {key, dir}}) under the same key;

@@ -57,8 +57,21 @@ function bottleneck(r: CraftRow): IngredientLine | undefined {
 const outBott = (r: CraftRow) => !isUnpriced(r) && Number.isFinite(r.outCraftsPerHour) && r.outCraftsPerHour <= r.inCraftsPerHour;
 const inBott = (r: CraftRow) => !isUnpriced(r) && Number.isFinite(r.inCraftsPerHour) && r.inCraftsPerHour < r.outCraftsPerHour;
 
-export function craftColumns(env: RenderEnv): KitColumn<CraftRow>[] {
+export function craftColumns(env: RenderEnv, kind: 'craft' | 'forge' = 'craft'): KitColumn<CraftRow>[] {
   const coins = (v: (r: CraftRow) => number) => (r: CraftRow) => (isUnpriced(r) ? null : v(r));
+  const duration: KitColumn<CraftRow>[] =
+    kind === 'forge'
+      ? [
+          {
+            key: 'duration',
+            label: () => t('craft.colDuration'),
+            get: (r) => r.recipe.durationSec ?? null,
+            align: 'right',
+            priority: 2,
+            html: (r) => (r.recipe.durationSec ? esc(fmtHours(r.recipe.durationSec / 3600)) : dash),
+          },
+        ]
+      : [];
   return [
     {
       key: 'name',
@@ -76,6 +89,7 @@ export function craftColumns(env: RenderEnv): KitColumn<CraftRow>[] {
         );
       },
     },
+    ...duration,
     {
       key: 'count',
       label: () => t('craft.colOutCount'),

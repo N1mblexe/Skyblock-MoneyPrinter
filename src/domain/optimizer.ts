@@ -75,6 +75,7 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
     row: { id: string; name: string; profit: number; tp: Throughput; risk: RiskReport },
     cost: number,
     slotsAt: (units: number) => number,
+    ahSold = false,
   ) => {
     if (!finitePos(row.profit) || !finitePos(cost)) return;
     const { maxUnits, unitsPerHour } = uncappedRate(row.tp, s.cycleHours);
@@ -90,6 +91,7 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
       maxUnits,
       slots: row.tp.slots != null && maxUnits === row.tp.batchQty ? row.tp.slots : slotsAt(maxUnits),
       risk: row.risk,
+      ...(ahSold ? { ahSold } : {}),
     });
   };
 
@@ -100,7 +102,7 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
     r.lines.reduce((n, l) => n + orders(l.source === 'order', l.qty * u), orders(r.valueSource === 'bazaar' && sellOffer, u * r.recipe.outCount));
   for (const r of d.crafts) {
     if (r.unpriced.length > 0) continue;
-    push('craft', r.recipe.key, r, r.cost, craftSlots(r));
+    push(r.recipe.kind === 'forge' ? 'forge' : 'craft', r.recipe.key, r, r.cost, craftSlots(r), r.valueSource === 'ah');
   }
   for (const c of d.chains ?? []) {
     if (c.row.unpriced.length > 0) continue;

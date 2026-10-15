@@ -1,6 +1,6 @@
 import type { Route, RouteId } from '../types/contracts.ts';
 
-const IDS: ReadonlySet<RouteId> = new Set<RouteId>(['overview', 'flip', 'craft', 'books', 'npc', 'fusion', 'plan', 'watch', 'item']);
+const IDS: ReadonlySet<RouteId> = new Set<RouteId>(['overview', 'flip', 'craft', 'forge', 'books', 'npc', 'fusion', 'plan', 'watch', 'item']);
 export const DEFAULT_ROUTE: Route = { id: 'overview' };
 
 function safeDecode(s: string): string {
@@ -28,6 +28,12 @@ export function parseHash(hash: string): Route {
   }
 
   if (!IDS.has(head)) return { ...DEFAULT_ROUTE };
+  // Craft and Forge used to be one page with a kind filter: #/craft?kind=forge is now #/forge
+  if (head === 'craft' && query?.kind) {
+    const { kind, ...rest } = query;
+    query = Object.keys(rest).length ? rest : undefined;
+    if (kind === 'forge') return query ? { id: 'forge', query } : { id: 'forge' };
+  }
   const r: Route = { id: head };
   if (head === 'item') {
     const param = safeDecode(segs.slice(1).join('/'));

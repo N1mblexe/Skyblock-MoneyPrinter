@@ -1,15 +1,15 @@
 import type { Messages } from '../en/index.ts';
 
 export const craft: Messages['craft'] = {
-  title: 'Craft & Forge',
-  intro: 'Malzemeleri al, craftla (veya forge’la), çıktıyı sat. Her malzeme için en ucuz yol seçilir. Satıra tıkla, detay yan panelde açılır.',
+  title: 'Craft',
+  intro: 'Malzemeleri al, craftla, ürünü sat. Her malzeme için en ucuz yol kullanılır. Ayrıntılar için bir satıra tıkla.',
+  forgeTitle: 'Forge',
+  forgeIntro: 'Malzemeleri al, forge’a koy, sonucu sat. Forge süresi ve forge slotların saatte kaç tane yapacağını sınırlar. Ayrıntılar için bir satıra tıkla.',
+  colDuration: 'Forge süresi',
 
   // filters
   search: 'Ara (çıktı veya malzeme)',
   searchPh: 'enchanted, sugar…',
-  kind: 'Tür',
-  kindAll: 'Hepsi',
-  kindCraft: 'Craft',
   kindForge: 'Forge',
   market: 'Çıktı pazarı',
   marketAll: 'Hepsi',

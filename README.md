@@ -112,7 +112,8 @@ The app opens in English. Switch to Turkish with the **EN / TR** buttons in the 
 | 📊 **Overview** | <kbd>g</kbd> <kbd>o</kbd> | Best flips, crafts and book combines, price movers, watchlist, alerts and the mayor at a glance |
 | 🔁 **Flips** | <kbd>g</kbd> <kbd>f</kbd> | Buy and sell the same bazaar product |
 | 📚 **Books** | <kbd>g</kbd> <kbd>b</kbd> | Combine 2^(L−k) level-k books into one level-L book |
-| ⚒️ **Craft & Forge** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft or forge, sell the result; the Chains tab covers multi-step ladders |
+| ⚒️ **Craft** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft, sell the result; the Chains tab covers multi-step ladders |
+| 🔥 **Forge** | <kbd>g</kbd> <kbd>h</kbd> | Forge recipes, limited by forge time and your forge slots |
 | 🧬 **Fusion** | <kbd>g</kbd> <kbd>u</kbd> | Your own shard-fusion recipes, editable, with import and export |
 | 🏪 **NPC & Shops** | <kbd>g</kbd> <kbd>n</kbd> | Bazaar ↔ NPC flips and currency-shop offers valued in coins |
 | 🎯 **Planner** | <kbd>g</kbd> <kbd>p</kbd> | Spread capital and order slots over every opportunity |
@@ -131,7 +132,7 @@ Filters and sort orders are stored in the URL, so you can bookmark any filtered 
 | <kbd>r</kbd> | Refresh prices |
 | <kbd>?</kbd> | Shortcuts help |
 | <kbd>Esc</kbd> | Close the dialog or panel |
-| <kbd>g</kbd> then <kbd>o</kbd> <kbd>f</kbd> <kbd>c</kbd> <kbd>b</kbd> <kbd>n</kbd> <kbd>u</kbd> <kbd>p</kbd> <kbd>w</kbd> | Go to a page |
+| <kbd>g</kbd> then <kbd>o</kbd> <kbd>f</kbd> <kbd>c</kbd> <kbd>h</kbd> <kbd>b</kbd> <kbd>n</kbd> <kbd>u</kbd> <kbd>p</kbd> <kbd>w</kbd> | Go to a page |
 | <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>j</kbd> <kbd>k</kbd>, then <kbd>Enter</kbd> | Move between table rows and open one |
 | <kbd>s</kbd> | Watch or unwatch the selected row (Flips, Books) |
 | <kbd>e</kbd> | Download the table as CSV (Flips, Books) |

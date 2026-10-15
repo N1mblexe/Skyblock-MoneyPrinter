@@ -279,6 +279,13 @@ describe('toOpportunities', () => {
     const plan = allocate(out, { capital: 5_000_000, slots: 14, maxShare: 0.5, excludeSuspect: true });
     checkFeasible(plan, { capital: 5_000_000, slots: 14, maxShare: 0.5, excludeSuspect: true });
     expect(plan.profitPerHour).toBeGreaterThan(0);
+    // forge recipes are their own kind; AH-valued outputs are marked
+    const crafts = computeCrafts(c);
+    for (const o of out.filter((x) => x.kind === 'craft' || x.kind === 'forge')) {
+      const r = crafts.find((x) => `${x.recipe.kind}:${x.recipe.key}` === o.key)!;
+      expect(r).toBeDefined();
+      expect(!!o.ahSold).toBe(r.valueSource === 'ah');
+    }
   });
 });
 

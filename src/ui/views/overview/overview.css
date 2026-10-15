@@ -116,9 +116,6 @@
 .overview-view .ov-mini .spark {
   display: block;
 }
-.overview-view .ov-forge {
-  font-size: var(--fs-xs);
-}
 
 /* movers: two sides */
 .overview-view .ov-sides {

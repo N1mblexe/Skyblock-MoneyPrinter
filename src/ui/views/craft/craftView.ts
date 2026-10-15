@@ -17,18 +17,19 @@ import {
 } from '../../kit/index.ts';
 import './craft.css';
 import { createChainsPane } from './chainsPane.ts';
-import { filterCrafts, migrateLegacyPrefs, PREFS_KEY, relabel, SCHEMA, tabOf, tabsHtml, type CraftQuery, type CraftTab, type KindFilter, type MarketFilter } from './helpers.ts';
+import { filterCrafts, migrateLegacyPrefs, prefsKeyFor, relabel, SCHEMA, tabOf, tabsHtml, type CraftQuery, type CraftTab, type MarketFilter, type RecipeKind } from './helpers.ts';
 import { craftColumns, craftDetail, watchButton, type RenderEnv } from './render.ts';
 
 const NOTES = ['note1', 'note2', 'note3', 'note4'] as const;
 
-function skeleton(): string {
+function skeleton(kind: RecipeKind): string {
+  const forge = kind === 'forge';
   return `
-  <div class="craft-view kit-split">
+  <div class="craft-view${forge ? ' forge-view' : ''} kit-split">
     <header class="craft-head">
-      <h1 class="craft-title" tabindex="-1" data-i18n="craft.title"></h1>
-      <p class="craft-intro muted small" data-i18n="craft.intro"></p>
-      ${tabsHtml('recipes')}
+      <h1 class="craft-title" tabindex="-1" data-i18n="${forge ? 'craft.forgeTitle' : 'craft.title'}"></h1>
+      <p class="craft-intro muted small" data-i18n="${forge ? 'craft.forgeIntro' : 'craft.intro'}"></p>
+      ${forge ? '' : tabsHtml('recipes')}
     </header>
     <div class="craft-bar"></div>
     <div class="craft-state" hidden></div>
@@ -42,7 +43,7 @@ export function createCraftView(): View {
   let c: ViewContext | null = null;
   let tab: CraftTab = 'recipes';
   let pane: View | null = null;
-  const make = (t: CraftTab) => (t === 'chains' ? createChainsPane() : createRecipesPane());
+  const make = (t: CraftTab) => (t === 'chains' ? createChainsPane() : createRecipesPane('craft'));
   const onClick = (ev: MouseEvent) => {
     const b = ev.target instanceof Element ? ev.target.closest<HTMLElement>('[data-craft-tab]') : null;
     if (!b || !c || b.dataset.craftTab === tab) return;
@@ -77,7 +78,8 @@ export function createCraftView(): View {
   };
 }
 
-function createRecipesPane(): View {
+/** Craft recipes (Craft page, Recipes tab) or forge recipes (Forge page): same table, filters and panel. */
+export function createRecipesPane(kind: RecipeKind): View {
   let root: HTMLElement | null = null;
   let ctx: ViewContext | null = null;
   let qs: QueryState<CraftQuery> | null = null;
@@ -165,7 +167,7 @@ function createRecipesPane(): View {
     tools.hidden = false;
 
     const v = qs.get();
-    const all = ctx.derived.crafts();
+    const all = ctx.derived.crafts().filter((r) => r.recipe.kind === kind);
     const res = filterCrafts(
       all,
       {
@@ -173,7 +175,7 @@ function createRecipesPane(): View {
         minVol: v.minVol,
         minMargin: v.minMargin,
         minPph: v.minPph,
-        kind: v.kind as KindFilter,
+        kind,
         market: v.market as MarketFilter,
         showUnpriced: v.unpriced,
         hideSuspect: s.settings.hideSuspicious && !v.suspect,
@@ -207,29 +209,19 @@ function createRecipesPane(): View {
   }
 
   return {
-    id: 'craft',
+    id: kind,
     mount(el, c, route) {
       root = el;
       ctx = c;
-      migrateLegacyPrefs();
-      el.innerHTML = skeleton();
+      if (kind === 'craft') migrateLegacyPrefs();
+      el.innerHTML = skeleton(kind);
       const view = $('.craft-view');
-      const state = bindQueryState(SCHEMA, route, c.setQuery, PREFS_KEY);
+      const state = bindQueryState(SCHEMA, route, c.setQuery, prefsKeyFor(kind));
       qs = state;
 
       bar = createFilterBar(
         [
           { kind: 'search', key: 'q', label: () => t('craft.search'), placeholder: () => t('craft.searchPh') },
-          {
-            kind: 'segment',
-            key: 'kind',
-            label: () => t('craft.kind'),
-            options: [
-              { value: 'all', label: () => t('craft.kindAll') },
-              { value: 'craft', label: () => t('craft.kindCraft') },
-              { value: 'forge', label: () => t('craft.kindForge') },
-            ],
-          },
           {
             kind: 'segment',
             key: 'market',
@@ -260,7 +252,7 @@ function createRecipesPane(): View {
       detailEl.className = 'craft-detail-host';
 
       table = createKitTable<CraftRow>({
-        columns: craftColumns(env),
+        columns: craftColumns(env, kind),
         rowKey: (r) => r.recipe.key,
         sort: state.get().sort,
         onSortChange: (s) => qs?.set({ sort: s }),
@@ -272,8 +264,8 @@ function createRecipesPane(): View {
           showDetail(r, true);
         },
         selectedKey: null,
-        columnsKey: 'craft',
-        toolbar: { columns: true, exportName: 'crafts', extra },
+        columnsKey: kind,
+        toolbar: { columns: true, exportName: kind === 'forge' ? 'forges' : 'crafts', extra },
         rowActions: (r) => watchButton(env, r),
         onRowAction: (action, r) => {
           if (action === 'watch') toggleWatch(r);

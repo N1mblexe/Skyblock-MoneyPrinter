@@ -206,7 +206,9 @@ export function createItemView(): View {
 
   /** Craft tab link, plus a Books tab link when the output is an enchanted book. */
   const recipeLinks = (r: Recipe) =>
-    `<a class="btn btn-sm" href="#/craft?q=${encodeURIComponent(r.output)}" title="${esc(t('openCraft'))}">${esc(t('openCraftShort'))} →</a>` +
+    (r.kind === 'forge'
+      ? `<a class="btn btn-sm" href="#/forge?q=${encodeURIComponent(r.output)}" title="${esc(t('openForge'))}">${esc(t('openForgeShort'))} →</a>`
+      : `<a class="btn btn-sm" href="#/craft?q=${encodeURIComponent(r.output)}" title="${esc(t('openCraft'))}">${esc(t('openCraftShort'))} →</a>`) +
     (isBookId(r.output)
       ? ` <a class="btn btn-sm" href="#/books?q=${encodeURIComponent(r.output)}" title="${esc(t('openBooksLong'))}">${esc(t('openBooks'))} →</a>`
       : '');
@@ -327,7 +329,9 @@ export function createItemView(): View {
     const link = (href: string, label: string) => `<a class="btn btn-sm btn-ghost" href="${esc(href)}">${esc(label)} →</a>`;
     const q = encodeURIComponent(id);
     if (p) links.push(link(`#/flip?q=${q}`, t('openFlip')));
-    if (s.catalog?.byOutput.get(id)?.length) links.push(link(`#/craft?q=${q}`, t('openCraftShort')));
+    const made = s.catalog?.byOutput.get(id) ?? [];
+    if (made.some((r) => r.kind === 'craft')) links.push(link(`#/craft?q=${q}`, t('openCraftShort')));
+    if (made.some((r) => r.kind === 'forge')) links.push(link(`#/forge?q=${q}`, t('openForgeShort')));
     if (isBookId(id)) links.push(link(`#/books?q=${q}`, t('openBooks')));
     linksEl.innerHTML = links.length ? `<span class="small muted">${esc(t('openIn'))}</span> ${links.join(' ')}` : '';
     const n = s.alerts.filter((r) => r.id === id).length;

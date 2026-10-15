@@ -3,6 +3,7 @@ import type { RouteId, View } from '../../types/contracts.ts';
 import { createBooksView } from './books/booksView.ts';
 import { createCraftView } from './craft/craftView.ts';
 import { createFlipView } from './flip/flipView.ts';
+import { createForgeView } from './forge/forgeView.ts';
 import { createFusionView } from './fusion/fusionView.ts';
 import { createItemView } from './item/itemView.ts';
 import { createNpcView } from './npc/npcView.ts';
@@ -14,6 +15,7 @@ export const views: Record<RouteId, () => View> = {
   overview: createOverviewView,
   flip: createFlipView,
   craft: createCraftView,
+  forge: createForgeView,
   books: createBooksView,
   npc: createNpcView,
   fusion: createFusionView,
@@ -36,6 +38,7 @@ export const NAV: NavEntry[] = [
   { id: 'flip', group: 'markets' },
   { id: 'books', group: 'markets' },
   { id: 'craft', group: 'production' },
+  { id: 'forge', group: 'production' },
   { id: 'fusion', group: 'production' },
   { id: 'npc', group: 'trade' },
   { id: 'plan', group: 'tools' },

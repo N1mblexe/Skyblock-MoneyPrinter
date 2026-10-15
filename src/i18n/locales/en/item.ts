@@ -107,6 +107,8 @@ export const item = {
   openFlip: 'Flip',
   openBooks: 'Books',
   openCraftShort: 'Craft',
+  openForge: 'Open this recipe on the Forge page',
+  openForgeShort: 'Forge',
   openIn: 'Open in',
   actionsAria: 'Item actions',
   alertsHere_one: '{n} alert on this item',

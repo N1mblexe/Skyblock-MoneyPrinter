@@ -1,12 +1,12 @@
 export const craft = {
-  title: 'Craft & Forge',
-  intro: 'Buy the ingredients, craft (or forge), sell the output. The cheapest way to get each ingredient is used. Click a row to open the details in the side panel.',
+  title: 'Craft',
+  intro: 'Buy the ingredients, craft, sell the output. The cheapest way to get each ingredient is used. Click a row to open the details in the side panel.',
+  forgeTitle: 'Forge',
+  forgeIntro: 'Buy the ingredients, put them in the forge, sell the result. Forge time and your forge slots limit how many you make per hour. Click a row to open the details in the side panel.',
+  colDuration: 'Forge time',
 
   search: 'Search (output or ingredient)',
   searchPh: 'enchanted, sugar…',
-  kind: 'Kind',
-  kindAll: 'All',
-  kindCraft: 'Craft',
   kindForge: 'Forge',
   market: 'Output market',
   marketAll: 'All',

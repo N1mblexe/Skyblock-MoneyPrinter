@@ -438,7 +438,7 @@ export interface MarketStat {
   sellVolTrend: number | null;
 }
 
-export type OpportunityKind = 'flip' | 'craft' | 'chain' | 'book' | 'npc';
+export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc';
 
 export interface Opportunity {
   kind: OpportunityKind;
@@ -457,6 +457,8 @@ export interface Opportunity {
   /** order slots used */
   slots: number;
   risk: RiskReport;
+  /** the output is valued at the AH lowest BIN (planner can leave these out) */
+  ahSold?: boolean;
 }
 
 export interface Allocation {
@@ -597,7 +599,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'overview' | 'flip' | 'craft' | 'books' | 'npc' | 'fusion' | 'plan' | 'watch' | 'item';
+export type RouteId = 'overview' | 'flip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;

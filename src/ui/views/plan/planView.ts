@@ -28,7 +28,7 @@ export const PLAN_DEBOUNCE_MS = 300;
 /** Window event the shell may listen to for opening the settings drawer. */
 export const OPEN_SETTINGS_EVENT = 'bm:open-settings';
 
-const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc' } as const;
+const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', forge: 'kindForge', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc' } as const;
 
 interface Memo {
   opps: readonly Opportunity[];
@@ -71,7 +71,7 @@ export function createPlanView(): View {
 
   // ---------------------------------------------------------------- compute
   const keyOf = (v: PlanQuery, o: AllocateOptions) =>
-    JSON.stringify([KINDS.map((k) => v[k]), o.capital, o.slots, o.maxShare, o.excludeSuspect]);
+    JSON.stringify([KINDS.map((k) => v[k]), v.ah, o.capital, o.slots, o.maxShare, o.excludeSuspect]);
 
   function wanted(): { opps: readonly Opportunity[]; v: PlanQuery; opts: AllocateOptions; key: string } {
     const opps = ctx!.derived.opportunities();
@@ -355,6 +355,7 @@ export function createPlanView(): View {
         },
         { kind: 'toggle', key: 'suspect', label: () => t('suspect') },
         ...KINDS.map((k) => ({ kind: 'toggle' as const, key: k, label: () => t(KIND_LABEL[k]) })),
+        { kind: 'toggle', key: 'ah', label: () => t('includeAh') },
       ],
       qs,
     );

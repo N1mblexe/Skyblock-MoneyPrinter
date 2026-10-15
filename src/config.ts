@@ -160,7 +160,7 @@ export const HOTKEYS = {
   star: ['s'],
   export: ['e'],
   close: ['Escape'],
-  go: { overview: 'g o', flip: 'g f', craft: 'g c', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', watch: 'g w' },
+  go: { overview: 'g o', flip: 'g f', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', watch: 'g w' },
 } as const;
 
 // ---- localStorage keys

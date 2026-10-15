@@ -111,6 +111,8 @@ export const item: Messages['item'] = {
   openFlip: 'Flip',
   openBooks: 'Kitaplar',
   openCraftShort: 'Craft',
+  openForge: 'Bu tarifi Forge sayfasında aç',
+  openForgeShort: 'Forge',
   openIn: 'Şurada aç',
   actionsAria: 'Ürün işlemleri',
   alertsHere_one: 'Bu üründe {n} alarm var',
