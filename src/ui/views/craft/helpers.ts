@@ -179,6 +179,8 @@ export const CHAIN_SCHEMA = {
   /** only the most profitable move (profit/hour) of each ladder */
   best: { kind: 'bool', def: true },
   minSteps: { kind: 'number', def: 2, min: 2 },
+  /** where the first tier is bought */
+  start: { kind: 'enum', def: 'bazaar', values: ['bazaar', 'cheapest'] },
   /** percent */
   minMargin: { kind: 'number', def: 1 },
   minPph: { kind: 'number', def: null },

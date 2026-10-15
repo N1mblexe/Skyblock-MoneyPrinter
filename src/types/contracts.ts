@@ -640,7 +640,8 @@ export type TFn = (key: string, params?: Record<string, string | number>) => str
 export interface Derived {
   flips(): FlipRow[];
   crafts(): CraftRow[];
-  chains(): ChainRow[];
+  /** craft chain moves; `start` = where the first tier is bought (default 'bazaar') */
+  chains(start?: 'bazaar' | 'cheapest'): ChainRow[];
   npc(): NpcFlipRow[];
   books(): BookRow[];
   shops(): ShopRow[];

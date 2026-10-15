@@ -166,11 +166,14 @@ export const craft = {
   chNote1:
     'A recipe is a <strong>chain step</strong> when one bazaar ingredient makes up at least half of its input items and more of it goes in than comes out (Wheat → Enchanted Wheat). Steps link into <strong>ladders</strong>; uncrafting (Hay Bale → 9 Wheat) is not a step.',
   chNote2:
-    'Each row is one <strong>move</strong>: buy the first tier, craft every step up to the last one, sell it. The first tier is always bought, never crafted; other ingredients use the cheapest of bazaar, NPC and sub-crafting, like on the Recipes tab.',
+    'Each row is one <strong>move</strong>: buy the first tier, craft every step up to the last one, sell it. The first tier is always bought, never crafted: on the bazaar by default (an NPC shop is often cheaper per item, but its daily limit makes long ladders crawl), or at the cheapest source with “First tier from”. Other ingredients use the cheapest of bazaar, NPC and sub-crafting, like on the Recipes tab.',
   chNote3:
     '<strong>Best move per ladder</strong> keeps the most profitable move (profit/hour) of each ladder. Open a row to compare every tier of its ladder: what one unit is worth per unit of the first tier, and the profit of stopping there.',
   chSearchPh: 'wheat, gem, egg…',
   chBest: 'Best move per ladder',
+  chStart: 'First tier from',
+  chStartBazaar: 'Bazaar',
+  chStartCheapest: 'Cheapest (incl. NPC)',
   chMinSteps: 'Min. steps',
   chCount_one: '{n} of {total} move',
   chCount_other: '{n} of {total} moves',

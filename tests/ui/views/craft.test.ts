@@ -508,6 +508,19 @@ describe('craft view: chains tab', () => {
     expect(q('[data-testid="chain-count"]').textContent).toBe(t('craft.chCount', { n: want.length, total: all.length, count: all.length }));
   });
 
+  it('"first tier from" switches between bazaar-only and cheapest-source moves', async () => {
+    mount({ view: 'chains' });
+    await flush();
+    const spy = vi.spyOn(ctx.derived, 'chains');
+    segment('start', 'cheapest');
+    await flush();
+    expect(urlState()).toMatchObject({ start: 'cheapest' });
+    expect(spy).toHaveBeenCalledWith('cheapest');
+    const shown = new Set(chainRows().map((r) => r.dataset.key));
+    const all = ctx.derived.chains('cheapest');
+    expect([...shown].every((k) => all.some((r) => r.key === k))).toBe(true);
+  });
+
   it('turning off "best move per ladder" lists every priced move', async () => {
     mount({ view: 'chains' });
     await flush();

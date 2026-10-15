@@ -33,6 +33,8 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
 export interface PriceOptions {
   /** inputs bought as they are (bazaar or NPC), never sub-crafted; a chain move uses it for its starting tier */
   directIds?: ReadonlySet<string>;
+  /** inputs bought on the bazaar only (no NPC shop, no sub-craft) */
+  bazaarIds?: ReadonlySet<string>;
 }
 
 export interface CraftPricer {
@@ -57,15 +59,20 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
     return r;
   };
 
-  /** Cheapest of bazaar buy quote and NPC buy price. */
-  const direct = (id: string): Resolved | null => {
-    if (directMemo.has(id)) return directMemo.get(id)!;
-    let best: Resolved | null = null;
+  /** Bazaar buy quote in the cost mode, null when the item can't be bought there. */
+  const bazaar = (id: string): Resolved | null => {
     const p = snap.products[id];
     const side = p ? buySide(p, costMode, share, undefined, catalog.items[id]?.npcSell) : null;
     const q = side?.quote;
-    if (q && q.price > 0 && Number.isFinite(q.price))
-      best = { unit: q.price, source: q.source, rate: side.rate, bound: 'volume', orderUnits: q.source === 'order' ? 1 : 0 };
+    return q && q.price > 0 && Number.isFinite(q.price)
+      ? { unit: q.price, source: q.source, rate: side.rate, bound: 'volume', orderUnits: q.source === 'order' ? 1 : 0 }
+      : null;
+  };
+
+  /** Cheapest of bazaar buy quote and NPC buy price. */
+  const direct = (id: string): Resolved | null => {
+    if (directMemo.has(id)) return directMemo.get(id)!;
+    let best = bazaar(id);
     const nb = catalog.items[id]?.npcBuy;
     if (nb != null && nb > 0 && (!best || nb < best.unit)) best = { unit: nb, source: 'npc', rate: npcRate, bound: 'npcLimit', orderUnits: 0 };
     directMemo.set(id, best);
@@ -138,7 +145,11 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
     const capDepth = (v: number) => (depthCap = depthCap == null ? v : Math.min(depthCap, v));
 
     for (const inp of recipe.inputs) {
-      const res = opts?.directIds?.has(inp.id) ? direct(inp.id) : resolve(inp.id, 0, new Set([recipe.output])).res;
+      const res = opts?.bazaarIds?.has(inp.id)
+        ? bazaar(inp.id)
+        : opts?.directIds?.has(inp.id)
+          ? direct(inp.id)
+          : resolve(inp.id, 0, new Set([recipe.output])).res;
       const line: IngredientLine = {
         id: inp.id,
         name: catalog.name(inp.id),

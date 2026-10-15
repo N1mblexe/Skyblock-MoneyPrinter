@@ -96,14 +96,27 @@ export function moveRecipe(g: ChainGraph, path: readonly string[]): { recipe: Re
   return { recipe: { key: `chain:${path.join('>')}`, output: path.at(-1)!, outCount: 1, inputs, kind: 'craft' }, needFrom: need };
 }
 
-/** Price one path with a shared pricer; the first tier is bought, never sub-crafted. */
-export function priceMove(pricer: CraftPricer, g: ChainGraph, path: readonly string[]): { row: CraftRow; needFrom: number } {
+/** Where a move buys its first tier: the bazaar only, or the cheaper of bazaar and NPC shop. */
+export type ChainStart = 'bazaar' | 'cheapest';
+
+/** Price one path with a shared pricer; the first tier is bought (per `start`), never sub-crafted. */
+export function priceMove(
+  pricer: CraftPricer,
+  g: ChainGraph,
+  path: readonly string[],
+  start: ChainStart = 'bazaar',
+): { row: CraftRow; needFrom: number } {
   const { recipe, needFrom } = moveRecipe(g, path);
-  return { row: pricer.price(recipe, { directIds: new Set([path[0]!]) }), needFrom };
+  const first = new Set([path[0]!]);
+  return { row: pricer.price(recipe, start === 'bazaar' ? { bazaarIds: first } : { directIds: first }), needFrom };
 }
 
-/** Every move of at least CHAIN.minSteps steps on every ladder, priced (unpriced rows included, like crafts). */
-export function computeChains(ctx: CalcCtx): ChainRow[] {
+/**
+ * Every move of at least CHAIN.minSteps steps on every ladder, priced (unpriced rows included, like crafts).
+ * By default the first tier is bought on the bazaar: NPC shops are often cheaper per unit, but their daily limit
+ * makes long ladders (25,600 Wheat per Enchanted Hay Bale) look useless.
+ */
+export function computeChains(ctx: CalcCtx, start: ChainStart = 'bazaar'): ChainRow[] {
   const g = chainGraph(ctx.catalog);
   const pricer = createCraftPricer(ctx);
   const moves = new Map<string, { path: string[]; ladders: string[] }>();
@@ -120,7 +133,7 @@ export function computeChains(ctx: CalcCtx): ChainRow[] {
     }
   }
   return [...moves].map(([key, { path, ladders }]) => {
-    const { row, needFrom } = priceMove(pricer, g, path);
+    const { row, needFrom } = priceMove(pricer, g, path, start);
     return { key, path, fromId: path[0]!, toId: path.at(-1)!, steps: path.length - 1, needFrom, ladders, row };
   });
 }
@@ -152,7 +165,7 @@ export interface LadderTier {
 }
 
 /** Each tier of `ladder` seen from the tier at `fromIndex`: unit prices and the move that ends there. */
-export function ladderDetail(ctx: CalcCtx, ladder: readonly string[], fromIndex: number): LadderTier[] {
+export function ladderDetail(ctx: CalcCtx, ladder: readonly string[], fromIndex: number, start: ChainStart = 'bazaar'): LadderTier[] {
   const { snap, catalog, settings } = ctx;
   const g = chainGraph(catalog);
   const pricer = createCraftPricer(ctx);
@@ -164,7 +177,7 @@ export function ladderDetail(ctx: CalcCtx, ladder: readonly string[], fromIndex:
     const buys = [bq && Number.isFinite(bq.price) && bq.price > 0 ? bq.price : null, npcBuy != null && npcBuy > 0 ? npcBuy : null].filter((x): x is number => x != null);
     const sq = p ? sellQuote(p, settings.sellMode) : null;
     const sells = [sq && Number.isFinite(sq.price) ? afterTax(sq.price, settings.taxRate) : null, npcSell != null && npcSell > 0 ? npcSell : null].filter((x): x is number => x != null);
-    const priced = i > fromIndex ? priceMove(pricer, g, ladder.slice(fromIndex, i + 1)) : null;
+    const priced = i > fromIndex ? priceMove(pricer, g, ladder.slice(fromIndex, i + 1), start) : null;
     return {
       id,
       name: catalog.name(id),

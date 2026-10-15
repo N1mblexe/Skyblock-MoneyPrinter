@@ -83,7 +83,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     calcCtx: current,
     flips: cached('flips', [], computeFlips),
     crafts: cached('crafts', [], computeCrafts),
-    chains: cached('chains', [], computeChains),
+    chains: (start = 'bazaar') => cached(`chains:${start}`, [], (c) => computeChains(c, start))(),
     npc: cached('npc', [], computeNpcFlips),
     books: cached('books', [], computeBookCombines),
     shops: cached('shops', [], computeShopRows),
