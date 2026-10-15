@@ -1,4 +1,5 @@
 // Runs alert rules on every new snapshot; fires notifications/toasts. Owner: history package.
+import { RATIO_METRICS } from '../domain/alertMetrics.ts';
 import { ALERTS } from '../config.ts';
 import { evaluateAlerts } from '../domain/alerts.ts';
 import { t } from '../i18n/index.ts';
@@ -15,7 +16,6 @@ export interface AlertsRunnerOptions {
   now?: () => number;
 }
 
-const RATIO_METRICS: ReadonlySet<AlertMetric> = new Set(['spreadPct', 'flipMargin']);
 
 /** Value formatted for its metric: ratios as percent, prices/profits as coins. */
 export function fmtMetric(metric: AlertMetric, v: number): string {

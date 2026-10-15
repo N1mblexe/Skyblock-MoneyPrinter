@@ -61,6 +61,7 @@ export type * from './types.ts';
 export { createKitTable, cssRowHeight } from './table.ts';
 export { sortRows, isNullish } from './sort.ts';
 export { toCsv, csvCell, csvNumber, csvFileName, downloadCsv } from './csv.ts';
+export { downloadBlob, downloadJson } from './download.ts';
 export { createDetailPanel } from './panel.ts';
 export { createDrawer } from './drawer.ts';
 export { openPalette, collectPalette, currentPalette, PALETTE_LIMIT } from './palette.ts';

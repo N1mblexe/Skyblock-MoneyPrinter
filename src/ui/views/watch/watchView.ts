@@ -1,4 +1,5 @@
 // Watchlist: watched items with live prices, an alert-rule editor, notification permission, alert log, import/export.
+import { downloadJson } from '../../kit/download.ts';
 import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
 import { metricValue } from '../../../domain/alerts.ts';
 import { matchesQuery, resolveUserInput, searchItems } from '../../../domain/search.ts';
@@ -443,14 +444,7 @@ export function createWatchView(): View {
 
   function downloadExport(): void {
     const s = ctx.store.get();
-    const file = exportFileName();
-    const blob = new Blob([exportJson(s.watchlist, s.alerts)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = h('a', { href: url, download: file, hidden: true });
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    const file = downloadJson(exportFileName(), exportJson(s.watchlist, s.alerts));
     ctx.toast(t('watch.downloaded', { file }), 'ok');
   }
 

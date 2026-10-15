@@ -1,3 +1,4 @@
+import { ALERT_METRICS } from '../domain/alertMetrics.ts';
 import {
   ALERTS,
   LS_ALERT_LOG,
@@ -71,15 +72,15 @@ export function saveFusion(r: FusionRecipe[]): void {
 }
 
 // ---- watchlist / alerts: entries are validated field by field; invalid ones are dropped, duplicates keep the first
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
-const idStr = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= 200;
-const time = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
-const METRICS: ReadonlySet<unknown> = new Set<AlertMetric>(['ask', 'bid', 'spreadPct', 'flipMargin', 'flipProfit']);
+export const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+export const idStr = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= 200;
+export const time = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+const METRICS: ReadonlySet<unknown> = new Set<AlertMetric>(ALERT_METRICS);
 /** cooldowns above a week are treated as invalid */
 const MAX_COOLDOWN_MIN = 7 * 24 * 60;
 
 /** Parse a stored array, keeping valid entries (cleaned by `parse`); with `key`, only the first one per key. */
-function loadList<T>(lsKey: string, parse: (x: Record<string, unknown>) => T | null, key?: (t: T) => string): T[] {
+export function loadList<T>(lsKey: string, parse: (x: Record<string, unknown>) => T | null, key?: (t: T) => string): T[] {
   const raw = lsGet<unknown>(lsKey, []);
   if (!Array.isArray(raw)) return [];
   const out: T[] = [];

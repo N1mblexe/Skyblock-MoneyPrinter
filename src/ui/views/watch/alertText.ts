@@ -1,12 +1,13 @@
 // Alert texts shared by the watchlist and the overview: log lines and metric value formatting.
 import { t } from '../../../i18n/index.ts';
 import { alertMessage, fmtMetric } from '../../../state/alertsRunner.ts';
+import { ALERT_METRICS, RATIO_METRICS } from '../../../domain/alertMetrics.ts';
 import type { AlertEvent, AlertMetric, AlertRule } from '../../../types/contracts.ts';
 
-export const METRICS: readonly AlertMetric[] = ['ask', 'bid', 'spreadPct', 'flipMargin', 'flipProfit'];
+export const METRICS = ALERT_METRICS;
 
 /** Ratio metrics are edited in percent and stored as ratios. */
-export const isRatio = (m: AlertMetric): boolean => m === 'spreadPct' || m === 'flipMargin';
+export const isRatio = (m: AlertMetric): boolean => RATIO_METRICS.has(m);
 
 /** One-line message for a logged alert event. Uses the rule's op/threshold when the rule still exists. */
 export function logMessage(e: AlertEvent, rules: readonly AlertRule[], name: string): string {

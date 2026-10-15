@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { MAX_ORDER_UNITS } from '../../src/config.ts';
 import { walkBook } from '../../src/domain/book.ts';
 import {
+  ahClaimTax,
+  ahListingFee,
+  ahNet,
   afterTax,
   buyQuote,
   buySide,
@@ -370,5 +373,30 @@ describe('NPC floor on buy orders', () => {
     expect(buyQuote(pearl, 'order', undefined, 3.9 / 0.9)).toMatchObject({ price: 3.9, clamped: 'npcFloor' });
     // no ask: the floor stands
     expect(buyQuote({ ...pearl, ask: null, asks: [] }, 'order', undefined, 7)).toMatchObject({ price: 6.3, clamped: 'npcFloor' });
+  });
+});
+
+describe('AH fees', () => {
+  it('listing fee by price tier', () => {
+    expect(ahListingFee(0)).toBe(0);
+    expect(ahListingFee(1_000_000)).toBeCloseTo(10_000, 6); // 1 %
+    expect(ahListingFee(10_000_000)).toBeCloseTo(100_000, 6); // still 1 % at exactly 10M
+    expect(ahListingFee(50_000_000)).toBeCloseTo(1_000_000, 6); // 2 %
+    expect(ahListingFee(200_000_000)).toBeCloseTo(5_000_000, 6); // 2.5 %
+  });
+
+  it('claim tax: none up to 1M, 1 % above, never below the 1M floor; Derpy x4', () => {
+    expect(ahClaimTax(1_000_000)).toBe(0);
+    expect(ahClaimTax(1_000_050)).toBeCloseTo(50, 6); // 1 % would be 10,000.5: capped at the floor
+    expect(ahClaimTax(5_000_000)).toBeCloseTo(50_000, 6);
+    expect(ahClaimTax(5_000_000, true)).toBeCloseTo(200_000, 6);
+    expect(ahClaimTax(1_100_000, true)).toBeCloseTo(44_000, 6);
+    expect(ahClaimTax(1_030_000, true)).toBeCloseTo(30_000, 6); // 4 % = 41,200, capped at the floor
+  });
+
+  it('net = price - listing fee - claim tax', () => {
+    expect(ahNet(500_000)).toBeCloseTo(495_000, 6);
+    expect(ahNet(20_000_000)).toBeCloseTo(20_000_000 - 400_000 - 200_000, 6);
+    expect(ahNet(20_000_000, true)).toBeCloseTo(20_000_000 - 400_000 - 800_000, 6);
   });
 });

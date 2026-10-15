@@ -2,6 +2,7 @@
 // Numbers are locale independent ('.' decimals, no grouping) so spreadsheets in any locale can parse them.
 
 /** A column as the CSV writer sees it (KitColumn is compatible). */
+import { downloadBlob } from './download.ts';
 export interface CsvColumn<T> {
   label: () => string;
   get: (row: T) => number | string | null;
@@ -48,16 +49,5 @@ export function csvFileName(name: string, d: Date = new Date()): string {
 
 /** Trigger a browser download of CSV text (UTF-8 with BOM so Excel reads Turkish characters). Returns the file name. */
 export function downloadCsv(name: string, csv: string, now: Date = new Date()): string {
-  const file = csvFileName(name, now);
-  const blob = new Blob(['﻿', csv], { type: 'text/csv;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = file;
-  a.hidden = true;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-  return file;
+  return downloadBlob(csvFileName(name, now), ['\uFEFF', csv], 'text/csv;charset=utf-8');
 }

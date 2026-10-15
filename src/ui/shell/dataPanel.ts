@@ -1,4 +1,5 @@
 // Settings drawer "Data" section: catalog/snapshot facts, price-history info + clear, settings backup.
+import { downloadJson } from '../kit/download.ts';
 import { msgOf, msgText, onLangChange, t } from '../../i18n/index.ts';
 import { sanitizeSettings } from '../../state/appState.ts';
 import type { AppState, HistoryRepo, Store, ToastKind } from '../../types/contracts.ts';
@@ -154,14 +155,7 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
   function exportSettings(): void {
     const json = JSON.stringify(store.get().settings, null, 2);
     try {
-      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = SETTINGS_FILE;
-      document.body.append(a);
-      a.click();
-      a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
+      downloadJson(SETTINGS_FILE, json);
       opts.toast(t('shell.exported'), 'ok');
     } catch (e) {
       console.warn('settings export failed', e);

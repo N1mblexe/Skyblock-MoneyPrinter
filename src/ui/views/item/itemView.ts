@@ -1,6 +1,7 @@
 // Item detail view: #/item/<id>. Header actions (watch, quick alert, copy id), key facts, your flip (same as the
 // Flips tab), market stats, AH lowest BIN, shard info, risk, top-10 order book, price history chart, recipes.
 // Catalog / AH items that are not bazaar products get a reduced page (no book, chart or flip).
+import { ALERT_METRICS } from '../../../domain/alertMetrics.ts';
 import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
 import { flipPlanFor, metricValue } from '../../../domain/alerts.ts';
 import { buyQuote } from '../../../domain/pricing.ts';
@@ -51,7 +52,7 @@ const USING_LIMIT = 20;
 const SUGGEST_LIMIT = 8;
 const RANGES: HistoryRange[] = ['3h', '24h', '7d'];
 const PREFS_KEY = LS_VIEWPREFS + 'item';
-const METRICS: AlertMetric[] = ['ask', 'bid', 'spreadPct', 'flipMargin', 'flipProfit'];
+const METRICS = ALERT_METRICS;
 
 interface BookRow {
   key: string;

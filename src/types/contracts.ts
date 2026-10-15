@@ -544,6 +544,8 @@ export interface CalcCtx {
   stats?: (id: string) => PriceStats | null;
   /** lowest BIN on the auction house, if scanned */
   ah?: (id: string) => AhPrice | null;
+  /** mayor Derpy is in office (AH claim tax ×4) */
+  derpy?: boolean;
 }
 
 // ---------------------------------------------------------------- Storage

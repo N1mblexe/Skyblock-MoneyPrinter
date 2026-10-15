@@ -1,4 +1,4 @@
-import { COMP_TOL, FILL_MODEL_DEFAULT, MAX_ORDER_UNITS, NPC_FLOOR_RATIO, PRICE_TICK } from '../config.ts';
+import { AH, COMP_TOL, FILL_MODEL_DEFAULT, MAX_ORDER_UNITS, NPC_FLOOR_RATIO, PRICE_TICK } from '../config.ts';
 import type { CostMode, FillModel, OrderLevel, Product, Quote, SellMode, Throughput } from '../types/contracts.ts';
 import { bookUnits, walkBook } from './book.ts';
 
@@ -59,6 +59,26 @@ export function sellQuote(p: Product, mode: SellMode, qty?: number): Quote | nul
 /** price * (1 - tax) */
 export function afterTax(price: number, tax: number): number {
   return price * (1 - tax);
+}
+
+/** BIN listing fee for one item listed at `price` (AH.fees.listing tiers). */
+export function ahListingFee(price: number): number {
+  if (!(price > 0)) return 0;
+  const tier = AH.fees.listing.find(([upTo]) => price <= upTo) ?? AH.fees.listing[AH.fees.listing.length - 1]!;
+  return price * tier[1];
+}
+
+/** Claim tax when collecting a sale of `price`: up to 1 % (×4 under Derpy), never below AH.fees.claimFloor. */
+export function ahClaimTax(price: number, derpy = false): number {
+  const { claimTax, claimFloor, derpyClaimMul } = AH.fees;
+  if (!(price > claimFloor)) return 0;
+  const tax = price * claimTax * (derpy ? derpyClaimMul : 1);
+  return Math.min(tax, price - claimFloor);
+}
+
+/** What one BIN sale at `price` leaves you after the listing fee and the claim tax. */
+export function ahNet(price: number, derpy = false): number {
+  return price - ahListingFee(price) - ahClaimTax(price, derpy);
 }
 
 const perHour = (week: number) => (Number.isFinite(week) && week > 0 ? week / HOURS_PER_WEEK : 0);

@@ -120,6 +120,21 @@ export const AH = {
   concurrency: 4,
   /** fewer BIN listings than this adds an AH thin-market risk flag */
   minCount: 2,
+  /**
+   * Seller fees (hypixelskyblock.minecraft.wiki/w/Auction_House, checked 2026-10): a BIN listing fee by price tier
+   * (`[upTo, rate]`, first match), and a claim tax of up to 1 % on sales above 1M that never takes the payout below
+   * 1M. Mayor Derpy quadruples the claim tax (not the listing fee).
+   */
+  fees: {
+    listing: [
+      [10_000_000, 0.01],
+      [100_000_000, 0.02],
+      [Infinity, 0.025],
+    ] as const,
+    claimTax: 0.01,
+    claimFloor: 1_000_000,
+    derpyClaimMul: 4,
+  },
 } as const;
 
 export const ELECTION_POLL_MS = 30 * 60_000;
