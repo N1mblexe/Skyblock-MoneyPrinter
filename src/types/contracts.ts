@@ -611,7 +611,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'watch' | 'item';
+export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'sell' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;

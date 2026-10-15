@@ -175,6 +175,19 @@ The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) uses the AH scan's t
 
 Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter is 5). Because one id covers every copy of an item, two flags warn about variants: `AH_VARIANT` for pets and for gear and tools (`AH_FLIP.variantCategories`), and `AH_GAP` when the second price is more than `AH_FLIP.gapRatio = 3` times the lowest. Both together make a row suspect, hidden while "Hide suspicious" is on. Prices can change before you reach the listing; the page copies `/viewauction <uuid>` for the cheapest listing.
 
+## Sell or craft?
+
+The **Sell or craft?** page (`#/sell`, `src/domain/sell.ts`) values items you already own. Raw options for `qty` items:
+
+| option | you get |
+|---|---|
+| insta-sell | walk the buy orders for `qty` (VWAP), after bazaar tax; if the book holds fewer, only the filled part counts and the row says so |
+| sell offer | `(ask − 0.1)` after tax × qty; time = qty / your sell rate (your share of weekly volume) |
+| NPC | NPC sell price × qty |
+| AH | `ahNet(lowest BIN)` × qty, for auctionable items with a scanned price |
+
+**Craft up:** for every chain ladder (see Craft chains) that contains the item, every higher tier is an option. Your items are free inputs; side ingredients are bought at their cheapest source (the craft pricer); only whole crafts count (`made = floor(qty / need)`); leftover items are sold at the best raw price per item. `net = made × (value of one crafted item − its side-ingredient cost) + leftover × best raw price`. Options are listed best first; the page total adds each item's best option.
+
 ## Book combining
 
 Two level-k books combine into one level-(k+1) book, so one level-L book takes `2^(L−k)` level-k books. For each output book, the app tries every `k` from `L − 1` down to `L − 4` (`BOOK.maxChainLevels = 4`, at most 16 input books) and keeps the most profitable chain. On a tie, it keeps the shorter chain. One unit is one output book: it costs `count` input books, and the input's fill rate and book depth are divided by `count`.

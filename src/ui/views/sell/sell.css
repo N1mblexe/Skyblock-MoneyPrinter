@@ -1,0 +1,71 @@
+/* "Sell or craft?" page (scoped under .sell-view; theme tokens only) */
+.sell-view {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.sell-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.sell-head h1 {
+  margin: 0;
+  font-size: var(--fs-2xl);
+}
+.sell-head h1:focus {
+  outline: none;
+}
+.sell-intro {
+  margin: 0;
+}
+.sell-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--s-3);
+}
+.sell-form .field {
+  min-width: 10rem;
+}
+.sell-form .field:first-child {
+  flex: 1 1 16rem;
+}
+.sell-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s-3);
+}
+.sell-list {
+  display: grid;
+  gap: var(--s-3);
+}
+.sell-card {
+  display: grid;
+  gap: var(--s-2);
+}
+.sell-card-head {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+.sell-card-head h2 {
+  margin: 0;
+  flex: 1;
+  font-size: var(--fs-lg);
+}
+.sell-qty input {
+  width: 9rem;
+}
+.sell-wrap {
+  overflow-x: auto;
+}
+.sell-tbl {
+  width: 100%;
+}
+.sell-tbl th.name-cell {
+  font-weight: normal;
+}
+.sell-tbl tr.sell-best > * {
+  background: var(--good-soft);
+}

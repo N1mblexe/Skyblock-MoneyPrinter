@@ -10,6 +10,7 @@ import { createItemView } from './item/itemView.ts';
 import { createNpcView } from './npc/npcView.ts';
 import { createOverviewView } from './overview/overviewView.ts';
 import { createPlanView } from './plan/planView.ts';
+import { createSellView } from './sell/sellView.ts';
 import { createWatchView } from './watch/watchView.ts';
 
 export const views: Record<RouteId, () => View> = {
@@ -22,6 +23,7 @@ export const views: Record<RouteId, () => View> = {
   npc: createNpcView,
   fusion: createFusionView,
   plan: createPlanView,
+  sell: createSellView,
   watch: createWatchView,
   item: createItemView,
 };
@@ -45,5 +47,6 @@ export const NAV: NavEntry[] = [
   { id: 'fusion', group: 'production' },
   { id: 'npc', group: 'trade' },
   { id: 'plan', group: 'tools' },
+  { id: 'sell', group: 'tools' },
   { id: 'watch', group: 'tools' },
 ];
