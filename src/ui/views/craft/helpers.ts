@@ -4,8 +4,9 @@ import { walkBook } from '../../../domain/book.ts';
 import { afterTax, buyQuote, sellQuote } from '../../../domain/pricing.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import { lsGet, lsSet } from '../../../storage/local.ts';
-import type { Catalog, CraftRow, Product } from '../../../types/contracts.ts';
-import { locale } from '../../format.ts';
+import { t } from '../../../i18n/index.ts';
+import type { Catalog, ChainRow, CraftRow, Product } from '../../../types/contracts.ts';
+import { fmtInt, locale } from '../../format.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
 
 export type KindFilter = 'all' | 'craft' | 'forge';
@@ -144,6 +145,109 @@ export function fmtRate(n: number | null | undefined): string {
   }
   return f.format(n);
 }
+
+// ---------------------------------------------------------------- tabs (Recipes | Chains)
+
+export type CraftTab = 'recipes' | 'chains';
+
+/** The tab a route shows: `#/craft?view=chains` is the Chains tab, anything else Recipes. */
+export const tabOf = (query: Record<string, string> | undefined): CraftTab => (query?.view === 'chains' ? 'chains' : 'recipes');
+
+/** Tab switch shown in both panes' headers; clicks are handled by the craft view (data-craft-tab). Labels: relabelTabs. */
+export function tabsHtml(active: CraftTab): string {
+  const tab = (id: CraftTab, key: string) =>
+    `<button type="button" class="craft-tab" data-craft-tab="${id}" data-testid="craft-tab-${id}" aria-pressed="${id === active}" data-i18n="${key}"></button>`;
+  return `<div class="seg craft-tabs" role="group" data-i18n-aria="craft.tabsLabel">${tab('recipes', 'craft.tabRecipes')}${tab('chains', 'craft.tabChains')}</div>`;
+}
+
+/** (Re)translate [data-i18n] text and [data-i18n-aria] labels under `root`. */
+export function relabel(root: ParentNode): void {
+  root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n!)));
+  root.querySelectorAll<HTMLElement>('[data-i18n-aria]').forEach((el) => el.setAttribute('aria-label', t(el.dataset.i18nAria!)));
+}
+
+// ---------------------------------------------------------------- chains tab
+
+export const CHAIN_SORT_KEYS = ['name', 'steps', 'need', 'sides', 'cost', 'value', 'profit', 'margin', 'limited', 'slots', 'pph', 'risk'] as const;
+
+/** Chains tab filters + sort (#/craft?view=chains&…); stored apart from the Recipes tab. */
+export const CHAIN_SCHEMA = {
+  q: { kind: 'string', def: '' },
+  /** only the most profitable move (profit/hour) of each ladder */
+  best: { kind: 'bool', def: true },
+  minSteps: { kind: 'number', def: 2, min: 2 },
+  /** percent */
+  minMargin: { kind: 'number', def: 1 },
+  minPph: { kind: 'number', def: null },
+  unpriced: { kind: 'bool', def: false },
+  suspect: { kind: 'bool', def: false },
+  sort: { kind: 'sort', def: { key: 'pph', dir: 'desc' }, keys: CHAIN_SORT_KEYS },
+} as const satisfies QuerySchema;
+
+export type ChainQuery = QueryValues<typeof CHAIN_SCHEMA>;
+
+export const CHAIN_PREFS_KEY = LS_VIEWPREFS + 'craft.chains';
+
+export interface ChainFilterOpts {
+  q: string;
+  /** keys allowed by the "best per ladder" filter; null = every move */
+  only: ReadonlySet<string> | null;
+  minSteps: number | null;
+  minMargin: number | null;
+  minPph: number | null;
+  showUnpriced: boolean;
+  hideSuspect: boolean;
+}
+
+export interface ChainFilterResult {
+  rows: ChainRow[];
+  hidden: number;
+  suspect: number;
+  unpricedHidden: number;
+}
+
+/** Search hits any tier of the move or a side ingredient. */
+export function chainMatchesQuery(catalog: Catalog | null, r: ChainRow, q: string): boolean {
+  if (!q.trim()) return true;
+  return r.path.some((id) => matchesQuery(catalog, id, q)) || r.row.recipe.inputs.some((i) => matchesQuery(catalog, i.id, q));
+}
+
+export function filterChains(all: readonly ChainRow[], o: ChainFilterOpts, catalog: Catalog | null): ChainFilterResult {
+  const rows: ChainRow[] = [];
+  let hidden = 0;
+  let suspect = 0;
+  let unpricedHidden = 0;
+  const minM = fin(o.minMargin) ? o.minMargin / 100 : -Infinity;
+  const minP = fin(o.minPph) ? o.minPph : -Infinity;
+  const minS = fin(o.minSteps) ? o.minSteps : 0;
+  for (const r of all) {
+    if (r.steps < minS) continue;
+    const unpriced = r.row.unpriced.length > 0;
+    if (unpriced) {
+      if (!o.showUnpriced) {
+        if (chainMatchesQuery(catalog, r, o.q)) unpricedHidden++;
+        continue;
+      }
+    } else {
+      if (o.only && !o.only.has(r.key)) continue;
+      if (r.row.margin == null || r.row.margin < minM) continue;
+      if (!(r.row.profitPerHour >= minP)) continue;
+    }
+    if (!chainMatchesQuery(catalog, r, o.q)) continue;
+    if (r.row.risk.level === 'suspect' && !unpriced) {
+      suspect++;
+      if (o.hideSuspect) {
+        hidden++;
+        continue;
+      }
+    }
+    rows.push(r);
+  }
+  return { rows, hidden, suspect, unpricedHidden };
+}
+
+/** Quantities: grouped integers, or 2 significant digits for fractions (chain side inputs can be 0.25 per output). */
+export const fmtQty = (n: number): string => (Number.isInteger(n) ? fmtInt(n) : fmtRate(n));
 
 /** An item's own order→offer flip margin after tax (legacy "tek başına flip marjı"); null when a side is missing. */
 export function ownFlipMargin(p: Product | undefined, taxRate: number, npcSell?: number): number | null {

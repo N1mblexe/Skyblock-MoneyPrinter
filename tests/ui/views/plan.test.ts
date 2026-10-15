@@ -119,7 +119,7 @@ describe('plan view', () => {
   });
 
   it('kind filter limits the plan to the included kinds', () => {
-    const query = { craft: '0', book: '0', npc: '0' };
+    const query = { craft: '0', chain: '0', book: '0', npc: '0' };
     mount(query);
     const kinds = [...root.querySelectorAll('.plan-view [data-key]')].map((r) => r.getAttribute('data-key')!.split(':')[0]);
     expect(kinds.length).toBeGreaterThan(0);

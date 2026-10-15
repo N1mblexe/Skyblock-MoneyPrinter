@@ -1,0 +1,9 @@
+{
+  "$source": "Hand-kept craft recipes that the NEU repo lacks, read by scripts/build-data.ts and merged into catalog.recipes when NEU has no recipe for the output. Craft chains (src/domain/chains.ts) and the Craft view use them like any NEU recipe.",
+  "$policy": "Add a recipe only after checking it in game or on a current wiki page, and put that page in `source`. Entries are skipped (with a warning) once NEU ships a recipe for the same output.",
+  "$checked": [
+    "2026-10-15: ENCHANTED_HAY_BLOCK (old Enchanted Hay Bale) and TIGHTLY_TIED_HAY_BALE are Legacy Items in NEU ('no longer used throughout the game', /legacytrades) with no recipe, so they are deliberately not added. The current Enchanted Hay Bale is ENCHANTED_HAY_BALE (160 Enchanted Wheat), which NEU already has.",
+    "The official wiki (wiki.hypixel.net) closed in July 2026; NEU now links https://hypixelskyblock.minecraft.wiki."
+  ],
+  "recipes": []
+}

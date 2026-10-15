@@ -2,7 +2,7 @@ import type { Messages } from '../en/index.ts';
 
 export const plan: Messages['plan'] = {
   title: 'Planlayıcı',
-  intro: 'Sermayeni ve sipariş slotlarını flip, craft, kitap ve NPC fırsatları arasında saatlik kârı en yükseğe çıkaracak şekilde paylaştırır.',
+  intro: 'Sermayeni ve sipariş slotlarını flip, craft, zincir, kitap ve NPC fırsatları arasında saatlik kârı en yükseğe çıkaracak şekilde paylaştırır.',
 
   // inputs
   capital: 'Sermaye (coin)',
@@ -13,6 +13,7 @@ export const plan: Messages['plan'] = {
   fromDefault: 'Boş = varsayılan: {v}',
   kindFlip: 'Flip',
   kindCraft: 'Craft & Forge',
+  kindChain: 'Zincir',
   kindBook: 'Kitap',
   kindNpc: 'NPC',
   fillModel: 'Dolum modeli: {v}',
@@ -90,6 +91,7 @@ export const plan: Messages['plan'] = {
   openItem: 'Ürün sayfası',
   tab_flip: 'Flipler',
   tab_craft: 'Craft & Forge',
+  tab_chain: 'Craft zincirleri',
   tab_book: 'Kitaplar',
   tab_npc: 'NPC',
   watch: 'İzle',

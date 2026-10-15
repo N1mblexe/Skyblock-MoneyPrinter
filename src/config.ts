@@ -39,6 +39,12 @@ export const COMP_TOL = 0.01;
 export const NPC_FLOOR_RATIO = 0.9;
 export const CRAFT_RECURSION_DEPTH = 3;
 /**
+ * Craft chains (src/domain/chains.ts). A recipe is a chain step when its main input (largest quantity, a bazaar item)
+ * holds at least `mainShare` of the recipe's input units and more of it goes in than comes out. Moves span at least
+ * `minSteps` steps (single steps are ordinary craft rows).
+ */
+export const CHAIN = { mainShare: 0.5, minSteps: 2 } as const;
+/**
  * Assumed per-item daily purchase limit at NPC shops (in-game limits vary; tune here).
  * Caps NPC-bought ingredients and NPC->bazaar flips so NPC loops don't look unlimited.
  */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_ORDER_UNITS } from '../../src/config.ts';
+import { computeChains } from '../../src/domain/chains.ts';
 import { computeCrafts } from '../../src/domain/craft.ts';
 import { computeFlips } from '../../src/domain/flip.ts';
 import { computeNpcFlips } from '../../src/domain/npc.ts';
@@ -278,6 +279,25 @@ describe('toOpportunities', () => {
     const plan = allocate(out, { capital: 5_000_000, slots: 14, maxShare: 0.5, excludeSuspect: true });
     checkFeasible(plan, { capital: 5_000_000, slots: 14, maxShare: 0.5, excludeSuspect: true });
     expect(plan.profitPerHour).toBeGreaterThan(0);
+  });
+});
+
+describe('toOpportunities: craft chains', () => {
+  it('priced, profitable chain moves become chain opportunities with craft-style slots', () => {
+    const c = ctx();
+    const chains = computeChains(c);
+    const out = toOpportunities({ flips: [], crafts: [], chains, books: [], npc: [] }, c.settings);
+    const want = chains.filter((r) => r.row.unpriced.length === 0 && r.row.profit > 0 && r.row.tp.unitsPerHour > 0);
+    expect(want.length).toBeGreaterThan(0);
+    expect(out.map((o) => o.key).sort()).toEqual(want.map((r) => `chain:${r.key}`).sort());
+    for (const o of out) {
+      const r = chains.find((x) => `chain:${x.key}` === o.key)!;
+      expect(o).toMatchObject({ kind: 'chain', id: r.toId, profitPerUnit: r.row.profit });
+      expect(o.unitCost).toBeCloseTo(r.row.cost, 9);
+      expect(o.slots).toBeGreaterThanOrEqual(1); // buy orders for the first tier at least
+    }
+    // without chains the sources still work (older callers)
+    expect(toOpportunities({ flips: [], crafts: [], books: [], npc: [] }, c.settings)).toEqual([]);
   });
 });
 

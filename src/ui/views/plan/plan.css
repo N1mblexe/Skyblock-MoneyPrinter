@@ -92,6 +92,12 @@
   background: var(--violet-soft);
   color: var(--violet);
 }
+/* chains are crafts too: same hue, outlined so the two kinds stay apart */
+.plan-kind-chain {
+  background: transparent;
+  color: var(--violet);
+  box-shadow: inset 0 0 0 1px var(--violet);
+}
 .plan-kind-book {
   background: var(--accent-soft);
   color: var(--accent);

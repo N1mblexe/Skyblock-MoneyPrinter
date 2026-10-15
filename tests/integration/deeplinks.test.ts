@@ -49,6 +49,17 @@ describe('deep links', () => {
     expectNoConsoleErrors(b);
   });
 
+  it('#/craft?view=chains&q=melon mounts the chains tab with the search applied', async () => {
+    const b = await bootApp({ hash: '#/craft?view=chains&q=melon' });
+    await waitFor(() => !!document.querySelector('#view .chains-view') && rows().length > 0, 'chain rows');
+    await settle(2);
+    expect(b.store.get().route).toEqual({ id: 'craft', query: { view: 'chains', q: 'melon' } });
+    expect(filter('q').value).toBe('melon');
+    expect(document.querySelector('[data-testid="craft-tab-chains"]')!.getAttribute('aria-pressed')).toBe('true');
+    expect(rows().map((r) => r.dataset.key)).toEqual(['MELON>ENCHANTED_MELON>ENCHANTED_MELON_BLOCK']);
+    expectNoConsoleErrors(b);
+  });
+
   it('#/flip?minMargin=5 mounts flip with the margin filter applied', async () => {
     const b = await bootApp({ hash: '#/flip?minMargin=5' });
     await waitFor(() => rows().length > 0, 'flip rows');

@@ -8,7 +8,8 @@ import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AhSnapshot, AppState, Catalog, CatalogFile, CraftRow, Settings, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { createCraftView } from '../../../src/ui/views/craft/craftView.ts';
-import { filterCrafts, migrateLegacyPrefs, ownFlipMargin, slippage } from '../../../src/ui/views/craft/helpers.ts';
+import { filterChains, filterCrafts, migrateLegacyPrefs, ownFlipMargin, slippage } from '../../../src/ui/views/craft/helpers.ts';
+import { bestPerLadder } from '../../../src/domain/chains.ts';
 
 import bazaarJson from '../../fixtures/bazaar.json';
 import catalogJson from '../../fixtures/catalog.json';
@@ -460,5 +461,80 @@ describe('craft view', () => {
     setLang('tr');
     await flush();
     expect(root.innerHTML).toBe('');
+  });
+});
+
+describe('craft view: chains tab', () => {
+  const chainRows = () => [...root.querySelectorAll<HTMLTableRowElement>('.chains-view tbody tr[data-key]')];
+
+  beforeEach(() => {
+    setLang('en');
+    store.set({ snapshot: snap, catalog });
+  });
+
+  it('?view=chains shows the chains pane with the filtered domain rows (best per ladder by default)', async () => {
+    mount({ view: 'chains' });
+    await flush();
+    expect(q('[data-testid="craft-tab-chains"]').getAttribute('aria-pressed')).toBe('true');
+    expect(root.querySelectorAll('h1')).toHaveLength(1);
+    const all = ctx.derived.chains();
+    const best = bestPerLadder(all);
+    const want = filterChains(
+      all,
+      { q: '', only: best, minSteps: 2, minMargin: 1, minPph: null, showUnpriced: false, hideSuspect: store.get().settings.hideSuspicious },
+      catalog,
+    ).rows;
+    expect(want.length).toBeGreaterThan(0);
+    expect(new Set(chainRows().map((r) => r.dataset.key))).toEqual(new Set(want.map((r) => r.key)));
+    expect(q('[data-testid="chain-count"]').textContent).toBe(t('craft.chCount', { n: want.length, total: all.length, count: all.length }));
+  });
+
+  it('turning off "best move per ladder" lists every priced move', async () => {
+    mount({ view: 'chains' });
+    await flush();
+    const before = chainRows().length;
+    check('best', false);
+    await flush();
+    expect(chainRows().length).toBeGreaterThanOrEqual(before);
+    expect(urlState()).toMatchObject({ best: '0' });
+  });
+
+  it('a row opens the ladder: tiers, start and sell rows, one craft step per tier', async () => {
+    mount({ view: 'chains' });
+    await flush();
+    const tr = chainRows()[0]!;
+    const row = ctx.derived.chains().find((r) => r.key === tr.dataset.key)!;
+    tr.click();
+    const panel = q('.kit-panel');
+    expect(panel.hidden).toBe(false);
+    const tiers = [...panel.querySelectorAll<HTMLElement>('.chain-ladder tbody tr')].map((r) => r.dataset.tier);
+    expect(tiers).toEqual(expect.arrayContaining(row.path));
+    expect(panel.querySelector('.chain-ladder tr.chain-start')!.getAttribute('data-tier')).toBe(row.fromId);
+    expect(panel.querySelector('.chain-ladder tr.chain-target')!.getAttribute('data-tier')).toBe(row.toId);
+    // buy + one craft per step + sell + profit
+    expect(panel.querySelectorAll('.craft-steps > li')).toHaveLength(1 + row.steps + 2);
+  });
+
+  it('tab buttons navigate between the tabs, dropping the other tab’s query', async () => {
+    mount({ view: 'chains', q: 'gem' });
+    await flush();
+    q<HTMLButtonElement>('[data-testid="craft-tab-recipes"]').click();
+    expect(ctx.navigate).toHaveBeenCalledWith({ id: 'craft', query: {} });
+    view!.update!({ id: 'craft', query: {} });
+    await flush();
+    expect(root.querySelector('.chains-view')).toBeNull();
+    expect(q('[data-testid="craft-tab-recipes"]').getAttribute('aria-pressed')).toBe('true');
+    expect(rows().length).toBeGreaterThan(0);
+    q<HTMLButtonElement>('[data-testid="craft-tab-chains"]').click();
+    expect(ctx.navigate).toHaveBeenLastCalledWith({ id: 'craft', query: { view: 'chains' } });
+  });
+
+  it('switches language in place', async () => {
+    mount({ view: 'chains' });
+    await flush();
+    setLang('tr');
+    await flush();
+    expect(q('[data-testid="craft-tab-chains"]').textContent).toBe('Zincirler');
+    expect(q('.craft-tabs').getAttribute('aria-label')).toBe('Craft & Forge görünümü');
   });
 });

@@ -1,6 +1,6 @@
 export const plan = {
   title: 'Planner',
-  intro: 'Splits your capital and order slots across flip, craft, book and NPC opportunities to maximize profit per hour.',
+  intro: 'Splits your capital and order slots across flip, craft, chain, book and NPC opportunities to maximize profit per hour.',
 
   capital: 'Capital (coins)',
   slots: 'Order slots',
@@ -10,6 +10,7 @@ export const plan = {
   fromDefault: 'Empty = default: {v}',
   kindFlip: 'Flip',
   kindCraft: 'Craft & Forge',
+  kindChain: 'Chains',
   kindBook: 'Books',
   kindNpc: 'NPC',
   fillModel: 'Fill model: {v}',
@@ -83,6 +84,7 @@ export const plan = {
   openItem: 'Item page',
   tab_flip: 'Flips',
   tab_craft: 'Craft & Forge',
+  tab_chain: 'Craft chains',
   tab_book: 'Books',
   tab_npc: 'NPC',
   watch: 'Watch',

@@ -1,7 +1,8 @@
-// Craft & Forge view: buy ingredients -> craft/forge -> sell. Rows come from ctx.derived.crafts() (memoized);
-// filters live in the URL (bindQueryState), details open in the side panel.
+// Craft & Forge view with two tabs: Recipes (buy ingredients -> craft/forge -> sell; rows from ctx.derived.crafts())
+// and Chains (multi-step moves, ./chainsPane.ts). `#/craft?view=chains` picks the tab; each tab keeps its own
+// filters in the URL (bindQueryState) and localStorage; details open in the side panel.
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
-import type { AppState, CraftRow, Recipe, View, ViewContext } from '../../../types/contracts.ts';
+import type { AppState, CraftRow, Recipe, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { esc, rafDebounce } from '../../dom.ts';
 import { fmtInt } from '../../format.ts';
 import {
@@ -15,7 +16,8 @@ import {
   type QueryState,
 } from '../../kit/index.ts';
 import './craft.css';
-import { filterCrafts, migrateLegacyPrefs, PREFS_KEY, SCHEMA, type CraftQuery, type KindFilter, type MarketFilter } from './helpers.ts';
+import { createChainsPane } from './chainsPane.ts';
+import { filterCrafts, migrateLegacyPrefs, PREFS_KEY, relabel, SCHEMA, tabOf, tabsHtml, type CraftQuery, type CraftTab, type KindFilter, type MarketFilter } from './helpers.ts';
 import { craftColumns, craftDetail, watchButton, type RenderEnv } from './render.ts';
 
 const NOTES = ['note1', 'note2', 'note3', 'note4'] as const;
@@ -26,6 +28,7 @@ function skeleton(): string {
     <header class="craft-head">
       <h1 class="craft-title" tabindex="-1" data-i18n="craft.title"></h1>
       <p class="craft-intro muted small" data-i18n="craft.intro"></p>
+      ${tabsHtml('recipes')}
     </header>
     <div class="craft-bar"></div>
     <div class="craft-state" hidden></div>
@@ -35,6 +38,46 @@ function skeleton(): string {
 }
 
 export function createCraftView(): View {
+  let host: HTMLElement | null = null;
+  let c: ViewContext | null = null;
+  let tab: CraftTab = 'recipes';
+  let pane: View | null = null;
+  const make = (t: CraftTab) => (t === 'chains' ? createChainsPane() : createRecipesPane());
+  const onClick = (ev: MouseEvent) => {
+    const b = ev.target instanceof Element ? ev.target.closest<HTMLElement>('[data-craft-tab]') : null;
+    if (!b || !c || b.dataset.craftTab === tab) return;
+    // each tab restores its own filters, so the other tab's query is dropped
+    c.navigate({ id: 'craft', query: b.dataset.craftTab === 'chains' ? { view: 'chains' } : {} });
+  };
+  const open = (route: Route) => {
+    tab = tabOf(route.query);
+    pane = make(tab);
+    pane.mount(host!, c!, route);
+  };
+  return {
+    id: 'craft',
+    mount(el, ctx, route) {
+      host = el;
+      c = ctx;
+      el.addEventListener('click', onClick);
+      open(route);
+    },
+    update(route) {
+      if (tabOf(route.query) === tab) return pane?.update?.(route);
+      pane?.unmount();
+      open(route);
+    },
+    unmount() {
+      host?.removeEventListener('click', onClick);
+      pane?.unmount();
+      pane = null;
+      host = null;
+      c = null;
+    },
+  };
+}
+
+function createRecipesPane(): View {
   let root: HTMLElement | null = null;
   let ctx: ViewContext | null = null;
   let qs: QueryState<CraftQuery> | null = null;
@@ -73,7 +116,7 @@ export function createCraftView(): View {
 
   function applyLabels(): void {
     if (!root || !ctx) return;
-    root.querySelectorAll<HTMLElement>('[data-i18n]').forEach((el) => (el.textContent = t(el.dataset.i18n!)));
+    relabel(root);
     const s = ctx.store.get().settings;
     const params = { slots: esc(fmtInt(s.forgeSlots)), orderSlots: esc(fmtInt(s.orderSlots)), limit: esc(fmtInt(s.npcDailyLimit)) };
     $('.craft-note-body').innerHTML = NOTES.map((k) => `<p>${t(`craft.${k}`, params)}</p>`).join('');

@@ -296,3 +296,28 @@
 .craft-note-body {
   margin-top: var(--s-2);
 }
+
+/* ---- Recipes | Chains tabs */
+.craft-tabs {
+  justify-self: start;
+  margin-top: var(--s-1);
+}
+
+/* ---- Chains tab */
+.chain-path {
+  white-space: normal;
+}
+.chain-d-path {
+  margin: 0;
+}
+.chain-ladder tr.chain-start th,
+.chain-ladder tr.chain-start td {
+  background: var(--info-soft);
+}
+.chain-ladder tr.chain-target th,
+.chain-ladder tr.chain-target td {
+  background: var(--accent-soft);
+}
+.chain-ladder tr.chain-below {
+  color: var(--muted);
+}

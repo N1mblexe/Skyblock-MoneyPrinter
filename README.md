@@ -39,7 +39,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
     </td>
     <td width="33%" valign="top">
       <h3>⚒️ Craft &amp; forge</h3>
-      Cheapest source for each ingredient (bazaar, NPC or sub-craft, 3 levels deep), sold to the bazaar, an NPC or the AH.
+      Cheapest source for each ingredient (bazaar, NPC or sub-craft, 3 levels deep), sold to the bazaar, an NPC or the AH. A <b>Chains</b> tab finds multi-step ladders like Wheat → Ench. Wheat → Ench. Hay Bale.
     </td>
   </tr>
   <tr>
@@ -49,7 +49,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
     </td>
     <td valign="top">
       <h3>🎯 Capital planner</h3>
-      Splits your coins and order slots across flips, crafts, books and NPC trades to maximize profit per hour.
+      Splits your coins and order slots across flips, crafts, craft chains, books and NPC trades to maximize profit per hour.
     </td>
     <td valign="top">
       <h3>⭐ Watchlist &amp; alerts</h3>
@@ -112,7 +112,7 @@ The app opens in English. Switch to Turkish with the **EN / TR** buttons in the 
 | 📊 **Overview** | <kbd>g</kbd> <kbd>o</kbd> | Best flips, crafts and book combines, price movers, watchlist, alerts and the mayor at a glance |
 | 🔁 **Flips** | <kbd>g</kbd> <kbd>f</kbd> | Buy and sell the same bazaar product |
 | 📚 **Books** | <kbd>g</kbd> <kbd>b</kbd> | Combine 2^(L−k) level-k books into one level-L book |
-| ⚒️ **Craft & Forge** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft or forge, sell the result |
+| ⚒️ **Craft & Forge** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft or forge, sell the result; the Chains tab covers multi-step ladders |
 | 🧬 **Fusion** | <kbd>g</kbd> <kbd>u</kbd> | Your own shard-fusion recipes, editable, with import and export |
 | 🏪 **NPC & Shops** | <kbd>g</kbd> <kbd>n</kbd> | Bazaar ↔ NPC flips and currency-shop offers valued in coins |
 | 🎯 **Planner** | <kbd>g</kbd> <kbd>p</kbd> | Spread capital and order slots over every opportunity |

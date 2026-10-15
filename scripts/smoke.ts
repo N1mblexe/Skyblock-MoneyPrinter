@@ -18,6 +18,7 @@ import { scanAuctions, type RawAhPage } from '../src/api/auctions.ts';
 import { toSnapshot, validateRaw } from '../src/api/normalize.ts';
 import { catalogFromFile, validateCatalogFile } from '../src/data/catalog.ts';
 import { computeBookCombines } from '../src/domain/books.ts';
+import { bestPerLadder, computeChains } from '../src/domain/chains.ts';
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
@@ -26,7 +27,7 @@ import { matchesQuery, resolveUserInput } from '../src/domain/search.ts';
 import { computeShopRows } from '../src/domain/shops.ts';
 import { defaultSettings } from '../src/state/appState.ts';
 import type { CalcCtx, FlipRow, Settings } from '../src/types/contracts.ts';
-import { filterCrafts, SCHEMA as CRAFT_SCHEMA, type KindFilter, type MarketFilter } from '../src/ui/views/craft/helpers.ts';
+import { CHAIN_SCHEMA, filterChains, filterCrafts, SCHEMA as CRAFT_SCHEMA, type ChainQuery, type KindFilter, type MarketFilter } from '../src/ui/views/craft/helpers.ts';
 import { filterFlips, filterShops, FLIP_SCHEMA as NPC_FLIP_SCHEMA, SHOP_SCHEMA, SEGMENTS, type FlipFilters, type ShopFilters } from '../src/ui/views/npc/npcData.ts';
 import { filterKinds, PLAN_SCHEMA, planOptions, type PlanQuery } from '../src/ui/views/plan/model.ts';
 import { fmtCoins } from '../src/ui/format.ts';
@@ -80,6 +81,8 @@ interface Expected {
   craftTotal: number;
   craftAll: number;
   craftForge: number;
+  chainTotal: number;
+  chainDefault: number;
   npc: Record<(typeof SEGMENTS)[number], number>;
   planPph: { base: string; big: string; baseN: number; bigN: number; positions: number };
   paletteId: string | null;
@@ -113,6 +116,15 @@ async function computeExpected(): Promise<Expected> {
       catalog,
     ).rows.length;
 
+  // chains tab defaults: best move per ladder, min 2 steps, min margin 1 %, suspect hidden while hideSuspicious
+  const chains = computeChains(ctx);
+  const chq = defaults<ChainQuery>(CHAIN_SCHEMA);
+  const chainDefault = filterChains(
+    chains,
+    { q: chq.q, only: chq.best ? bestPerLadder(chains) : null, minSteps: chq.minSteps, minMargin: chq.minMargin, minPph: chq.minPph, showUnpriced: chq.unpriced, hideSuspect: settings.hideSuspicious && !chq.suspect },
+    catalog,
+  ).rows.length;
+
   const npcAll = computeNpcFlips(ctx);
   const ff = defaults<FlipFilters>(NPC_FLIP_SCHEMA);
   const sf = defaults<ShopFilters>(SHOP_SCHEMA);
@@ -122,7 +134,7 @@ async function computeExpected(): Promise<Expected> {
     shops: filterShops(computeShopRows(ctx), sf, catalog, settings.hideSuspicious).rows.length,
   };
 
-  const opps = toOpportunities({ flips: flipRows, crafts, books: computeBookCombines(ctx), npc: npcAll }, settings);
+  const opps = toOpportunities({ flips: flipRows, crafts, chains, books: computeBookCombines(ctx), npc: npcAll }, settings);
   const pq = defaults<PlanQuery>(PLAN_SCHEMA);
   const plan = (capital: number) => allocate(filterKinds(opps, pq), planOptions(pq, { ...settings, capital }));
   const base = plan(settings.capital);
@@ -137,6 +149,8 @@ async function computeExpected(): Promise<Expected> {
     craftTotal: crafts.length,
     craftAll: craftCount('all'),
     craftForge: craftCount('forge'),
+    chainTotal: chains.length,
+    chainDefault,
     npc,
     planPph: { base: fmtCoins(base.profitPerHour), big: fmtCoins(big.profitPerHour), baseN: base.profitPerHour, bigN: big.profitPerHour, positions: base.allocations.length },
     paletteId: resolveUserInput(catalog, 'enchanted gold', new Set(Object.keys(snap.products))),
@@ -450,6 +464,19 @@ async function craftSuite(env: Env, exp: Expected): Promise<void> {
     await go(page, '#/craft?kind=all');
     const all = await until(counts, (xs) => xs.includes(exp.craftAll));
     check(all.includes(exp.craftAll) && exp.craftAll !== exp.craftForge, `${L} kind=all shows the domain count (${exp.craftAll}; UI ${all.join('/')})`);
+  });
+  await step(`${L} craft chains tab`, async () => {
+    await page.click(tid('craft-tab-chains'));
+    const h = await until(async () => hash(page), (x) => x.startsWith('#/craft?view=chains'));
+    const n = await until(async () => ints(await textOf(page.locator(tid('chain-count')))), (xs) => xs.includes(exp.chainDefault) && xs.includes(exp.chainTotal));
+    check(
+      h.startsWith('#/craft?view=chains') && n.includes(exp.chainDefault) && n.includes(exp.chainTotal),
+      `${L} Chains tab shows the domain count (${exp.chainDefault} of ${exp.chainTotal} moves; UI ${n.join('/')}, ${h})`,
+    );
+    await page.locator('.chains-view tbody tr[data-key]').first().locator('td.num').last().click();
+    const steps = await until(() => page.locator('.chain-detail .chain-ladder tbody tr').count(), (x) => x >= 3);
+    check(steps >= 3, `${L} chain row opens its ladder (${steps} tiers)`);
+    await page.keyboard.press('Escape');
   });
 }
 
@@ -806,7 +833,7 @@ try {
   if (exp) {
     console.log(
       `info  expected (fixture, default settings): flips ${exp.flipDefault}/${exp.flipRows.length}, q=${FLIP_Q} ${exp.flipQ}, ` +
-        `crafts ${exp.craftAll} (forge ${exp.craftForge}) of ${exp.craftTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
+        `crafts ${exp.craftAll} (forge ${exp.craftForge}) of ${exp.craftTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
         `plan ${exp.planPph.base} -> ${exp.planPph.big} at 1b (${exp.planPph.positions} positions)`,
     );
   }
