@@ -13,6 +13,7 @@
     "fixture": "tsx scripts/capture-fixture.ts",
     "sanity": "tsx scripts/sanity.ts",
     "smoke": "tsx scripts/smoke.ts",
+    "screenshots": "tsx scripts/screenshots.ts",
     "check:owners": "tsx scripts/check-ownership.ts",
     "coverage": "vitest run --coverage"
   },

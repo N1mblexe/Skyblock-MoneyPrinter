@@ -10,13 +10,9 @@
 // Suites: desktop 1280x800 (everything), mobile 390x844 (shell + routes + cards), error path (API down, manual load).
 // --live: no stubbing, reduced checks (status, routes, flip rows, palette, language, mobile shell).
 // Any console error or uncaught page error fails the run. Exit code 0 = all checks passed (or SKIP: no browser).
-import { spawn, type ChildProcess } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { createServer, type AddressInfo } from 'node:net';
-import { homedir } from 'node:os';
+import type { ChildProcess } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { gunzipSync } from 'node:zlib';
 import { chromium, type Browser, type BrowserContext, type Locator, type Page, type Route as PwRoute } from 'playwright-core';
 import { scanAuctions, type RawAhPage } from '../src/api/auctions.ts';
 import { toSnapshot, validateRaw } from '../src/api/normalize.ts';
@@ -34,8 +30,8 @@ import { filterCrafts, SCHEMA as CRAFT_SCHEMA, type KindFilter, type MarketFilte
 import { filterFlips, filterShops, FLIP_SCHEMA as NPC_FLIP_SCHEMA, SHOP_SCHEMA, SEGMENTS, type FlipFilters, type ShopFilters } from '../src/ui/views/npc/npcData.ts';
 import { filterKinds, PLAN_SCHEMA, planOptions, type PlanQuery } from '../src/ui/views/plan/model.ts';
 import { fmtCoins } from '../src/ui/format.ts';
+import { findBrowser, freePort, loadSmokeFixtures, ROOT, sleep, startServer, withNow } from './lib/browser.ts';
 
-const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const LIVE = process.argv.includes('--live');
 const DESKTOP = { width: 1280, height: 800 };
 const MOBILE = { width: 390, height: 844 };
@@ -63,39 +59,13 @@ async function step(name: string, fn: () => Promise<void>): Promise<void> {
   }
 }
 
-// ---------------------------------------------------------------- browser lookup
-
-function findBrowser(): string | null {
-  const cands: string[] = [];
-  if (process.env.CHROME_PATH) cands.push(process.env.CHROME_PATH);
-  try {
-    cands.push(chromium.executablePath());
-  } catch {
-    /* no bundled path */
-  }
-  const cache = join(homedir(), '.cache', 'ms-playwright');
-  const dirs = (p: string) => {
-    try {
-      return readdirSync(p, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort().reverse();
-    } catch {
-      return [];
-    }
-  };
-  for (const d of dirs(cache)) cands.push(join(cache, d, 'chrome-headless-shell-linux64', 'chrome-headless-shell'));
-  for (const d of dirs(cache)) for (const sub of dirs(join(cache, d))) if (sub.startsWith('chrome-linux')) cands.push(join(cache, d, sub, 'chrome'));
-  if (process.env.CHROME_PATH && !existsSync(process.env.CHROME_PATH)) console.warn(`CHROME_PATH=${process.env.CHROME_PATH} does not exist; looking elsewhere`);
-  return cands.find((p) => p && existsSync(p)) ?? null;
-}
-
 // ---------------------------------------------------------------- fixtures + expected values (domain code)
 
 const fx = (p: string) => join(ROOT, p);
-const BAZAAR_TEXT = LIVE ? '' : gunzipSync(readFileSync(fx('tests/fixtures/smoke/bazaar.json.gz'))).toString('utf8');
-const AH_PAGE: RawAhPage | null = LIVE ? null : { ...(JSON.parse(readFileSync(fx('tests/fixtures/ah-page.json'), 'utf8')) as RawAhPage), page: 0, totalPages: 1 };
-const ELECTION_TEXT = LIVE ? '' : readFileSync(fx('tests/fixtures/election.json'), 'utf8');
-
-/** Bazaar body with lastUpdated = now (the poller only emits a snapshot when lastUpdated changes). */
-const withNow = (text: string) => text.replace(/"lastUpdated":\s*\d+/, `"lastUpdated":${Date.now()}`);
+const FIXTURES = LIVE ? null : loadSmokeFixtures();
+const BAZAAR_TEXT = FIXTURES?.bazaar ?? '';
+const AH_PAGE: RawAhPage | null = FIXTURES?.ahPage ?? null;
+const ELECTION_TEXT = FIXTURES?.election ?? '';
 
 /** Schema defaults as the view's query state decodes them with an empty URL and no stored prefs. */
 function defaults<V>(schema: Record<string, { def: unknown }>): V {
@@ -172,39 +142,6 @@ async function computeExpected(): Promise<Expected> {
     paletteId: resolveUserInput(catalog, 'enchanted gold', new Set(Object.keys(snap.products))),
     mayor: election.mayor?.name ?? null,
   };
-}
-
-// ---------------------------------------------------------------- server
-
-function freePort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const s = createServer();
-    s.on('error', reject);
-    s.listen(0, '127.0.0.1', () => {
-      const port = (s.address() as AddressInfo).port;
-      s.close(() => resolve(port));
-    });
-  });
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-async function startServer(port: number): Promise<ChildProcess> {
-  const server = spawn(join(ROOT, 'node_modules', '.bin', 'vite'), ['preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'], {
-    cwd: ROOT,
-    stdio: 'ignore',
-  });
-  const base = `http://127.0.0.1:${port}/`;
-  for (let i = 0; i < 100; i++) {
-    try {
-      if ((await fetch(base)).ok) return server;
-    } catch {
-      /* not up yet */
-    }
-    await sleep(100);
-  }
-  server.kill();
-  throw new Error('preview server did not start');
 }
 
 // ---------------------------------------------------------------- browser env (routes + error collection)
@@ -745,7 +682,7 @@ async function mobileSuite(browser: Browser, exp: Expected | null): Promise<void
     const h = await until(async () => hash(page), (x) => x.startsWith('#/npc'));
     const closed = await until(() => isOpen(page, tid('more-sheet')), (x) => !x);
     const h1 = await h1Text(page);
-    const cls = await page.locator(tid('nav-more')).getAttribute('class');
+    const cls = await until(() => page.locator(tid('nav-more')).getAttribute('class'), (c) => !!c && c.includes('has-current'));
     check(h.startsWith('#/npc') && !closed && h1.length > 0, `${L} More -> NPC navigates and closes the sheet (${h}, "${h1}")`);
     check(!!cls && cls.includes('has-current'), `${L} More button marks the current secondary page (class "${cls}")`);
     await page.click(tid('nav-more'));
