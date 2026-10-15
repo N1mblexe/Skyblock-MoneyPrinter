@@ -1,6 +1,7 @@
 import type { Route, RouteId } from '../types/contracts.ts';
 
-const IDS: ReadonlySet<RouteId> = new Set<RouteId>(['flip', 'craft', 'fusion', 'npc', 'item']);
+const IDS: ReadonlySet<RouteId> = new Set<RouteId>(['overview', 'flip', 'craft', 'books', 'npc', 'fusion', 'plan', 'watch', 'item']);
+export const DEFAULT_ROUTE: Route = { id: 'overview' };
 
 function safeDecode(s: string): string {
   try {
@@ -10,7 +11,7 @@ function safeDecode(s: string): string {
   }
 }
 
-/** "#/item/ENCHANTED_GOLD" -> {id:'item', param:'ENCHANTED_GOLD'}; "#/craft?q=gold" -> {id:'craft', query:{q:'gold'}}; unknown -> flip. */
+/** "#/item/ENCHANTED_GOLD" -> {id:'item', param:'ENCHANTED_GOLD'}; "#/craft?q=gold" -> {id:'craft', query:{q:'gold'}}; unknown -> overview. */
 export function parseHash(hash: string): Route {
   let s = hash.startsWith('#') ? hash.slice(1) : hash;
   const qi = s.indexOf('?');
@@ -26,11 +27,11 @@ export function parseHash(hash: string): Route {
     if (Object.keys(q).length) query = q;
   }
 
-  if (!IDS.has(head)) return { id: 'flip' };
+  if (!IDS.has(head)) return { ...DEFAULT_ROUTE };
   const r: Route = { id: head };
   if (head === 'item') {
     const param = safeDecode(segs.slice(1).join('/'));
-    if (!param) return { id: 'flip' };
+    if (!param) return { ...DEFAULT_ROUTE };
     r.param = param;
   }
   if (query) r.query = query;
@@ -50,14 +51,22 @@ export function routeToHash(r: Route): string {
 export interface Router {
   current(): Route;
   navigate(r: Route): void;
+  /** Replace the URL without a history entry or hashchange (filters -> URL); calls onRoute. */
+  replace(r: Route): void;
   destroy(): void;
 }
 
-/** Listens to hashchange and calls onRoute (also once immediately). */
-export function createRouter(onRoute: (r: Route) => void): Router {
-  let cur = parseHash(location.hash);
+/**
+ * Listens to hashchange and calls onRoute (also once immediately).
+ * An empty hash uses `initial()` (e.g. the last visited route), else the default route.
+ */
+export function createRouter(onRoute: (r: Route) => void, initial?: () => Route | null): Router {
+  let cur = location.hash.replace(/^#\/?/, '') === '' ? (initial?.() ?? parseHash('')) : parseHash(location.hash);
   const onHash = () => {
-    cur = parseHash(location.hash);
+    const next = parseHash(location.hash);
+    // replace() already handled this URL (some environments fire hashchange on replaceState)
+    if (routeToHash(next) === routeToHash(cur)) return;
+    cur = next;
     onRoute(cur);
   };
   window.addEventListener('hashchange', onHash);
@@ -68,6 +77,12 @@ export function createRouter(onRoute: (r: Route) => void): Router {
       const hash = routeToHash(r);
       if (hash === location.hash) return;
       location.hash = hash;
+    },
+    replace(r) {
+      const hash = routeToHash(r);
+      cur = parseHash(hash);
+      if (hash !== location.hash) history.replaceState(history.state, '', hash);
+      onRoute(cur);
     },
     destroy() {
       window.removeEventListener('hashchange', onHash);

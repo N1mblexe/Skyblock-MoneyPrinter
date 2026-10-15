@@ -1,222 +1,443 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createStore } from '../../src/state/store.ts';
-import { initialState, defaultSettings } from '../../src/state/appState.ts';
-import type { AppState, Snapshot, Store } from '../../src/types/contracts.ts';
-import { getLang, setLang } from '../../src/i18n/index.ts';
-import { mountShell, type ShellContext } from '../../src/ui/shell.ts';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { LS_VIEWPREFS } from '../../src/config.ts';
+import { dictKeys, getLang } from '../../src/i18n/index.ts';
+import { currentPalette } from '../../src/ui/kit/index.ts';
+import { LS_SHELL } from '../../src/ui/shell.ts';
+import { PRIMARY_NAV } from '../../src/ui/shell/nav.ts';
+import { harness, key, mockMatchMedia, snap, teardown, tick, type Harness } from './shell/helpers.ts';
 
-let store: Store<AppState>;
-let root: HTMLElement;
-let shell: { viewRoot: HTMLElement; destroy(): void } | null = null;
-let ctx: ShellContext;
-
-function snap(lastUpdated: number): Snapshot {
-  return { lastUpdated, fetchedAt: lastUpdated, source: 'live', products: {} };
-}
-const q = <E extends Element = HTMLElement>(sel: string) => root.querySelector<E>(sel)!;
-const tabTexts = () => [...root.querySelectorAll('.tabs .tab')].map((a) => a.textContent);
-
-beforeEach(() => {
-  setLang('tr');
-  store = createStore(initialState({ ...defaultSettings }));
-  root = document.createElement('div');
-  document.body.append(root);
-  ctx = {
-    store,
-    refresh: vi.fn(async () => {}),
-    navigate: vi.fn(),
-    manualLoad: vi.fn(() => null),
-  };
-});
+let h: Harness | null = null;
 afterEach(() => {
-  shell?.destroy();
-  shell = null;
-  document.body.innerHTML = '';
-  delete document.documentElement.dataset.theme;
-  setLang('tr');
+  teardown(h);
+  h = null;
 });
 
-describe('mountShell', () => {
-  it('renders header, tabs, view root and footer in Turkish', () => {
-    shell = mountShell(root, ctx);
-    expect(q('h1').textContent).toBe('Bazaar Masası');
-    expect(q('h1 span').textContent).toBe('Masası');
-    expect(tabTexts()).toEqual(['Flip bulucu', 'Craft flip', 'Shard fusion', 'NPC flip']);
-    expect(q('[data-testid="tab-flip"]').getAttribute('aria-selected')).toBe('true');
-    expect(shell.viewRoot.children).toHaveLength(0);
-    expect(root.contains(shell.viewRoot)).toBe(true);
-    expect(q('footer').textContent).toContain('macro');
-    expect(q('[data-testid="status-pill"]').dataset.status).toBe('loading');
-    expect(q('[data-testid="manual-load"]').tagName).toBe('DETAILS');
-    expect(q<HTMLDetailsElement>('[data-testid="manual-load"]').open).toBe(false);
+const TR_NAV = ['Genel bakış', 'Flipler', 'Kitaplar', 'Craft & Forge', 'Fusion', 'NPC & Dükkanlar', 'Planlayıcı', 'İzleme'];
+const navTexts = (hh: Harness) => hh.qa('.sidebar [data-nav] .sb-label').map((e) => e.textContent);
+
+describe('shell layout + nav', () => {
+  it('renders grouped sidebar nav in Turkish with aria-current on the active route', () => {
+    h = harness();
+    const shell = h.mount();
+    expect(navTexts(h)).toEqual(TR_NAV);
+    expect(h.qa('.sb-gh').map((e) => e.textContent)).toEqual(['Piyasalar', 'Üretim', 'Ticaret', 'Araçlar']);
+    expect(h.q('nav.sb-nav').getAttribute('aria-label')).toBe('Ana menü');
+    expect(h.q('[data-testid="tab-overview"]').getAttribute('aria-current')).toBe('page');
+    expect(h.qa('[aria-current="page"]')).toHaveLength(1);
+    // keyboard hint per item
+    expect(h.q('[data-testid="tab-flip"] .sb-kbd').textContent).toBe('gf');
+    expect(h.q('[data-testid="tab-flip"]').getAttribute('aria-keyshortcuts')).toBe('g f');
+    // view root, skip link, footer
+    expect(shell.viewRoot.id).toBe('view');
+    expect(shell.viewRoot.tagName).toBe('MAIN');
+    expect(h.q('.skip-link').textContent).toBe('İçeriğe geç');
+    expect(h.q('footer').textContent).toContain('macro');
+    expect(h.q('[data-testid="status-pill"]').dataset.status).toBe('loading');
   });
 
-  it('switches language from the toggle and re-renders labels', () => {
-    shell = mountShell(root, ctx);
-    q('[data-testid="lang-en"]').click();
-    expect(store.get().settings.lang).toBe('en');
+  it('active route follows the store; item routes highlight nothing; clicks navigate', () => {
+    h = harness();
+    h.mount();
+    h.store.set({ route: { id: 'npc' } });
+    expect(h.q('[data-testid="tab-npc"]').getAttribute('aria-current')).toBe('page');
+    expect(h.q('[data-testid="tab-overview"]').hasAttribute('aria-current')).toBe(false);
+    h.store.set({ route: { id: 'item', param: 'X' } });
+    expect(h.qa('.sidebar [aria-current]')).toHaveLength(0);
+    h.q('[data-testid="tab-craft"]').click();
+    expect(h.ctx.navigate).toHaveBeenCalledWith({ id: 'craft' });
+    h.q('[data-testid="brand"]').click();
+    expect(h.ctx.navigate).toHaveBeenLastCalledWith({ id: 'overview' });
+    // modifier clicks are left to the browser (new tab)
+    h.ctx.navigate.mockClear();
+    h.q('[data-testid="tab-flip"]').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, ctrlKey: true }));
+    expect(h.ctx.navigate).not.toHaveBeenCalled();
+  });
+
+  it('watchlist badge counts watched items', () => {
+    h = harness();
+    h.mount();
+    const badge = h.q('[data-testid="tab-watch"] .sb-badge');
+    expect(badge.hidden).toBe(true);
+    h.store.set({ watchlist: [{ id: 'A', addedAt: 0 }, { id: 'B', addedAt: 0 }] });
+    expect(badge.hidden).toBe(false);
+    expect(badge.textContent).toBe('2');
+    expect(h.q('[data-testid="tab-watch"] .sb-badge-sr').textContent).toContain('2 izlenen ürün');
+  });
+
+  it('collapses the sidebar and remembers it', () => {
+    h = harness();
+    h.mount();
+    const app = h.q('.app');
+    const btn = h.q<HTMLButtonElement>('[data-testid="sidebar-toggle"]');
+    expect(app.dataset.sidebar).toBe('open');
+    expect(btn.getAttribute('aria-expanded')).toBe('true');
+    btn.click();
+    expect(app.dataset.sidebar).toBe('collapsed');
+    expect(btn.getAttribute('aria-expanded')).toBe('false');
+    expect(JSON.parse(localStorage.getItem(LS_SHELL)!)).toEqual({ collapsed: true });
+    expect(LS_SHELL.startsWith(LS_VIEWPREFS)).toBe(true);
+    // collapsed links get a tooltip with their label
+    expect(h.q('[data-testid="tab-flip"]').title).toBe('Flipler');
+    h.shell!.destroy();
+    h.shell = null;
+    h.mount();
+    expect(h.q('.app').dataset.sidebar).toBe('collapsed');
+  });
+
+  it('switches TR/EN from the top bar and re-renders labels', () => {
+    h = harness();
+    h.mount();
+    h.q('[data-testid="lang-en"]').click();
+    expect(h.store.get().settings.lang).toBe('en');
     expect(getLang()).toBe('en');
     expect(document.documentElement.lang).toBe('en');
-    expect(tabTexts()).toEqual(['Flip finder', 'Craft flip', 'Shard fusion', 'NPC flip']);
-    expect(q('[data-testid="lang-en"]').getAttribute('aria-pressed')).toBe('true');
-    expect(q('.refresh-lbl').textContent).toBe('Refresh');
-    expect(q('.settings-panel summary').textContent).toContain('Global settings');
-    expect(q('[data-field="capital"] .field-label').textContent).toBe('Capital (coins)');
-    expect(q('[data-testid="status-pill"]').textContent).toBe('Loading');
-    q('[data-testid="lang-tr"]').click();
-    expect(tabTexts()[0]).toBe('Flip bulucu');
+    expect(navTexts(h)).toEqual(['Overview', 'Flips', 'Books', 'Craft & Forge', 'Fusion', 'NPC & Shops', 'Planner', 'Watchlist']);
+    expect(h.qa('.sb-gh').map((e) => e.textContent)).toEqual(['Markets', 'Production', 'Trade', 'Tools']);
+    expect(h.q('[data-testid="lang-en"]').getAttribute('aria-pressed')).toBe('true');
+    expect(h.q('.refresh-lbl').textContent).toBe('Refresh');
+    expect(h.q('.skip-link').textContent).toBe('Skip to content');
+    expect(h.q('[data-testid="status-pill"]').textContent).toBe('Loading');
+    expect(h.q('.brand-name').textContent).toBe('Bazaar Desk');
+    h.q('[data-testid="lang-tr"]').click();
+    expect(navTexts(h)[0]).toBe('Genel bakış');
   });
 
-  it('applies initial lang from settings', () => {
-    store.set((s) => ({ settings: { ...s.settings, lang: 'en' } }));
-    shell = mountShell(root, ctx);
+  it('applies initial lang, theme and density from settings', () => {
+    h = harness();
+    h.store.set((s) => ({ settings: { ...s.settings, lang: 'en', theme: 'dark', density: 'compact' } }));
+    h.mount();
     expect(getLang()).toBe('en');
-    expect(q('h1').textContent).toBe('Bazaar Desk');
-  });
-
-  it('applies theme to <html data-theme>', () => {
-    shell = mountShell(root, ctx);
-    expect(document.documentElement.dataset.theme).toBeUndefined();
-    q('[data-theme-set="dark"]').click();
-    expect(store.get().settings.theme).toBe('dark');
     expect(document.documentElement.dataset.theme).toBe('dark');
-    store.set((s) => ({ settings: { ...s.settings, theme: 'light' } }));
-    expect(document.documentElement.dataset.theme).toBe('light');
-    expect(q('[data-theme-set="light"]').getAttribute('aria-pressed')).toBe('true');
-    q('[data-theme-set="auto"]').click();
+    expect(document.documentElement.dataset.density).toBe('compact');
+    h.store.set((s) => ({ settings: { ...s.settings, theme: 'auto', density: 'comfortable' } }));
     expect(document.documentElement.hasAttribute('data-theme')).toBe(false);
-  });
-
-  it('tab click navigates; active tab follows route; item highlights nothing', () => {
-    shell = mountShell(root, ctx);
-    q('[data-testid="tab-craft"]').click();
-    expect(ctx.navigate).toHaveBeenCalledWith({ id: 'craft' });
-    store.set({ route: { id: 'npc' } });
-    expect(q('[data-testid="tab-npc"]').getAttribute('aria-selected')).toBe('true');
-    expect(q('[data-testid="tab-flip"]').getAttribute('aria-selected')).toBe('false');
-    store.set({ route: { id: 'item', param: 'X' } });
-    expect(root.querySelectorAll('.tab[aria-selected="true"]')).toHaveLength(0);
+    expect(document.documentElement.dataset.density).toBe('comfortable');
   });
 
   it('refresh button calls ctx.refresh with busy state', async () => {
+    h = harness();
     let resolve!: () => void;
-    ctx.refresh = vi.fn(() => new Promise<void>((r) => (resolve = r)));
-    shell = mountShell(root, ctx);
-    const btn = q<HTMLButtonElement>('[data-testid="refresh-btn"]');
+    h.ctx.refresh.mockImplementation(() => new Promise<void>((r) => (resolve = r)));
+    h.mount();
+    const btn = h.q<HTMLButtonElement>('[data-testid="refresh-btn"]');
     btn.click();
-    expect(ctx.refresh).toHaveBeenCalledTimes(1);
+    expect(h.ctx.refresh).toHaveBeenCalledTimes(1);
     expect(btn.disabled).toBe(true);
+    expect(btn.getAttribute('aria-busy')).toBe('true');
     expect(btn.textContent).toContain('Yenileniyor');
     btn.click();
-    expect(ctx.refresh).toHaveBeenCalledTimes(1);
+    expect(h.ctx.refresh).toHaveBeenCalledTimes(1);
     resolve();
     await vi.waitFor(() => expect(btn.disabled).toBe(false));
     expect(btn.textContent).toContain('Yenile');
   });
 
-  it('shows catalog error banner', () => {
-    shell = mountShell(root, ctx);
-    const banner = q('.catalog-banner');
+  it('shows the catalog error banner', () => {
+    h = harness();
+    h.mount();
+    const banner = h.q('.catalog-banner');
     expect(banner.hidden).toBe(true);
-    store.set({ catalogError: 'HTTP 404' });
+    h.store.set({ catalogError: 'HTTP 404' });
     expect(banner.hidden).toBe(false);
+    expect(banner.getAttribute('role')).toBe('alert');
     expect(banner.textContent).toContain('HTTP 404');
   });
 
-  it('auto-opens manual load on error without snapshot', () => {
-    shell = mountShell(root, ctx);
-    const panel = q<HTMLDetailsElement>('[data-testid="manual-load"]');
-    store.set({ status: 'error', lastError: 'Failed to fetch' });
+  it('auto-opens the manual-load panel inline on error without a snapshot; paste goes to ctx.manualLoad', () => {
+    h = harness();
+    h.ctx.manualLoad.mockReturnValue('bad json');
+    h.mount();
+    // lives in the settings drawer until needed
+    expect(h.root.querySelector('[data-testid="manual-load"]')).toBeNull();
+    h.store.set({ status: 'error', lastError: 'Failed to fetch' });
+    const panel = h.root.querySelector<HTMLDetailsElement>('.manual-inline [data-testid="manual-load"]')!;
+    expect(panel).not.toBeNull();
     expect(panel.open).toBe(true);
-    const pill = q('[data-testid="status-pill"]');
-    expect(pill.dataset.status).toBe('error');
-    expect(pill.title).toContain('Failed to fetch');
-    expect(q('.status-err').textContent).toBe('Failed to fetch');
-  });
+    expect(h.q('[data-testid="status-pill"]').dataset.status).toBe('error');
+    expect(h.q('.status-err').textContent).toBe('Failed to fetch');
 
-  it('manual paste calls ctx.manualLoad and shows the error', () => {
-    ctx.manualLoad = vi.fn(() => 'bad json');
-    shell = mountShell(root, ctx);
-    const zone = q('.paste');
     const ev = new Event('paste', { bubbles: true, cancelable: true }) as ClipboardEvent;
     Object.defineProperty(ev, 'clipboardData', { value: { getData: () => '{"x":1}' } });
-    zone.dispatchEvent(ev);
-    expect(ctx.manualLoad).toHaveBeenCalledWith('{"x":1}');
-    expect(q('.msg').textContent).toBe('bad json');
-    expect(q('.msg').classList.contains('err')).toBe(true);
-    (ctx.manualLoad as ReturnType<typeof vi.fn>).mockReturnValue(null);
-    zone.dispatchEvent(ev);
-    expect(q('.msg').textContent).toBe('Veri yüklendi.');
+    panel.querySelector('.paste')!.dispatchEvent(ev);
+    expect(h.ctx.manualLoad).toHaveBeenCalledWith('{"x":1}');
+    expect(panel.querySelector('.msg')!.textContent).toBe('bad json');
+    h.ctx.manualLoad.mockReturnValue(null);
+    panel.querySelector('.paste')!.dispatchEvent(ev);
+    expect(panel.querySelector('.msg')!.textContent).toBe('Veri yüklendi.');
   });
 
-  it('destroy cleans up', () => {
-    shell = mountShell(root, ctx);
-    shell.destroy();
-    shell = null;
-    expect(root.children).toHaveLength(0);
-    store.set({ catalogError: 'x' });
+  it('moves focus to the view h1 after navigation, but not on the initial load', async () => {
+    h = harness();
+    const shell = h.mount();
+    const outside = document.createElement('button');
+    document.body.append(outside);
+    outside.focus();
+    // initial route (router's first show) in the same task: no focus move
+    h.store.set({ route: { id: 'flip' } });
+    shell.viewRoot.innerHTML = '<h1>Flipler</h1>';
+    await tick(60);
+    expect(document.activeElement).toBe(outside);
+    // a later navigation focuses the new view's h1
+    h.store.set({ route: { id: 'craft' } });
+    shell.viewRoot.innerHTML = '<h1>Craft</h1><input>';
+    await tick(80);
+    const h1 = shell.viewRoot.querySelector('h1')!;
+    expect(document.activeElement).toBe(h1);
+    expect(h1.getAttribute('tabindex')).toBe('-1');
+    // query-only changes don't move focus
+    outside.focus();
+    h.store.set({ route: { id: 'craft', query: { q: 'x' } } });
+    await tick(80);
+    expect(document.activeElement).toBe(outside);
+  });
+
+  it('skip link focuses main without changing the hash', async () => {
+    h = harness();
+    const shell = h.mount();
+    const before = location.hash;
+    const ev = new MouseEvent('click', { bubbles: true, cancelable: true });
+    h.q('.skip-link').dispatchEvent(ev);
+    expect(ev.defaultPrevented).toBe(true);
+    await tick(60);
+    expect(document.activeElement).toBe(shell.viewRoot);
+    expect(location.hash).toBe(before);
+  });
+
+  it('destroy releases everything', () => {
+    h = harness();
+    h.mount();
+    h.q('[data-testid="settings-btn"]').click();
+    expect(document.querySelector('.settings-drawer')).not.toBeNull();
+    h.shell!.destroy();
+    h.shell = null;
+    expect(h.root.children).toHaveLength(0);
+    expect(document.querySelector('.kit-drawer')).toBeNull();
+    h.store.set({ catalogError: 'x', election: null, ahProgress: { page: 1, totalPages: 2 } });
+    key('r');
+    key('g');
+    key('f');
+    expect(h.ctx.refresh).not.toHaveBeenCalled();
+    expect(h.ctx.navigate).not.toHaveBeenCalled();
   });
 });
 
-describe('status pill', () => {
-  it('shows freshness from snapshot age and countdown', () => {
-    vi.useFakeTimers();
-    try {
-      const now = Date.now();
-      vi.setSystemTime(now);
-      store.set({ status: 'live', snapshot: snap(now - 30_000), nextPollAt: now + 40_000 });
-      shell = mountShell(root, ctx);
-      const pill = q('[data-testid="status-pill"]');
-      expect(pill.dataset.status).toBe('live');
-      expect(pill.textContent).toBe('Canlı');
-      expect(q('.status-age').textContent).toBe('veri 30 sn önce');
-      expect(q('.status-next').textContent).toBe('yenileme 40 sn');
-      vi.advanceTimersByTime(5000);
-      expect(q('.status-age').textContent).toBe('veri 35 sn önce');
-      expect(q('.status-next').textContent).toBe('yenileme 35 sn');
-      // snapshot ages past thresholds while fetches "succeed"
-      vi.advanceTimersByTime(4 * 60_000);
-      expect(pill.dataset.status).toBe('stale');
-      vi.advanceTimersByTime(10 * 60_000);
-      expect(pill.dataset.status).toBe('old');
-      store.set({ status: 'cached' });
-      expect(pill.dataset.status).toBe('cached');
-    } finally {
-      vi.useRealTimers();
-    }
+describe('global hotkeys', () => {
+  it('g-sequences navigate, r refreshes, ? opens the shortcuts dialog', () => {
+    h = harness();
+    h.mount();
+    key('g');
+    key('f');
+    expect(h.ctx.navigate).toHaveBeenCalledWith({ id: 'flip' });
+    key('g');
+    key('w');
+    expect(h.ctx.navigate).toHaveBeenLastCalledWith({ id: 'watch' });
+    key('r');
+    expect(h.ctx.refresh).toHaveBeenCalledTimes(1);
+    key('?', { shiftKey: true });
+    const dlg = h.q('[data-testid="shortcuts-dialog"]');
+    expect(dlg.hasAttribute('open')).toBe(true);
+    const text = dlg.textContent!;
+    expect(text).toContain('Klavye kısayolları');
+    for (const label of TR_NAV) expect(text).toContain(`${label} sayfasına git`);
+    expect(text).toContain('Komut paletini aç');
+    expect(text).toContain('CSV');
+    // global hotkeys are inert while an overlay is open
+    key('r');
+    expect(h.ctx.refresh).toHaveBeenCalledTimes(1);
+    // Escape closes
+    key('Escape', {}, dlg);
+    expect(dlg.hasAttribute('open')).toBe(false);
+  });
+
+  it('leaves s/e to the views (not consumed globally)', () => {
+    h = harness();
+    h.mount();
+    expect(key('s').defaultPrevented).toBe(false);
+    expect(key('e').defaultPrevented).toBe(false);
+  });
+
+  it('ignores hotkeys while typing', () => {
+    h = harness();
+    h.mount();
+    const inp = document.createElement('input');
+    document.body.append(inp);
+    inp.focus();
+    key('r', {}, inp);
+    key('g', {}, inp);
+    key('o', {}, inp);
+    expect(h.ctx.refresh).not.toHaveBeenCalled();
+    expect(h.ctx.navigate).not.toHaveBeenCalled();
   });
 });
 
-describe('settings panel', () => {
-  it('writes validated values to the store', () => {
-    shell = mountShell(root, ctx);
-    const set = (name: string, value: string) => {
-      const el = q<HTMLInputElement>(`[name="${name}"]`);
-      el.value = value;
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-      return el;
-    };
-    set('share', '10');
-    expect(store.get().settings.share).toBeCloseTo(0.1);
-    set('capital', '12m');
-    expect(store.get().settings.capital).toBe(12_000_000);
-    expect(q<HTMLInputElement>('[name="capital"]').value).toBe('12.000.000');
-    set('capital', '3.500.000');
-    expect(store.get().settings.capital).toBe(3_500_000);
-    set('taxRate', '0.01125');
-    expect(store.get().settings.taxRate).toBe(0.01125);
-    set('sellMode', 'insta');
-    expect(store.get().settings.sellMode).toBe('insta');
-    const bad = set('forgeSlots', '99');
-    expect(store.get().settings.forgeSlots).toBe(defaultSettings.forgeSlots);
-    expect(bad.getAttribute('aria-invalid')).toBe('true');
-    const cb = q<HTMLInputElement>('[name="hideSuspicious"]');
-    cb.checked = false;
-    cb.dispatchEvent(new Event('change', { bubbles: true }));
-    expect(store.get().settings.hideSuspicious).toBe(false);
-    // external change syncs into the form
-    store.set((s) => ({ settings: { ...s.settings, cycleHours: 4 } }));
-    expect(q<HTMLInputElement>('[name="cycleHours"]').value).toBe('4');
+describe('command palette', () => {
+  const products = { ENCHANTED_GOLD: {}, ENCHANTED_DIAMOND: {}, BOOSTER_COOKIE: {} } as never;
+  const type = (hh: Harness, text: string) => {
+    const input = hh.q<HTMLInputElement>('.kit-palette-input');
+    input.value = text;
+    input.dispatchEvent(new Event('input'));
+    return input;
+  };
+  const groups = (hh: Harness) => hh.qa('.kp-glabel').map((g) => g.textContent);
+
+  it('opens with "/" and Ctrl+K, finds an item and navigates to it', () => {
+    h = harness({ snapshot: snap(Date.now(), products) });
+    h.mount();
+    key('/');
+    expect(currentPalette()).not.toBeNull();
+    expect(h.q<HTMLInputElement>('.kit-palette-input').placeholder).toBe('Ürün, sayfa veya komut ara…');
+    // empty query: pages + commands
+    expect(groups(h)).toEqual(['Sayfalar', 'Komutlar']);
+    const input = type(h, 'enchanted gold');
+    expect(groups(h)).toEqual(['Ürünler']);
+    expect(h.q('.kp-opt .kp-hint').textContent).toBe('ENCHANTED_GOLD');
+    key('Enter', {}, input);
+    expect(currentPalette()).toBeNull();
+    expect(h.ctx.navigate).toHaveBeenCalledWith({ id: 'item', param: 'ENCHANTED_GOLD' });
+
+    key('k', { ctrlKey: true });
+    expect(currentPalette()).not.toBeNull();
+    currentPalette()!.close();
+    h.q('[data-testid="palette-btn"]').click();
+    expect(currentPalette()).not.toBeNull();
+  });
+
+  it('pages and commands run', () => {
+    h = harness();
+    h.mount();
+    key('/');
+    key('Enter', {}, type(h, 'kitap'));
+    expect(h.ctx.navigate).toHaveBeenCalledWith({ id: 'books' });
+
+    key('/');
+    key('Enter', {}, type(h, 'yoğunluğu'));
+    expect(h.store.get().settings.density).toBe('compact');
+    expect(document.documentElement.dataset.density).toBe('compact');
+
+    key('/');
+    key('Enter', {}, type(h, 'ingilizce'));
+    expect(h.store.get().settings.lang).toBe('en');
+
+    key('/');
+    key('Enter', {}, type(h, 'refresh'));
+    expect(h.ctx.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the AH scan command only when the shell can trigger it', () => {
+    h = harness();
+    h.mount();
+    key('/');
+    type(h, 'müzayede');
+    expect(h.qa('.kp-opt')).toHaveLength(0);
+    currentPalette()!.close();
+    h.shell!.destroy();
+
+    h.ctx.scanAh = vi.fn();
+    h.mount();
+    key('/');
+    key('Enter', {}, type(h, 'müzayede'));
+    expect(h.ctx.scanAh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('mayor chip + AH status', () => {
+  const election = {
+    year: 412,
+    mayor: { key: 'dungeons', name: 'Paul', perks: [{ name: 'Marauder', description: 'Dungeon reward chests are 20% cheaper.' }] },
+    minister: { key: 'mining', name: 'Cole', perk: { name: 'Mining Fiesta', description: 'More mining.', minister: true } },
+    fetchedAt: 0,
+  };
+
+  it('shows mayor, minister and perks', () => {
+    h = harness();
+    h.mount();
+    const wrap = h.q('.mayor');
+    expect(wrap.hidden).toBe(true);
+    h.store.set({ election });
+    expect(wrap.hidden).toBe(false);
+    const chip = h.q<HTMLButtonElement>('[data-testid="mayor-chip"]');
+    expect(chip.textContent).toBe('Paul · Cole');
+    expect(chip.getAttribute('aria-label')).toBe('Belediye başkanı: Paul, Bakan: Cole');
+    expect(chip.title).toContain('Marauder');
+    expect(chip.getAttribute('aria-expanded')).toBe('false');
+    chip.click();
+    const pop = h.q('.mayor-pop');
+    expect(pop.hidden).toBe(false);
+    expect(chip.getAttribute('aria-expanded')).toBe('true');
+    expect(pop.textContent).toContain('Dungeon reward chests are 20% cheaper.');
+    expect(pop.textContent).toContain('Mining Fiesta');
+    expect(pop.textContent).toContain('SkyBlock yılı 412');
+    key('Escape');
+    expect(pop.hidden).toBe(true);
+    // outside click also closes
+    chip.click();
+    document.body.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    expect(pop.hidden).toBe(true);
+  });
+
+  it('shows AH scan progress, then the snapshot age', () => {
+    h = harness();
+    h.mount();
+    const el = h.q('[data-testid="ah-status"]');
+    expect(el.hidden).toBe(true);
+    h.store.set({ ahProgress: { page: 3, totalPages: 40 } });
+    expect(el.hidden).toBe(false);
+    expect(el.dataset.state).toBe('scanning');
+    expect(el.textContent).toContain('Müzayede taranıyor 3/40');
+    const bar = el.querySelector('[role="progressbar"]')!;
+    expect(bar.getAttribute('aria-valuenow')).toBe('3');
+    expect(bar.getAttribute('aria-valuemax')).toBe('40');
+    h.store.set({ ahProgress: null, ah: { fetchedAt: Date.now() - 120_000, lastUpdated: 0, lowestBin: {}, failedPages: [5] } });
+    expect(el.dataset.state).toBe('idle');
+    expect(el.textContent).toContain('AH 2 dk');
+    expect(el.title).toContain('1 sayfa okunamadı');
+  });
+});
+
+describe('mobile layout', () => {
+  it('turns the sidebar into a bottom nav with 4 primary items and a More sheet', () => {
+    mockMatchMedia(true);
+    h = harness();
+    h.mount();
+    expect(h.q('.app').dataset.layout).toBe('mobile');
+    const visible = h.qa('.sidebar .sb-item').filter((li) => !li.hidden);
+    expect(visible.map((li) => li.querySelector<HTMLElement>('[data-nav]')!.dataset.nav)).toEqual([...PRIMARY_NAV]);
+    const more = h.q<HTMLButtonElement>('[data-testid="nav-more"]');
+    expect(more.hidden).toBe(false);
+    expect(more.textContent).toBe('Daha fazla');
+    more.click();
+    const sheet = h.q('[data-testid="more-sheet"]');
+    expect(sheet.hasAttribute('open')).toBe(true);
+    expect(more.getAttribute('aria-expanded')).toBe('true');
+    expect([...sheet.querySelectorAll<HTMLElement>('[data-nav]')].map((a) => a.dataset.nav)).toEqual(['books', 'fusion', 'npc', 'plan']);
+    // an active secondary route marks the More button
+    h.store.set({ route: { id: 'plan' } });
+    expect(more.classList.contains('has-current')).toBe(true);
+    expect(sheet.querySelector('[data-nav="plan"]')!.getAttribute('aria-current')).toBe('page');
+    sheet.querySelector<HTMLElement>('[data-testid="more-npc"]')!.click();
+    expect(h.ctx.navigate).toHaveBeenCalledWith({ id: 'npc' });
+    expect(sheet.hasAttribute('open')).toBe(false);
+    // settings reachable from the sheet
+    more.click();
+    h.q('[data-testid="more-settings"]').click();
+    expect(h.q('[data-testid="settings-drawer"]').hasAttribute('open')).toBe(true);
+  });
+
+  it('desktop shows every item and hides More', () => {
+    mockMatchMedia(false);
+    h = harness();
+    h.mount();
+    expect(h.q('.app').dataset.layout).toBe('desktop');
+    expect(h.qa('.sidebar .sb-item').every((li) => !li.hidden)).toBe(true);
+    expect(h.q('[data-testid="nav-more"]').hidden).toBe(true);
+  });
+});
+
+describe('shell i18n', () => {
+  it('TR/EN parity of the shell dictionary', () => {
+    const { tr, en } = dictKeys('shell');
+    expect(tr.length).toBeGreaterThan(20);
+    expect(en).toEqual(tr);
   });
 });

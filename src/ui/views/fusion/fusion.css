@@ -1,139 +1,374 @@
-/* fusion view styles (owner: fusion view) */
+/* Shard fusion view (owner: npc-fusion). Theme tokens only. */
 .fusion-view {
   display: grid;
-  gap: 14px;
+  gap: var(--s-3);
+  min-width: 0;
 }
-.fu-top > h2 {
-  margin: 0 0 4px;
+.fu-top > h1 {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-2xl);
+}
+.fu-top > h1:focus {
+  outline: none;
+}
+.fu-top > h1:focus-visible {
+  box-shadow: var(--focus-ring);
 }
 .fu-top > p {
   margin: 0;
-  max-width: 75ch;
+  max-width: 90ch;
 }
-.fu-actions {
-  flex-wrap: nowrap;
+
+/* toolbar */
+.fu-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2) var(--s-3);
 }
-.fu-actions .fu-quick {
+.fu-tb-left,
+.fu-tb-right {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+.fu-count {
+  color: var(--muted);
+  font-size: var(--fs-sm);
+}
+.fu-sort-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+.fu-sort-field .field-label {
+  margin: 0;
+}
+.fu-sort,
+.fu-quick {
   width: auto;
   max-width: 100%;
   min-width: 0;
-  flex: 0 1 260px;
 }
-.fu-actions .fu-add {
-  flex: none;
+.fu-quick {
+  flex: 0 1 240px;
 }
+.fu-sort-hint {
+  color: var(--warn);
+}
+
+/* list */
 .fu-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
   display: grid;
-  gap: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  overflow: hidden;
+}
+.fu-list > .fu-empty {
+  border: 0;
+  box-shadow: none;
 }
 .fu-empty p {
-  margin: 4px 0;
+  margin: var(--s-1) 0;
 }
 
-/* one recipe card */
+/* one recipe per row: # | A × qa + B × qb → OUT × qo | results | actions */
 .fu-row {
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 2.5ch minmax(0, 5fr) minmax(0, 4fr) auto;
+  align-items: start;
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-2) var(--s-3);
+  border-top: 1px solid var(--line);
+}
+.fu-row:first-child {
+  border-top: 0;
+}
+.fu-row:hover,
+.fu-row:focus-within {
+  background: var(--row-hover);
 }
 .fu-row-missing {
-  border-color: var(--bad);
+  box-shadow: inset 3px 0 0 var(--bad);
 }
-.fu-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+.fu-num {
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  color: var(--muted);
+  padding-top: 6px;
+  text-align: right;
 }
-.fu-head .fu-title {
-  margin: 0;
-}
-
-/* A × qa + B × qb → OUT × qo */
 .fu-eq {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 10px;
+  gap: var(--s-1) var(--s-2);
   align-items: start;
-}
-.fu-term {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 76px;
-  gap: 6px 8px;
   min-width: 0;
 }
-.fu-term-out .fu-item {
-  border-color: var(--accent);
-}
-.fu-qty {
-  width: 100%;
-}
-.fu-op {
-  font-family: var(--f-display);
-  font-size: 1.6rem;
-  font-weight: 600;
-  line-height: 1;
-  color: var(--muted);
-  align-self: start;
-  padding-top: 26px;
-}
-.fu-unit {
-  grid-column: 1 / -1;
-  min-height: 2.6em;
-  color: var(--muted);
-  line-height: 1.35;
-  overflow-wrap: anywhere;
-}
-.fu-unit .fu-name {
-  color: var(--ink);
-}
-.fu-unit .fu-name a {
-  color: inherit;
-}
-.fu-unit .fu-price {
-  text-align: left;
-}
-
-/* results strip */
-.fu-res {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px 12px;
-  padding: 10px 12px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-}
-.fu-stat {
+.fu-term {
   display: grid;
   gap: 2px;
   min-width: 0;
 }
+.fu-in {
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+  min-width: 0;
+}
+.fu-in .fu-item {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
+  padding-block: 4px;
+}
+.fu-in .fu-qty {
+  flex: 0 0 5.5ch;
+  width: 5.5ch;
+  padding-inline: 4px;
+  padding-block: 4px;
+  text-align: right;
+}
+.fu-term-out .fu-item {
+  border-color: var(--accent);
+}
+.fu-x,
+.fu-op {
+  color: var(--muted);
+  font-family: var(--f-mono);
+}
+.fu-op {
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  padding-top: 5px;
+}
+.fu-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px var(--s-1);
+  min-height: 1.4em;
+  color: var(--muted);
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.fu-sub .fu-name {
+  color: var(--ink);
+}
+.fu-sub .fu-name a {
+  color: inherit;
+}
+.fu-sub .fu-name .id-sub {
+  display: none;
+}
+.fu-sub .fu-price {
+  text-align: left;
+  margin-left: auto;
+}
+
+/* shard chips */
+.fu-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.fu-chip {
+  display: inline-block;
+  padding: 0 5px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  font-size: var(--fs-xs);
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.fu-r-common {
+  color: var(--ink);
+}
+.fu-r-uncommon {
+  color: var(--good);
+  border-color: var(--good);
+  background: var(--good-soft);
+}
+.fu-r-rare {
+  color: var(--info);
+  border-color: var(--info);
+  background: var(--info-soft);
+}
+.fu-r-epic {
+  color: var(--violet);
+  border-color: var(--violet);
+  background: var(--violet-soft);
+}
+.fu-r-legendary {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.fu-r-mythic,
+.fu-r-special {
+  color: var(--bad);
+  border-color: var(--bad);
+  background: var(--bad-soft);
+}
+.fu-align {
+  font-style: italic;
+}
+
+/* results */
+.fu-res {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 2px var(--s-2);
+  min-width: 0;
+}
+.fu-stat {
+  display: grid;
+  gap: 0;
+  min-width: 0;
+}
 .fu-k {
-  font-size: 0.72rem;
+  font-size: var(--fs-xs);
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .fu-v {
   text-align: left;
-  font-size: 1.05rem;
+  font-size: var(--fs-md);
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fu-s-pph .fu-v.pos {
+  font-weight: 700;
 }
 .fu-msg {
   grid-column: 1 / -1;
   margin: 0;
 }
 
+/* row actions */
+.fu-acts {
+  display: flex;
+  gap: 2px;
+}
+.fu-act {
+  min-width: 2em;
+  padding-inline: 4px;
+  font-family: var(--f-mono);
+}
+.fu-act:disabled {
+  opacity: 0.35;
+}
+.fu-del {
+  color: var(--bad);
+}
+.fusion-view :is(.fu-act, .fu-item, .fu-qty, .fu-sort, .fu-quick):focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* notes */
+.fu-note > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.fu-note > summary:focus-visible {
+  outline: none;
+  box-shadow: var(--focus-ring);
+}
+
+/* import drawer (rendered inside the kit drawer, outside .fusion-view) */
+.fu-imp {
+  display: grid;
+  gap: var(--s-3);
+}
+.fu-imp p {
+  margin: 0;
+}
+.fu-imp-text {
+  width: 100%;
+  font-family: var(--f-mono);
+  font-size: var(--fs-sm);
+  resize: vertical;
+}
+.fu-imp-mode {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--s-2) var(--s-3);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2) var(--s-4);
+}
+.fu-imp-err:empty {
+  display: none;
+}
+.fu-imp-actions {
+  display: flex;
+  gap: var(--s-2);
+}
+
+@media (max-width: 1100px) {
+  .fu-row {
+    grid-template-columns: 2.5ch minmax(0, 1fr) auto;
+  }
+  .fu-res {
+    grid-column: 2 / 3;
+    grid-row: 2;
+  }
+  .fu-acts {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
 @media (max-width: 760px) {
+  .fu-top > h1 {
+    font-size: var(--fs-xl);
+  }
+  .fu-row {
+    grid-template-columns: 2.5ch minmax(0, 1fr);
+    padding: var(--s-2);
+  }
   .fu-eq {
     grid-template-columns: minmax(0, 1fr);
-    gap: 4px;
+    gap: 2px;
   }
   .fu-op {
     padding: 0;
     text-align: center;
+    line-height: 1;
   }
   .fu-res {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-column: 1 / -1;
+    grid-row: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .fu-acts {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    justify-content: flex-end;
+  }
+  .fu-act {
+    min-width: 2.75em;
+    min-height: 2.25em;
+  }
+  .fu-tb-right {
+    width: 100%;
+  }
+  .fu-quick {
+    flex: 1 1 100%;
   }
 }

@@ -58,6 +58,31 @@ export interface CatalogItemEntry {
   nb?: number;
   /** 1 = is a bazaar product */
   bz?: 1;
+  /** item category from the Hypixel items API (v2) */
+  c?: string;
+  /** 1 = can be auctioned (v2) */
+  ah?: 1;
+  /** attribute shard metadata (v2): rarity, families, alignment */
+  sh?: { r: string; f?: string[]; a?: string };
+}
+
+/** One non-coin (or coin) NPC shop offer (v2): pay `cq` x `cur`, get `oq` x `o`. */
+export interface CatalogShopOffer {
+  /** shop NEU id / name */
+  s: string;
+  /** currency id, e.g. 'SKYBLOCK_COIN', 'SKYBLOCK_BIT', 'SKYBLOCK_COPPER', 'SKYBLOCK_MOTE', or an item id */
+  cur: string;
+  cq: number;
+  o: string;
+  oq: number;
+}
+
+/** Enchanted-book combining rule (v2), keyed by base enchant id (ENCHANTMENT_<BASE>). */
+export interface CatalogBookRule {
+  /** max level from the enchanting table */
+  t?: number;
+  /** curated max level reachable by anvil combining (verified) */
+  m?: number;
 }
 
 export interface CatalogRecipeEntry {
@@ -75,12 +100,16 @@ export interface CatalogRecipeEntry {
 }
 
 export interface CatalogFile {
-  v: 1;
+  v: 1 | 2;
   generatedAt: string;
   neuCommit?: string;
   itemsApiUpdated?: number;
   items: Record<string, CatalogItemEntry>;
   recipes: CatalogRecipeEntry[];
+  /** v2 */
+  shops?: CatalogShopOffer[];
+  /** v2 */
+  books?: Record<string, CatalogBookRule>;
 }
 
 export interface ItemInfo {
@@ -90,6 +119,23 @@ export interface ItemInfo {
   npcSell?: number;
   npcBuy?: number;
   bazaar: boolean;
+  category?: string;
+  auctionable?: boolean;
+  shard?: { rarity: string; family: string[]; alignment?: string };
+}
+
+export interface ShopOffer {
+  shop: string;
+  currency: string;
+  costQty: number;
+  output: string;
+  outQty: number;
+}
+
+export interface BookRule {
+  maxLevel: number;
+  /** true when maxLevel comes from the curated anvil table, false when only from the enchanting table / guess */
+  verified: boolean;
 }
 
 export interface Recipe {
@@ -104,13 +150,16 @@ export interface Recipe {
 }
 
 export interface Catalog {
-  meta: { generatedAt: string; neuCommit?: string };
+  meta: { generatedAt: string; neuCommit?: string; itemsApiUpdated?: number };
   items: Record<string, ItemInfo>;
   recipes: Recipe[];
   byOutput: Map<string, Recipe[]>;
   byInput: Map<string, Recipe[]>;
   /** Display name; falls back to deriveName(id). */
   name(id: string): string;
+  shops: ShopOffer[];
+  /** base = 'ENCHANTMENT_<BASE>' (no level suffix); null when unknown */
+  bookRule(base: string): BookRule | null;
 }
 
 // ---------------------------------------------------------------- Settings
@@ -119,6 +168,9 @@ export type SellMode = 'offer' | 'insta';
 export type Lang = 'tr' | 'en';
 export type Theme = 'auto' | 'light' | 'dark';
 export type TaxRate = 0.0125 | 0.01125 | 0.01;
+/** sequential: buy the batch, then sell it; pipelined: buy and sell overlap (needs 2x capital) */
+export type FillModel = 'sequential' | 'pipelined';
+export type Density = 'comfortable' | 'compact';
 
 export interface Settings {
   taxRate: TaxRate;
@@ -135,6 +187,16 @@ export interface Settings {
   autoRefresh: boolean;
   lang: Lang;
   theme: Theme;
+  /** bazaar order slots available (each order of up to MAX_ORDER_UNITS uses one) */
+  orderSlots: number;
+  /** per-item NPC shop purchase limit per day */
+  npcDailyLimit: number;
+  fillModel: FillModel;
+  density: Density;
+  /** fire browser notifications for alerts (permission still required) */
+  notify: boolean;
+  /** scan the auction house for lowest BIN prices */
+  ahEnabled: boolean;
 }
 
 // ---------------------------------------------------------------- Domain results
@@ -148,6 +210,8 @@ export interface Quote {
   /** (price - top of book) / top of book, 0 for order modes */
   slippage: number;
   source: QuoteSource;
+  /** order price was clamped: raised to the NPC floor, or capped at the ask */
+  clamped?: 'npcFloor' | 'ask';
 }
 
 export interface Throughput {
@@ -155,7 +219,12 @@ export interface Throughput {
   batchQty: number;
   capitalUsed: number;
   fillHours: number;
-  limitedBy: 'volume' | 'capital' | 'depth' | 'forge';
+  limitedBy: 'volume' | 'capital' | 'depth' | 'forge' | 'npcLimit' | 'slots';
+  /** hours to buy / sell one batch */
+  buyHours?: number;
+  sellHours?: number;
+  /** order slots one batch occupies */
+  slots?: number;
 }
 
 export type RiskFlag =
@@ -168,6 +237,8 @@ export type RiskFlag =
   | 'QUICK_DIVERGENCE'
   | 'VOLUME_IMBALANCE'
   | 'PRICE_SPIKE'
+  /** off-bazaar output valued from fewer than AH.minCount auction listings */
+  | 'AH_THIN'
   | 'NO_HISTORY';
 
 export type RiskLevel = 'ok' | 'caution' | 'suspect';
@@ -209,6 +280,8 @@ export interface FlipRow {
   tp: Throughput;
   profitPerHour: number;
   risk: RiskReport;
+  /** buy order price was clamped (NPC floor raised it / ask capped it) */
+  buyClamped?: 'npcFloor' | 'ask';
 }
 
 export interface IngredientLine {
@@ -233,7 +306,9 @@ export interface CraftRow {
   cost: number;
   /** value per craft (after tax if bazaar) */
   value: number;
-  valueSource: 'bazaar' | 'npc';
+  valueSource: 'bazaar' | 'npc' | 'ah';
+  /** output is not a bazaar product (valued at NPC / AH or unpriced) */
+  outputOffBazaar?: boolean;
   profit: number;
   margin: number | null;
   outCraftsPerHour: number;
@@ -276,6 +351,170 @@ export interface FusionRow {
   margin: number | null;
   /** inputs/outputs that could not be resolved or priced */
   missing: string[];
+  tp?: Throughput;
+  risk?: RiskReport;
+  profitPerHour?: number;
+}
+
+export interface BookRow {
+  /** output id, e.g. ENCHANTMENT_SHARPNESS_6 */
+  id: string;
+  name: string;
+  /** ENCHANTMENT_SHARPNESS */
+  base: string;
+  fromLevel: number;
+  toLevel: number;
+  /** input id (level fromLevel) */
+  inputId: string;
+  /** input books per output = 2^(toLevel-fromLevel) */
+  count: number;
+  /** per input book */
+  buyAt: number;
+  /** per output book (before tax) */
+  sellAt: number;
+  /** count * buyAt */
+  cost: number;
+  netSell: number;
+  profit: number;
+  margin: number;
+  tp: Throughput;
+  profitPerHour: number;
+  risk: RiskReport;
+  verified: boolean;
+}
+
+export interface ShopRow {
+  key: string;
+  /** output id */
+  id: string;
+  name: string;
+  shop: string;
+  currency: string;
+  costQty: number;
+  outQty: number;
+  /** coins per offer when sold (after tax if bazaar) */
+  value: number | null;
+  valueSource: 'bazaar' | 'npc' | null;
+  /** value / costQty */
+  coinsPerCurrency: number | null;
+  weekVol: number;
+  risk: RiskReport | null;
+}
+
+export interface MarketStat {
+  id: string;
+  /** history points used */
+  n: number;
+  change1h: number | null;
+  change24h: number | null;
+  /** MAD/median of mid price */
+  volatility: number | null;
+  /** median (ask-bid)/bid */
+  spreadMedian: number | null;
+  /** share of points (0..1) where a bid+tick -> ask-tick flip was profitable after tax */
+  consistency: number | null;
+  /** estimated recent insta-buy / insta-sell volume relative to the weekly average (1 = normal) */
+  buyVolTrend: number | null;
+  sellVolTrend: number | null;
+}
+
+export type OpportunityKind = 'flip' | 'craft' | 'book' | 'npc';
+
+export interface Opportunity {
+  kind: OpportunityKind;
+  /** unique key, e.g. `flip:ID` / `craft:RECIPEKEY` */
+  key: string;
+  /** primary item id (one opportunity per id is allocated) */
+  id: string;
+  name: string;
+  /** coins tied up per unit */
+  unitCost: number;
+  profitPerUnit: number;
+  /** units/hour ignoring capital */
+  unitsPerHour: number;
+  /** max units per cycle (volume/depth bound) */
+  maxUnits: number;
+  /** order slots used */
+  slots: number;
+  risk: RiskReport;
+}
+
+export interface Allocation {
+  opp: Opportunity;
+  units: number;
+  capital: number;
+  slots: number;
+  profitPerHour: number;
+}
+
+export interface PlanResult {
+  allocations: Allocation[];
+  capitalUsed: number;
+  slotsUsed: number;
+  profitPerHour: number;
+}
+
+export interface WatchEntry {
+  id: string;
+  addedAt: number;
+  note?: string;
+}
+
+export type AlertMetric = 'ask' | 'bid' | 'spreadPct' | 'flipMargin' | 'flipProfit';
+
+export interface AlertRule {
+  key: string;
+  id: string;
+  metric: AlertMetric;
+  op: 'lt' | 'gt';
+  value: number;
+  enabled: boolean;
+  cooldownMin: number;
+  lastFiredAt?: number;
+}
+
+export interface AlertEvent {
+  ruleKey: string;
+  id: string;
+  metric: AlertMetric;
+  value: number;
+  at: number;
+}
+
+// ---------------------------------------------------------------- Other market data
+export interface AhPrice {
+  /** lowest BIN price */
+  price: number;
+  /** number of BIN listings seen */
+  count: number;
+}
+
+export interface AhSnapshot {
+  fetchedAt: number;
+  /** Hypixel lastUpdated of page 0 */
+  lastUpdated: number;
+  lowestBin: Record<string, AhPrice>;
+  /** pages skipped after a retry (partial scan) */
+  failedPages?: number[];
+}
+
+export interface AhScanProgress {
+  page: number;
+  totalPages: number;
+}
+
+export interface ElectionPerk {
+  name: string;
+  /** formatting codes stripped */
+  description: string;
+  minister?: boolean;
+}
+
+export interface ElectionInfo {
+  year: number | null;
+  mayor: { key: string; name: string; perks: ElectionPerk[] } | null;
+  minister: { key: string; name: string; perk: ElectionPerk } | null;
+  fetchedAt: number;
 }
 
 export interface CalcCtx {
@@ -283,6 +522,8 @@ export interface CalcCtx {
   catalog: Catalog;
   settings: Settings;
   stats?: (id: string) => PriceStats | null;
+  /** lowest BIN on the auction house, if scanned */
+  ah?: (id: string) => AhPrice | null;
 }
 
 // ---------------------------------------------------------------- Storage
@@ -309,6 +550,11 @@ export interface HistoryRepo {
   stats(id: string): PriceStats | null;
   saveLatest(s: Snapshot): Promise<void>;
   loadLatest(): Promise<Snapshot | null>;
+  /** Sync, cross-item stats from in-memory data; memoized per record, minute (sliding 24h window) and taxRate. */
+  marketStats(taxRate: number): ReadonlyMap<string, MarketStat>;
+  info(): { raw: number; q15: number; oldest: number | null; persistent: boolean };
+  /** Drop all stored history (keeps nothing). */
+  clear(): Promise<void>;
 }
 
 // ---------------------------------------------------------------- Poller / status
@@ -329,7 +575,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'flip' | 'craft' | 'fusion' | 'npc' | 'item';
+export type RouteId = 'overview' | 'flip' | 'craft' | 'books' | 'npc' | 'fusion' | 'plan' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;
@@ -352,9 +598,32 @@ export interface AppState {
   historyTick: number;
   /** ms epoch of the next scheduled poll, null if not scheduled */
   nextPollAt: number | null;
+  watchlist: WatchEntry[];
+  alerts: AlertRule[];
+  /** newest first, capped at ALERTS.logMax */
+  alertLog: AlertEvent[];
+  ah: AhSnapshot | null;
+  /** non-null while an AH scan is running */
+  ahProgress: AhScanProgress | null;
+  election: ElectionInfo | null;
 }
 
 export type TFn = (key: string, params?: Record<string, string | number>) => string;
+
+/** Memoized domain results for the current snapshot/catalog/settings/history. */
+export interface Derived {
+  flips(): FlipRow[];
+  crafts(): CraftRow[];
+  npc(): NpcFlipRow[];
+  books(): BookRow[];
+  shops(): ShopRow[];
+  fusion(): FusionRow[];
+  opportunities(): Opportunity[];
+  marketStats(): ReadonlyMap<string, MarketStat>;
+  calcCtx(): CalcCtx | null;
+}
+
+export type ToastKind = 'info' | 'ok' | 'warn' | 'err';
 
 export interface ViewContext {
   store: Store<AppState>;
@@ -363,6 +632,11 @@ export interface ViewContext {
   t: TFn;
   /** Ask the app to refetch now (header refresh button uses this too). */
   refresh(): Promise<void>;
+  derived: Derived;
+  /** Patch the current route's query (history.replaceState, no new entry, no remount). undefined/'' removes a key. */
+  setQuery(patch: Record<string, string | undefined>): void;
+  toast(msg: string, kind?: ToastKind): void;
+  watch: { has(id: string): boolean; toggle(id: string): void };
 }
 
 export interface View {

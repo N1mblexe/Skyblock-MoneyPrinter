@@ -1,3 +1,4 @@
+import { FILL_MODEL_DEFAULT, NPC_DAILY_LIMIT_DEFAULT, ORDER_SLOTS_DEFAULT, ORDER_SLOTS_MAX } from '../config.ts';
 import type { AppState, Settings } from '../types/contracts.ts';
 
 export const defaultSettings: Settings = {
@@ -11,7 +12,14 @@ export const defaultSettings: Settings = {
   hideSuspicious: true,
   autoRefresh: true,
   lang: 'tr',
-  theme: 'auto',
+  // dark-first terminal look; 'auto' follows the system
+  theme: 'dark',
+  orderSlots: ORDER_SLOTS_DEFAULT,
+  npcDailyLimit: NPC_DAILY_LIMIT_DEFAULT,
+  fillModel: FILL_MODEL_DEFAULT,
+  density: 'comfortable',
+  notify: false,
+  ahEnabled: true,
 };
 
 /** Merge persisted (possibly partial/invalid) settings over defaults. */
@@ -28,6 +36,12 @@ export function sanitizeSettings(raw: unknown): Settings {
   num('share', 0, 1);
   num('cycleHours', 0.05, 168);
   num('forgeSlots', 1, 7);
+  num('orderSlots', 1, ORDER_SLOTS_MAX);
+  num('npcDailyLimit', 1, 1e7);
+  if (r.fillModel === 'sequential' || r.fillModel === 'pipelined') s.fillModel = r.fillModel;
+  if (r.density === 'comfortable' || r.density === 'compact') s.density = r.density;
+  if (typeof r.notify === 'boolean') s.notify = r.notify;
+  if (typeof r.ahEnabled === 'boolean') s.ahEnabled = r.ahEnabled;
   if (r.costMode === 'order' || r.costMode === 'insta') s.costMode = r.costMode;
   if (r.sellMode === 'offer' || r.sellMode === 'insta') s.sellMode = r.sellMode;
   if (typeof r.hideSuspicious === 'boolean') s.hideSuspicious = r.hideSuspicious;
@@ -46,8 +60,14 @@ export function initialState(settings: Settings = defaultSettings): AppState {
     catalogError: null,
     settings,
     fusion: [],
-    route: { id: 'flip' },
+    route: { id: 'overview' },
     historyTick: 0,
     nextPollAt: null,
+    watchlist: [],
+    alerts: [],
+    alertLog: [],
+    ah: null,
+    ahProgress: null,
+    election: null,
   };
 }

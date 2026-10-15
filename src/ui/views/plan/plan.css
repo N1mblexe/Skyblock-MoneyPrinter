@@ -1,0 +1,139 @@
+/* planner view styles. Colors only via theme tokens. */
+.plan-view {
+  min-width: 0;
+  gap: var(--s-3);
+}
+.plan-view > * {
+  min-width: 0;
+}
+.plan-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.plan-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2) var(--s-3);
+}
+.plan-title {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  line-height: 1.1;
+}
+.plan-intro,
+.plan-settings-line,
+.plan-suspect,
+.plan-msg {
+  margin: 0;
+}
+.plan-computing {
+  color: var(--accent);
+  font-family: var(--f-mono);
+}
+
+/* ---- summary bar */
+.plan-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(180px, 100%), 1fr));
+  gap: var(--s-2) var(--s-3);
+  padding: var(--s-3);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.plan-stat {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-width: 0;
+}
+.plan-stat-l {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.plan-stat-v {
+  font-size: var(--fs-xl);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.plan-stat-meter .plan-stat-v {
+  font-size: var(--fs-md);
+}
+.plan-bar {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.plan-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+.plan-bar.is-full .plan-bar-fill {
+  background: var(--accent);
+}
+.plan-hints {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+/* ---- table */
+.plan-kind-flip {
+  background: var(--info-soft);
+  color: var(--info);
+}
+.plan-kind-craft {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.plan-kind-book {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.plan-kind-npc {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.plan-why {
+  display: inline-block;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-size: var(--fs-sm);
+  color: var(--muted);
+}
+.plan-star[aria-pressed="true"] {
+  color: var(--accent);
+}
+
+/* ---- detail panel */
+.plan-detail h3 {
+  margin: var(--s-3) 0 var(--s-1);
+  font-size: var(--fs-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.plan-detail-badges,
+.plan-detail-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-1) var(--s-2);
+  margin: 0 0 var(--s-2);
+}
+.plan-flags {
+  margin: 0;
+  padding-left: 1.1em;
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-sm);
+}

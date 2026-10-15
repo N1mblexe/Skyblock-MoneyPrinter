@@ -1,23 +1,35 @@
-import type { CalcCtx, FlipRow } from '../types/contracts.ts';
-import { afterTax, buySide, planTrade, sellSide, type Leg } from './pricing.ts';
+import type { CalcCtx, FlipRow, Product } from '../types/contracts.ts';
+import { afterTax, buySide, planTrade, sellSide, type Leg, type TradePlan } from './pricing.ts';
 import { assessRisk } from './risk.ts';
+
+/** Plan the bazaar flip of one product with the current settings (no profit filter). null if a side can't be quoted. */
+export function planFlip(id: string, p: Product, ctx: CalcCtx): TradePlan | null {
+  const { catalog, settings } = ctx;
+  const { costMode, sellMode, share, taxRate } = settings;
+  const buy = (q: number): Leg | null => {
+    const s = buySide(p, costMode, share, q, catalog.items[id]?.npcSell);
+    return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp, order: costMode === 'order', clamped: s.quote.clamped };
+  };
+  const sell = (q: number): Leg | null => {
+    const s = sellSide(p, sellMode, share, q);
+    return s && {
+      price: s.quote.price,
+      net: afterTax(s.quote.price, taxRate),
+      rate: s.rate,
+      depth: s.depth,
+      comp: s.comp,
+      order: sellMode === 'offer',
+    };
+  };
+  return planTrade(buy, sell, settings, costMode === 'insta' || sellMode === 'insta');
+}
 
 /** All bazaar flips with profit > 0 (suspect rows included; views filter). */
 export function computeFlips(ctx: CalcCtx): FlipRow[] {
-  const { snap, catalog, settings } = ctx;
-  const { costMode, sellMode, share, taxRate } = settings;
-  const refine = costMode === 'insta' || sellMode === 'insta';
+  const { snap, catalog } = ctx;
   const rows: FlipRow[] = [];
   for (const [id, p] of Object.entries(snap.products)) {
-    const buy = (q: number): Leg | null => {
-      const s = buySide(p, costMode, share, q, catalog.items[id]?.npcSell);
-      return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp };
-    };
-    const sell = (q: number): Leg | null => {
-      const s = sellSide(p, sellMode, share, q);
-      return s && { price: s.quote.price, net: afterTax(s.quote.price, taxRate), rate: s.rate, depth: s.depth, comp: s.comp };
-    };
-    const plan = planTrade(buy, sell, settings, refine);
+    const plan = planFlip(id, p, ctx);
     if (!plan || !(plan.profit > 0) || !(plan.buy.price > 0)) continue;
     rows.push({
       id,
@@ -35,6 +47,7 @@ export function computeFlips(ctx: CalcCtx): FlipRow[] {
       tp: plan.tp,
       profitPerHour: plan.tp.unitsPerHour * plan.profit,
       risk: assessRisk(p, ctx.stats?.(id) ?? null),
+      ...(plan.buy.clamped ? { buyClamped: plan.buy.clamped } : {}),
     });
   }
   return rows;

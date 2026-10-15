@@ -1,7 +1,7 @@
 {
   "name": "bazaar-masasi",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,10 @@
     "data": "tsx scripts/build-data.ts",
     "fixture": "tsx scripts/capture-fixture.ts",
     "sanity": "tsx scripts/sanity.ts",
-    "smoke": "tsx scripts/smoke.ts"
+    "smoke": "tsx scripts/smoke.ts",
+    "screenshots": "tsx scripts/screenshots.ts",
+    "check:owners": "tsx scripts/check-ownership.ts",
+    "coverage": "vitest run --coverage"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

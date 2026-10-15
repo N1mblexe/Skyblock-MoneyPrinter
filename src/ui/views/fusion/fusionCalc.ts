@@ -1,8 +1,8 @@
-// Pure helpers for the fusion view: cached name resolution, per-term unit prices, suggestions.
-import { computeFusion } from '../../../domain/fusion.ts';
+// Pure helpers for the fusion view: cached name resolution, per-term unit prices, suggestions, sort order.
+// Recipe results themselves come from ctx.derived.fusion().
 import { afterTax, buyQuote, sellQuote } from '../../../domain/pricing.ts';
 import { resolveUserInput, searchItems } from '../../../domain/search.ts';
-import type { CalcCtx, Catalog, FusionRecipe, FusionRow, ItemInfo, Settings, Snapshot } from '../../../types/contracts.ts';
+import type { CalcCtx, Catalog, FusionRow, ItemInfo, Settings, Snapshot } from '../../../types/contracts.ts';
 
 const isShard = (id: string) => id.startsWith('SHARD_');
 const RESOLVE_CACHE_MAX = 1000;
@@ -33,50 +33,26 @@ export interface TermDetail {
   name: string | null;
   /** unit buy price (inputs) or pre-tax unit sell price (output); null if unpriced */
   unit: number | null;
+  shard: ItemInfo['shard'] | null;
 }
 
-export interface FusionDetail {
-  row: FusionRow;
-  a: TermDetail;
-  b: TermDetail;
-  out: TermDetail;
-  /** some item field is empty */
-  incomplete: boolean;
-  /** non-empty missing ids/texts */
-  missing: string[];
-}
-
-export function fusionDetails(ctx: CalcCtx, recipes: readonly FusionRecipe[], resolve: Resolver): FusionDetail[] {
+/** Resolved id, display name, unit price and shard metadata of one recipe term. */
+export function termDetail(ctx: CalcCtx, text: string, side: 'buy' | 'sell', resolve: Resolver): TermDetail {
   const { snap, catalog, settings } = ctx;
-  // Pre-resolve so computeFusion's resolveUserInput hits its fast exact-id path.
-  const pre = recipes.map((r) => ({
-    ...r,
-    a: resolve(r.a) ?? r.a,
-    b: resolve(r.b) ?? r.b,
-    out: resolve(r.out) ?? r.out,
-  }));
-  const rows = computeFusion(ctx, pre);
-  const term = (text: string, side: 'buy' | 'sell'): TermDetail => {
-    const id = resolve(text);
-    const p = id ? snap.products[id] : undefined;
-    const q = p
-      ? side === 'buy'
-        ? buyQuote(p, settings.costMode, undefined, catalog.items[id!]?.npcSell)
-        : sellQuote(p, settings.sellMode)
-      : null;
-    return { text, id, name: id ? catalog.name(id) : null, unit: q && Number.isFinite(q.price) ? q.price : null };
+  const id = resolve(text);
+  const p = id ? snap.products[id] : undefined;
+  const q = p
+    ? side === 'buy'
+      ? buyQuote(p, settings.costMode, undefined, catalog.items[id!]?.npcSell)
+      : sellQuote(p, settings.sellMode)
+    : null;
+  return {
+    text,
+    id,
+    name: id ? catalog.name(id) : null,
+    unit: q && Number.isFinite(q.price) ? q.price : null,
+    shard: (id && catalog.items[id]?.shard) || null,
   };
-  return recipes.map((r, i) => {
-    const row = { ...rows[i]!, recipe: r };
-    return {
-      row,
-      a: term(r.a, 'buy'),
-      b: term(r.b, 'buy'),
-      out: term(r.out, 'sell'),
-      incomplete: !r.a.trim() || !r.b.trim() || !r.out.trim(),
-      missing: row.missing.filter((m) => m !== ''),
-    };
-  });
 }
 
 /** Up to `limit` bazaar items for the autocomplete; SHARD_* items first. */
@@ -105,4 +81,27 @@ export function topShards(snap: Snapshot, catalog: Catalog | null, settings: Set
   }
   out.sort((a, b) => b.value - a.value || a.id.localeCompare(b.id));
   return out.slice(0, n);
+}
+
+export const SORT_MODES = ['manual', 'profit', 'pph', 'margin'] as const;
+export type SortMode = (typeof SORT_MODES)[number];
+
+/** Sort metric of a result row (null = unknown, sorts last). */
+export function sortValue(r: FusionRow | null | undefined, mode: SortMode): number | null {
+  if (!r) return null;
+  const v = mode === 'profit' ? r.profit : mode === 'pph' ? r.profitPerHour : mode === 'margin' ? r.margin : null;
+  return v != null && Number.isFinite(v) ? v : null;
+}
+
+/** Display order (indices into `results`): manual = as stored; otherwise descending, nulls last, stable. */
+export function displayOrder(results: readonly (FusionRow | null | undefined)[], mode: SortMode): number[] {
+  const idx = results.map((_, i) => i);
+  if (mode === 'manual') return idx;
+  const val = results.map((r) => sortValue(r, mode));
+  return idx.sort((a, b) => {
+    const x = val[a]!;
+    const y = val[b]!;
+    if (x == null || y == null) return x == null && y == null ? a - b : x == null ? 1 : -1;
+    return y - x || a - b;
+  });
 }

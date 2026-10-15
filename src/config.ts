@@ -2,6 +2,8 @@
 
 export const API_BAZAAR = 'https://api.hypixel.net/v2/skyblock/bazaar';
 export const API_ITEMS = 'https://api.hypixel.net/v2/resources/skyblock/items';
+export const API_AUCTIONS = 'https://api.hypixel.net/v2/skyblock/auctions';
+export const API_ELECTION = 'https://api.hypixel.net/v2/resources/skyblock/election';
 export const CATALOG_URL = `${import.meta.env?.BASE_URL ?? '/'}data/catalog.json`;
 
 // ---- fetching / polling
@@ -22,6 +24,7 @@ export const OLD_AFTER_MS = 10 * 60_000;
 
 // ---- history
 export const HISTORY_DB_NAME = 'bazaar-masasi';
+export const AH_DB_NAME = 'bazaar-masasi-ah';
 export const HISTORY_RAW_KEEP_MS = 3 * 3600_000;
 export const HISTORY_Q15_BUCKET_MS = 15 * 60_000;
 export const HISTORY_Q15_KEEP_MS = 7 * 24 * 3600_000;
@@ -39,8 +42,13 @@ export const CRAFT_RECURSION_DEPTH = 3;
  * Assumed per-item daily purchase limit at NPC shops (in-game limits vary; tune here).
  * Caps NPC-bought ingredients and NPC->bazaar flips so NPC loops don't look unlimited.
  */
-export const NPC_BUY_LIMIT_PER_DAY = 640;
-export const NPC_BUY_RATE_PER_HOUR = NPC_BUY_LIMIT_PER_DAY / 24;
+export const NPC_DAILY_LIMIT_DEFAULT = 640;
+/** Bazaar order slots (default for a mid-game profile; tune in settings). */
+export const ORDER_SLOTS_DEFAULT = 14;
+export const ORDER_SLOTS_MAX = 35;
+export const FILL_MODEL_DEFAULT = 'sequential' as const;
+/** Coins per fusion at the Hunting Box fusion machine. TODO verify in game; 0 = not modelled. */
+export const FUSION_FEE_COINS = 0;
 export const TABLE_MAX_ROWS = 300;
 
 // ---- risk thresholds
@@ -68,11 +76,81 @@ export const RISK = {
     THIN_TOP: 1,
     QUICK_DIVERGENCE: 1,
     VOLUME_IMBALANCE: 1,
+    AH_THIN: 2,
     NO_HISTORY: 0,
   },
+} as const;
+
+// ---- new tools
+export const BOOK = {
+  /** rows above the curated anvil max are hidden unless the user shows unverified rows */
+  hideUnverified: true,
+  /** longest chain considered: 2^4 = 16 input books */
+  maxChainLevels: 4,
+} as const;
+
+export const STATS = {
+  /** points needed before consistency/volatility are reported */
+  consistencyMinPoints: 12,
+  /** movers lists ignore items below this weekly volume (insta buys + insta sells) */
+  moversMinWeekVol: 10_000,
+  topN: 10,
+} as const;
+
+export const OPTIMIZER = {
+  /** never put more than this share of capital into one item */
+  maxShareOfCapitalPerItem: 0.5,
+  excludeSuspect: true,
+} as const;
+
+export const ALERTS = {
+  defaultCooldownMin: 15,
+  logMax: 100,
+} as const;
+
+export const AH = {
+  pollMs: 10 * 60_000,
+  /** parallel page fetches per scan */
+  concurrency: 4,
+  /** fewer BIN listings than this adds an AH thin-market risk flag */
+  minCount: 2,
+} as const;
+
+export const ELECTION_POLL_MS = 30 * 60_000;
+
+export const UI = {
+  rowH: 36,
+  rowHCompact: 28,
+  overscan: 8,
+  /** rows per "load more" page in card layout */
+  cardPage: 50,
+  mobileBp: 760,
+  /** detail panel docks beside the table at/above this width, overlays below */
+  dockBp: 1280,
+  /** tables virtualize above this many rows */
+  virtualizeAbove: 100,
+} as const;
+
+/** Global keyboard shortcuts ('mod' = Ctrl or Cmd; 'g o' = press g then o). */
+export const HOTKEYS = {
+  palette: ['/', 'mod+k'],
+  refresh: ['r'],
+  help: ['?'],
+  star: ['s'],
+  export: ['e'],
+  close: ['Escape'],
+  go: { overview: 'g o', flip: 'g f', craft: 'g c', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', watch: 'g w' },
 } as const;
 
 // ---- localStorage keys
 export const LS_SETTINGS = 'bazaarMasasi.settings';
 export const LS_FUSION = 'bazaarMasasi.fusion';
 export const LS_VIEWPREFS = 'bazaarMasasi.view.'; // + view id
+export const LS_WATCH = 'bazaarMasasi.watch';
+export const LS_ALERTS = 'bazaarMasasi.alerts';
+export const LS_ALERT_LOG = 'bazaarMasasi.alertLog';
+export const LS_LAST_ROUTE = 'bazaarMasasi.lastRoute';
+export const LS_COLUMNS = 'bazaarMasasi.cols.'; // + table id
+/** legacy single-file tool keys (migrated once) */
+export const LS_LEGACY_FUSION = 'bazaarMasasi.recipes';
+export const LS_LEGACY_TAB = 'bazaarMasasi.tab';

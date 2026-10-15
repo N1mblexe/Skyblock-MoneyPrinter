@@ -1,0 +1,40 @@
+{
+ "v": 2,
+ "generatedAt": "2026-10-14T00:00:00Z",
+ "neuCommit": "0123456789abcdef0123456789abcdef01234567",
+ "itemsApiUpdated": 1791302445914,
+ "items": {
+  "ENCHANTED_GOLD": { "n": "Enchanted Gold", "t": "UNCOMMON", "ns": 480, "bz": 1, "ah": 1 },
+  "GOLD_INGOT": { "n": "Gold Ingot", "t": "COMMON", "ns": 3, "nb": 5.5, "bz": 1, "ah": 1 },
+  "SHARD_GROVE": { "n": "Grove Shard", "bz": 1, "sh": { "r": "COMMON", "f": ["Elemental"], "a": "Forest" } },
+  "SHARD_LONE": { "n": "Lone Shard", "bz": 1, "sh": { "r": "RARE" } },
+  "SHARD_BAD": { "n": "Bad Shard", "bz": 1, "sh": { "f": ["X"] } },
+  "ASPECT_OF_THE_END": { "n": "Aspect of the End", "t": "RARE", "ns": 56000, "c": "SWORD", "ah": 1 },
+  "CACTUS_KNIFE": { "n": "Cactus Knife", "t": "UNCOMMON", "ns": 100, "c": "FARMING_TOOL" },
+  "ENCHANTMENT_SHARPNESS_5": { "n": "Sharpness V", "bz": 1 },
+  "ENCHANTMENT_SUNDER_1": { "n": "Sunder I", "bz": 1 },
+  "LARGE_WALNUT": { "n": "Large Walnut", "ns": 1, "bz": 1 },
+  "SKYBLOCK_COPPER": { "n": "Copper" },
+  "SKYBLOCK_BIT": { "n": "Bits" },
+  "KISMET_FEATHER": { "n": "Kismet Feather", "bz": 1 }
+ },
+ "recipes": [
+  { "o": "ENCHANTED_GOLD", "c": 1, "i": [["GOLD_INGOT", 160]], "k": "craft" }
+ ],
+ "shops": [
+  { "s": "Elizabeth", "cur": "SKYBLOCK_BIT", "cq": 1350, "o": "KISMET_FEATHER", "oq": 1 },
+  { "s": "SkyMart", "cur": "SKYBLOCK_COPPER", "cq": 10, "o": "ENCHANTMENT_SUNDER_1", "oq": 1 },
+  { "s": "SkyMart", "cur": "SKYBLOCK_COPPER", "cq": 150, "o": "LARGE_WALNUT", "oq": 1 },
+  { "s": "SkyMart", "cur": "SKYBLOCK_COPPER", "cq": 0, "o": "LARGE_WALNUT", "oq": 1 },
+  { "s": "", "cur": "SKYBLOCK_COPPER", "cq": 5, "o": "LARGE_WALNUT", "oq": 1 },
+  { "s": "SkyMart", "cur": "SKYBLOCK_COPPER", "cq": 5, "o": "LARGE_WALNUT" },
+  "junk"
+ ],
+ "books": {
+  "ENCHANTMENT_SHARPNESS": { "t": 5, "m": 5 },
+  "ENCHANTMENT_LOOTING": { "t": 3 },
+  "ENCHANTMENT_ULTIMATE_WISE": { "m": 5 },
+  "ENCHANTMENT_BROKEN": { "t": 0, "m": 2.5 },
+  "ENCHANTMENT_JUNK": "x"
+ }
+}

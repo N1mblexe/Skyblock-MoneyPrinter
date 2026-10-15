@@ -1,12 +1,12 @@
-import { NPC_BUY_RATE_PER_HOUR } from '../config.ts';
 import type { CalcCtx, NpcFlipRow } from '../types/contracts.ts';
-import { afterTax, buySide, planTrade, sellSide, type Leg } from './pricing.ts';
+import { afterTax, buySide, npcBuyRate, planTrade, sellSide, type Leg } from './pricing.ts';
 import { assessRisk } from './risk.ts';
 
 /** Profitable bz2npc and npc2bz flips. */
 export function computeNpcFlips(ctx: CalcCtx): NpcFlipRow[] {
   const { snap, catalog, settings } = ctx;
   const { costMode, sellMode, share, taxRate } = settings;
+  const npcRate = npcBuyRate(settings.npcDailyLimit);
   const rows: NpcFlipRow[] = [];
   for (const [id, p] of Object.entries(snap.products)) {
     const info = catalog.items[id];
@@ -33,7 +33,7 @@ export function computeNpcFlips(ctx: CalcCtx): NpcFlipRow[] {
     if (ns != null && ns > 0) {
       const buy = (q: number): Leg | null => {
         const s = buySide(p, costMode, share, q, ns);
-        return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth };
+        return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, order: costMode === 'order' };
       };
       const sell = (): Leg => ({ price: ns, net: ns, rate: Infinity });
       push('bz2npc', planTrade(buy, sell, settings, costMode === 'insta'));
@@ -41,10 +41,16 @@ export function computeNpcFlips(ctx: CalcCtx): NpcFlipRow[] {
 
     const nb = info.npcBuy;
     if (nb != null && nb > 0) {
-      const buy = (): Leg => ({ price: nb, net: nb, rate: NPC_BUY_RATE_PER_HOUR });
+      const buy = (): Leg => ({ price: nb, net: nb, rate: npcRate, bound: 'npcLimit' });
       const sell = (q: number): Leg | null => {
         const s = sellSide(p, sellMode, share, q);
-        return s && { price: s.quote.price, net: afterTax(s.quote.price, taxRate), rate: s.rate, depth: s.depth };
+        return s && {
+          price: s.quote.price,
+          net: afterTax(s.quote.price, taxRate),
+          rate: s.rate,
+          depth: s.depth,
+          order: sellMode === 'offer',
+        };
       };
       push('npc2bz', planTrade(buy, sell, settings, sellMode === 'insta'));
     }
