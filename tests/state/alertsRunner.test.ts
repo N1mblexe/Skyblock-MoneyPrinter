@@ -142,3 +142,19 @@ describe('alert messages', () => {
   });
 
 });
+
+describe('market alerts in the runner', () => {
+  it('evaluates market rules on a new snapshot and toasts a grouped message once', () => {
+    const { store, toast, stop } = setup({ alerts: [] });
+    // everything profitable: threshold 0 profit per item on flips
+    store.set({ oppAlerts: [{ key: 'm', scope: ['flip'], metric: 'profit', value: 0, maxRisk: 'caution', enabled: true, seen: [], hits: [] }] });
+    store.set({ snapshot: snapAt(T0) });
+    // product X flips at a profit: one hit, one grouped toast
+    expect(store.get().oppAlerts[0]!.hits.map((h) => h.key)).toEqual(['flip:X']);
+    expect(toast).toHaveBeenCalledTimes(1);
+    expect(toast.mock.calls[0]![0]).toMatch(/fırsat/);
+    store.set({ snapshot: snapAt(T0 + 60_000) });
+    expect(toast).toHaveBeenCalledTimes(1); // same row: no repeat
+    stop();
+  });
+});

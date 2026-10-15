@@ -184,6 +184,7 @@ export const LS_VIEWPREFS = 'bazaarMasasi.view.'; // + view id
 export const LS_WATCH = 'bazaarMasasi.watch';
 export const LS_SELL = 'bazaarMasasi.sell';
 export const LS_ORDERS = 'bazaarMasasi.orders';
+export const LS_OPP_ALERTS = 'bazaarMasasi.oppAlerts';
 export const LS_JOURNAL = 'bazaarMasasi.journal';
 export const LS_ALERTS = 'bazaarMasasi.alerts';
 export const LS_ALERT_LOG = 'bazaarMasasi.alertLog';

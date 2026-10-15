@@ -17,6 +17,7 @@ import {
   loadAlerts,
   loadFusion,
   loadJournal,
+  loadOppAlerts,
   loadOrders,
   loadSettings,
   loadWatchlist,
@@ -27,6 +28,7 @@ import {
   saveAlerts,
   saveFusion,
   saveJournal,
+  saveOppAlerts,
   saveOrders,
   saveSettings,
   saveWatchlist,
@@ -46,6 +48,7 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     ...initialState(settings),
     fusion: loadFusion(),
     watchlist: loadWatchlist(),
+    oppAlerts: loadOppAlerts(),
     orders: loadOrders(),
     journal: loadJournal(),
     alerts: loadAlerts(),
@@ -58,6 +61,7 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     if (s.settings !== prev.settings) saveSettings(s.settings);
     if (s.fusion !== prev.fusion) saveFusion(s.fusion);
     if (s.watchlist !== prev.watchlist) saveWatchlist(s.watchlist);
+    if (s.oppAlerts !== prev.oppAlerts) saveOppAlerts(s.oppAlerts);
     if (s.orders !== prev.orders) saveOrders(s.orders);
     if (s.journal !== prev.journal) saveJournal(s.journal);
     if (s.alerts !== prev.alerts) saveAlerts(s.alerts);

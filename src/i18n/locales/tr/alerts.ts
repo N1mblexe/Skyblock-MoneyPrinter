@@ -13,4 +13,12 @@ export const alerts: Messages['alerts'] = {
   op_gt: '>',
   // a rule as a short phrase: "ask < 1,200"
   rule: '{metric} {op} {value}',
+  // market alerts (any opportunity above a threshold)
+  oppTitle: 'Piyasa alarmı',
+  oppFired_one: '{value} {metric} üzerinde {n} yeni fırsat: {names}',
+  oppFired_other: '{value} {metric} üzerinde {n} yeni fırsat: {names}',
+  oppMore: 've {n} tane daha',
+  om_profitPerHour: 'kâr/saat',
+  om_profit: 'adet başına kâr',
+  om_margin: 'marj',
 };

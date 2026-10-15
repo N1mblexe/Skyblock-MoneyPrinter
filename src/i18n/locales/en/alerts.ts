@@ -11,4 +11,12 @@ export const alerts = {
   op_gt: '>',
   // a rule as a short phrase: "ask < 1,200"
   rule: '{metric} {op} {value}',
+  // market alerts (any opportunity above a threshold)
+  oppTitle: 'Market alert',
+  oppFired_one: '{n} new opportunity above {value} {metric}: {names}',
+  oppFired_other: '{n} new opportunities above {value} {metric}: {names}',
+  oppMore: 'and {n} more',
+  om_profitPerHour: 'profit/hour',
+  om_profit: 'profit per item',
+  om_margin: 'margin',
 };

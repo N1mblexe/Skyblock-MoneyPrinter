@@ -480,6 +480,36 @@ export interface PlanResult {
   profitPerHour: number;
 }
 
+// ---------------------------------------------------------------- Market (opportunity) alerts
+export type OppMetric = 'profitPerHour' | 'profit' | 'margin';
+
+/** One row that met a market alert. */
+export interface OppHit {
+  /** opportunity key, e.g. `flip:ID`, `chain:A>B>C` */
+  key: string;
+  kind: OpportunityKind;
+  id: string;
+  name: string;
+  value: number;
+  at: number;
+}
+
+/** "Tell me when any <kinds> beats <value> <metric> with risk up to <maxRisk>": not tied to one item. */
+export interface OppAlertRule {
+  key: string;
+  scope: OpportunityKind[];
+  metric: OppMetric;
+  /** profit/hour or profit per unit in coins; margin as a ratio */
+  value: number;
+  maxRisk: 'ok' | 'caution';
+  enabled: boolean;
+  /** keys meeting the rule at the last check: only rows not in here fire */
+  seen: string[];
+  /** latest hits, newest first (capped) */
+  hits: OppHit[];
+  lastFiredAt?: number;
+}
+
 // ---------------------------------------------------------------- Trades (my orders, journal)
 export type OrderSide = 'buy' | 'sell';
 /** where your order stands against the live book */
@@ -676,6 +706,8 @@ export interface AppState {
   /** ms epoch of the next scheduled poll, null if not scheduled */
   nextPollAt: number | null;
   watchlist: WatchEntry[];
+  /** market alerts (any flip/craft/… above a threshold) */
+  oppAlerts: OppAlertRule[];
   /** bazaar orders you track (Trades page) */
   orders: MyOrder[];
   /** finished trades, newest first */

@@ -24,6 +24,7 @@ import {
 import { sparklineSvg } from '../../sparkline.ts';
 import { fmtTime, logMessage, ruleText } from './alertText.ts';
 import { exportFileName, exportJson, makeRule, mergeImport, parseImport } from './model.ts';
+import { createOppAlertsEditor, type OppAlertsEditor } from './oppAlertsEditor.ts';
 import { createRulesEditor, type RulesEditor } from './rulesEditor.ts';
 import './watch.css';
 
@@ -74,6 +75,7 @@ export function createWatchView(): View {
   let logTable: KitTableHandle<LogRow>;
   let panel: DetailPanel;
   let editor: RulesEditor;
+  let oppEditor: OppAlertsEditor | null = null;
   let panelId: string | null = null;
   let emptyText = '';
   let logKey: unknown[] = [];
@@ -670,6 +672,8 @@ export function createWatchView(): View {
         addHint,
       );
       const rulesSec = section('w-rules', 'watch.rulesTitle', h('p', { class: 'note', 'data-t': 'watch.rulesIntro' }), editor.el);
+      oppEditor = createOppAlertsEditor(ctx);
+      const oppSec = section('w-opp', 'watch.oppTitle', h('p', { class: 'note', 'data-t': 'watch.oppIntro' }), oppEditor.el);
       const notifySec = section(
         'w-notify',
         'watch.notifyTitle',
@@ -697,6 +701,7 @@ export function createWatchView(): View {
         add,
         h('div', { class: 'w-list' }, bar.el, els.wait, table.el),
         rulesSec,
+        oppSec,
         h('div', { class: 'w-side' }, notifySec, ioSec),
         logSec,
       );
@@ -734,7 +739,11 @@ export function createWatchView(): View {
           logTable.refresh();
           renderLog(true);
           editor.render(true);
+          oppEditor?.render();
           render();
+        }),
+        ctx.store.subscribe((s, prev) => {
+          if (s.oppAlerts !== prev.oppAlerts) oppEditor?.render();
         }),
       );
       render();
@@ -750,6 +759,8 @@ export function createWatchView(): View {
       logTable?.destroy();
       panel?.destroy();
       editor?.destroy();
+      oppEditor?.destroy();
+      oppEditor = null;
       sparkCache.clear();
       if (root) {
         root.classList.remove('kit-split', 'kit-split--open', 'watch-view');

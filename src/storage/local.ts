@@ -8,12 +8,25 @@ import {
   LS_LAST_ROUTE,
   LS_LEGACY_FUSION,
   LS_LEGACY_TAB,
+  LS_OPP_ALERTS,
   LS_ORDERS,
   LS_SETTINGS,
   LS_WATCH,
 } from '../config.ts';
 import { sanitizeSettings } from '../state/appState.ts';
-import type { AlertEvent, AlertMetric, AlertRule, FusionRecipe, JournalEntry, MyOrder, Settings, WatchEntry } from '../types/contracts.ts';
+import type {
+  AlertEvent,
+  AlertMetric,
+  AlertRule,
+  FusionRecipe,
+  JournalEntry,
+  MyOrder,
+  OppAlertRule,
+  OppHit,
+  OpportunityKind,
+  Settings,
+  WatchEntry,
+} from '../types/contracts.ts';
 
 function storage(): Storage | null {
   try {
@@ -140,6 +153,38 @@ export const saveAlerts = (a: AlertRule[]): void => lsSet(LS_ALERTS, a);
 /** Persisted alert log (newest first, capped at ALERTS.logMax); invalid events dropped. */
 export const loadAlertLog = (): AlertEvent[] => loadList(LS_ALERT_LOG, parseEvent).slice(0, ALERTS.logMax);
 export const saveAlertLog = (l: AlertEvent[]): void => lsSet(LS_ALERT_LOG, l.slice(0, ALERTS.logMax));
+
+// ---- market alerts
+const OPP_SCOPE = new Set(['flip', 'craft', 'forge', 'chain', 'book', 'npc']);
+const OPP_METRICS = new Set(['profitPerHour', 'profit', 'margin']);
+
+export function parseOppRule(x: Record<string, unknown>): OppAlertRule | null {
+  const { key, scope, metric, value } = x;
+  if (!idStr(key) || !Array.isArray(scope) || !OPP_METRICS.has(metric as string) || typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const sc = [...new Set(scope.filter((k): k is OpportunityKind => OPP_SCOPE.has(k as string)))];
+  if (!sc.length) return null;
+  const hits = Array.isArray(x.hits)
+    ? x.hits.flatMap((h): OppHit[] =>
+        isObj(h) && idStr(h.key) && idStr(h.id) && OPP_SCOPE.has(h.kind as string) && typeof h.value === 'number' && time(h.at)
+          ? [{ key: h.key, kind: h.kind as OpportunityKind, id: h.id, name: typeof h.name === 'string' ? h.name : h.id, value: h.value, at: h.at }]
+          : [],
+      )
+    : [];
+  return {
+    key,
+    scope: sc,
+    metric: metric as OppAlertRule['metric'],
+    value,
+    maxRisk: x.maxRisk === 'caution' ? 'caution' : 'ok',
+    enabled: x.enabled !== false,
+    seen: Array.isArray(x.seen) ? x.seen.filter(idStr) : [],
+    hits: hits.slice(0, 10),
+    ...(time(x.lastFiredAt) ? { lastFiredAt: x.lastFiredAt } : {}),
+  };
+}
+
+export const loadOppAlerts = (): OppAlertRule[] => loadList(LS_OPP_ALERTS, parseOppRule, (r) => r.key);
+export const saveOppAlerts = (r: OppAlertRule[]): void => lsSet(LS_OPP_ALERTS, r);
 
 // ---- trades: my orders and the trade journal
 const posNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;

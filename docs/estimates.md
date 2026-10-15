@@ -307,6 +307,8 @@ An alert rule watches one item: `ask`, `bid`, `spreadPct` (`(ask − bid) / bid`
 - A fired alert shows a toast, and a browser notification if notifications are on and permitted. The log keeps the last 100 (`ALERTS.logMax`).
 - **Alerts only run while a tab with the app is open.** There is no background service.
 
+
+**Market alerts** (`src/domain/oppAlerts.ts`, Watchlist page): rules over every opportunity instead of one item: kinds (flip, craft, forge, chain, book, NPC), a metric (profit/hour, profit per item or margin) above a value, and the highest risk level allowed (clean, or clean and caution). On each new live snapshot the runner checks the rows of every page; a rule fires only for rows that were not meeting it at the previous check (`seen`), so a lasting opportunity is reported once, and again only after it drops out and comes back. One grouped toast (and notification) per rule lists the best three; the latest 10 hits are kept on the rule with links to their page.
 ## Risk flags
 
 Each product's market is checked against `config.RISK`. Some flags need price history: the baseline is the last 24 h, thinned to one point per 15 minutes, leaving out the last 15 minutes so that a fresh spike doesn't become its own baseline.

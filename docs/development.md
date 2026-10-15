@@ -54,6 +54,7 @@ Everything stays in your browser.
 | IndexedDB `bazaar-masasi-ah` | The last AH lowest-BIN scan |
 | `bazaarMasasi.settings` | Settings |
 | `bazaarMasasi.fusion` | Fusion recipes |
+| `bazaarMasasi.oppAlerts` | Market alert rules with their latest hits |
 | `bazaarMasasi.orders`, `bazaarMasasi.journal` | Tracked bazaar orders and the trade journal (Trades page) |
 | `bazaarMasasi.sell` | The Sell or craft? item list |
 | `bazaarMasasi.watch` | Watchlist |
