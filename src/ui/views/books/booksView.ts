@@ -25,7 +25,6 @@ import {
 import '../flip/flip.css';
 import { focusedRowKey, kv, limitedText, orderBookHtml, riskListHtml, section, signCls, span, tpPairs, watchButton } from '../flip/parts.ts';
 import './books.css';
-import './i18n.ts';
 
 export const BOOKS_PREFS_KEY = LS_VIEWPREFS + 'books';
 

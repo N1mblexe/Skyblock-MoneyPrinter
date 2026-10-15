@@ -4,7 +4,6 @@ import { evaluateAlerts } from '../domain/alerts.ts';
 import { t } from '../i18n/index.ts';
 import type { AlertEvent, AlertMetric, AppState, CalcCtx, Derived, Store, ToastKind } from '../types/contracts.ts';
 import { fmtCoins, fmtPct } from '../ui/format.ts';
-import './alertsI18n.ts';
 
 export interface AlertsRunnerOptions {
   store: Store<AppState>;

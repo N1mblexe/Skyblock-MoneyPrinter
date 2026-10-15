@@ -1,13 +1,10 @@
-// Locale-aware formatters; locale follows i18n getLang() (tr -> tr-TR, en -> en-US).
-import { getLang } from '../i18n/index.ts';
+// Locale-aware formatters; the Intl locale follows the active language (src/i18n/languages.ts).
+import { getLang, locale } from '../i18n/index.ts';
+
+export { locale };
 
 const DASH = '—';
 const cache = new Map<string, Intl.NumberFormat>();
-
-/** Current Intl locale for the active UI language. */
-export function locale(): string {
-  return getLang() === 'en' ? 'en-US' : 'tr-TR';
-}
 
 function nf(kind: string, opts: Intl.NumberFormatOptions): Intl.NumberFormat {
   const loc = locale();

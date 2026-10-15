@@ -5,7 +5,6 @@ import { esc } from '../dom.ts';
 import { hotkeyLabel } from '../kit/index.ts';
 import { NAV } from '../views/index.ts';
 import { navHotkey } from './nav.ts';
-import './i18n.ts';
 
 /** One spec as kbd chips: 'mod+k' -> <kbd>Ctrl</kbd><kbd>K</kbd>; 'g o' -> <kbd>G</kbd> then <kbd>O</kbd>. */
 const ARROWS: Record<string, string> = { ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→' };

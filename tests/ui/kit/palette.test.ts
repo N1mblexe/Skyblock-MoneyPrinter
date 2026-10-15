@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
 import { collectPalette, currentPalette, openPalette } from '../../../src/ui/kit/palette.ts';
 import type { PaletteItem, PaletteProvider } from '../../../src/ui/kit/types.ts';
 

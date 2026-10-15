@@ -23,7 +23,6 @@ import {
 } from '../../kit/index.ts';
 import { sparklineSvg } from '../../sparkline.ts';
 import './flip.css';
-import './i18n.ts';
 import {
   changeHtml,
   fillText,

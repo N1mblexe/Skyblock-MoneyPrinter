@@ -1,50 +1,7 @@
 // Shared cell renderers for views (risk badge, item name cell, price-source badge). Owner: lead.
-import { registerDict, t } from '../i18n/index.ts';
+import { t } from '../i18n/index.ts';
 import type { QuoteSource, RiskFlag, RiskReport } from '../types/contracts.ts';
 import { esc } from './dom.ts';
-
-registerDict('risk', {
-  tr: {
-    ok: 'Temiz',
-    caution: 'Dikkat',
-    suspect: 'Şüpheli',
-    DEAD_BID: 'Ölü alış: en iyi buy order satış fiyatının yanında önemsiz (ör. 0,1).',
-    WIDE_SPREAD: 'Geniş makas: alış ile satış arası %60’tan fazla.',
-    EXTREME_SPREAD: 'Aşırı makas (%200+): bir taraf neredeyse kesin bayat ya da manipüle.',
-    LOW_VOLUME: 'Düşük hacim: haftalık işlem çok az, emirler dolmayabilir.',
-    FEW_ORDERS: 'Az emir: bir tarafta 5’ten az emir var.',
-    THIN_TOP: 'İnce tepe: en iyi fiyatta çok az ürün var, bir sonraki seviye çok farklı.',
-    QUICK_DIVERGENCE: 'Ortalama fiyat (quick_status) en iyi fiyattan çok farklı.',
-    VOLUME_IMBALANCE: 'Dengesiz hacim: alım ve satım hacmi 10 kattan fazla farklı.',
-    PRICE_SPIKE: 'Fiyat sıçraması: son 24 saatin medyanından çok saptı.',
-    AH_THIN: 'Müzayedede çok az ilan var: en düşük BIN fiyatı güvenilir olmayabilir.',
-    NO_HISTORY: 'Henüz yeterli fiyat geçmişi yok (sıçrama kontrolü yapılamadı).',
-    srcOrder: 'Buy order',
-    srcInsta: 'Insta',
-    srcNpc: 'NPC',
-    srcCraft: 'Craft',
-  },
-  en: {
-    ok: 'Clean',
-    caution: 'Caution',
-    suspect: 'Suspect',
-    DEAD_BID: 'Dead bid: the best buy order is negligible next to the ask (e.g. 0.1).',
-    WIDE_SPREAD: 'Wide spread: more than 60% between bid and ask.',
-    EXTREME_SPREAD: 'Extreme spread (200%+): one side is almost surely stale or manipulated.',
-    LOW_VOLUME: 'Low volume: very few weekly trades, orders may not fill.',
-    FEW_ORDERS: 'Few orders: fewer than 5 orders on one side.',
-    THIN_TOP: 'Thin top: tiny amount at the best price, next level is far away.',
-    QUICK_DIVERGENCE: 'Average price (quick_status) is far from the best price.',
-    VOLUME_IMBALANCE: 'Imbalanced volume: buy and sell volume differ by more than 10x.',
-    PRICE_SPIKE: 'Price spike: far from the 24h median.',
-    AH_THIN: 'Very few auction listings: the lowest BIN may not be reliable.',
-    NO_HISTORY: 'Not enough price history yet (spike check skipped).',
-    srcOrder: 'Buy order',
-    srcInsta: 'Insta',
-    srcNpc: 'NPC',
-    srcCraft: 'Craft',
-  },
-});
 
 /** Text explanation of one flag. */
 export const riskFlagText = (f: RiskFlag): string => t(`risk.${f}`);

@@ -5,7 +5,6 @@ import type { MarketStat, OrderLevel, Product, RiskReport, Throughput } from '..
 import { riskFlagText } from '../../cells.ts';
 import { esc } from '../../dom.ts';
 import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtPct, locale } from '../../format.ts';
-import './i18n.ts';
 
 /** 'pos' / 'neg' / '' for a signed number. */
 export const signCls = (n: number | null | undefined): string => (n == null || !Number.isFinite(n) || n === 0 ? '' : n > 0 ? 'pos' : 'neg');

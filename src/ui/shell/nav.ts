@@ -6,7 +6,6 @@ import { esc } from '../dom.ts';
 import { routeToHash } from '../router.ts';
 import { NAV, type NavEntry, type NavGroup } from '../views/index.ts';
 import { icon } from './icons.ts';
-import './i18n.ts';
 
 export type NavId = NavEntry['id'];
 

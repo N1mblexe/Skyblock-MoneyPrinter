@@ -5,8 +5,7 @@ import { toSnapshot, validateRaw } from '../../../src/api/normalize.ts';
 import { LS_VIEWPREFS, OPTIMIZER, STATS } from '../../../src/config.ts';
 import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.ts';
 import { allocate } from '../../../src/domain/optimizer.ts';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang } from '../../../src/i18n/index.ts';
+import { setLang } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AppState, BookRow, Catalog, HistoryPoint, MarketStat, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
@@ -75,11 +74,6 @@ afterEach(() => {
 });
 
 describe('overview view', () => {
-  it('TR/EN dictionaries have identical keys', () => {
-    const k = dictKeys('overview');
-    expect(k.tr.length).toBeGreaterThan(40);
-    expect(k.en).toEqual(k.tr);
-  });
 
   it('renders an h1 and every card with a heading; titles link to their full views', () => {
     mount();

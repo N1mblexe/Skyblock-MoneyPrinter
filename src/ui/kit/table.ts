@@ -11,7 +11,6 @@ import { t } from '../../i18n/index.ts';
 import { lsGet, lsSet } from '../../storage/local.ts';
 import { esc } from '../dom.ts';
 import { downloadCsv, toCsv as buildCsv } from './csv.ts';
-import './i18n.ts';
 import { isNullish, sortRows } from './sort.ts';
 import type { KitColumn, KitTableHandle, KitTableOptions, SortState } from './types.ts';
 import { focusEl, media, onMedia, uid } from './util.ts';

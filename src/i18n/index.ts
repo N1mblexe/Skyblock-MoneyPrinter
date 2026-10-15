@@ -1,29 +1,32 @@
-// Minimal namespaced i18n. Each module registers its own namespace:
-//   registerDict('flip', { tr: { title: 'Flip bulucu' }, en: { title: 'Flip finder' } })
-//   t('flip.title')  ->  'Flip bulucu'
-// Params: t('common.rows', { n: 5 }) with "{n} satır".
-import type { Lang, TFn } from '../types/contracts.ts';
+// Namespaced i18n over the static locale files in ./locales (registry: ./languages.ts).
+//   t('flip.title')                 -> 'Flip finder'
+//   t('common.rows', { n: 5 })      -> '{n} rows' with params filled in
+// Lookup: active language, then DEFAULT_LANG, then the key itself.
+import { DEFAULT_LANG, languageOf, type Lang } from './languages.ts';
+import type { TFn } from '../types/contracts.ts';
 
-export type Dict = Record<string, string>;
-const dicts = new Map<string, { tr: Dict; en: Dict }>();
-let lang: Lang = 'tr';
+export { DEFAULT_LANG, LANGUAGES, isLang, type Lang } from './languages.ts';
+
+type Table = Record<string, Record<string, string>>;
+
+let lang: Lang = DEFAULT_LANG;
 const listeners = new Set<(l: Lang) => void>();
 
-export function registerDict(ns: string, d: { tr: Dict; en: Dict }): void {
-  dicts.set(ns, d);
-}
+const lookup = (l: Lang, ns: string, k: string): string | undefined => (languageOf(l).messages as Table)[ns]?.[k];
 
 export const t: TFn = (key, params) => {
   const dot = key.indexOf('.');
   const ns = dot < 0 ? '' : key.slice(0, dot);
   const k = dot < 0 ? key : key.slice(dot + 1);
-  const d = dicts.get(ns);
-  let s = d?.[lang][k] ?? d?.tr[k] ?? key;
+  let s = lookup(lang, ns, k) ?? lookup(DEFAULT_LANG, ns, k) ?? key;
   if (params) s = s.replace(/\{(\w+)\}/g, (m, p: string) => (p in params ? String(params[p]) : m));
   return s;
 };
 
 export const getLang = (): Lang => lang;
+
+/** BCP 47 locale of the active language, for Intl formatters. */
+export const locale = (): string => languageOf(lang).locale;
 
 export function setLang(l: Lang): void {
   if (l === lang) return;
@@ -35,10 +38,4 @@ export function setLang(l: Lang): void {
 export function onLangChange(fn: (l: Lang) => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);
-}
-
-/** Keys registered for a namespace (used by TR/EN parity tests). */
-export function dictKeys(ns: string): { tr: string[]; en: string[] } {
-  const d = dicts.get(ns);
-  return { tr: Object.keys(d?.tr ?? {}).sort(), en: Object.keys(d?.en ?? {}).sort() };
 }

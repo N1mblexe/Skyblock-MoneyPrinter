@@ -16,7 +16,6 @@ import {
 } from '../../kit/index.ts';
 import './craft.css';
 import { filterCrafts, migrateLegacyPrefs, PREFS_KEY, SCHEMA, type CraftQuery, type KindFilter, type MarketFilter } from './helpers.ts';
-import './i18n.ts';
 import { craftColumns, craftDetail, watchButton, type RenderEnv } from './render.ts';
 
 const NOTES = ['note1', 'note2', 'note3', 'note4'] as const;

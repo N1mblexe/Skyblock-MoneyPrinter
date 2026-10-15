@@ -2,7 +2,6 @@
 import { t } from '../../../i18n/index.ts';
 import { alertMessage, fmtMetric } from '../../../state/alertsRunner.ts';
 import type { AlertEvent, AlertMetric, AlertRule } from '../../../types/contracts.ts';
-import './i18n.ts';
 
 export const METRICS: readonly AlertMetric[] = ['ask', 'bid', 'spreadPct', 'flipMargin', 'flipProfit'];
 

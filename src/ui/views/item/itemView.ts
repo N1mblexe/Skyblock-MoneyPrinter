@@ -44,7 +44,6 @@ import {
   PCT_METRICS,
 } from './helpers.ts';
 import { createLineChart, type ChartData, type LineChart } from './lineChart.ts';
-import './i18n.ts';
 import './item.css';
 
 const BOOK_LEVELS = 10;

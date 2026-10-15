@@ -41,7 +41,6 @@ import {
   type ShopFilters,
 } from './npcData.ts';
 import './npc.css';
-import './i18n.ts';
 
 /** Best-rate chips shown above the shops table. */
 const RATE_CHIPS = 8;

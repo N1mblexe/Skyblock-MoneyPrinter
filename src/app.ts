@@ -1,5 +1,4 @@
 // Bootstrap wiring: settings -> history/cache -> catalog -> shell -> router/views -> poller.
-import './i18n/common.ts';
 import { createAhScanner } from './api/auctions.ts';
 import { createElectionPoller } from './api/election.ts';
 import { createPoller } from './api/poller.ts';

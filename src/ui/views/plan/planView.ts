@@ -21,7 +21,6 @@ import {
   type QueryState,
 } from '../../kit/index.ts';
 import { filterKinds, KINDS, PLAN_SCHEMA, planOptions, planRows, sourceHref, type PlanQuery, type PlanRow } from './model.ts';
-import './i18n.ts';
 import './plan.css';
 
 /** Input debounce before re-running allocate() (ms). */

@@ -6,7 +6,6 @@ import type { AppState, Route, Store } from '../../types/contracts.ts';
 import type { PaletteItem, PaletteProvider } from '../kit/index.ts';
 import { NAV } from '../views/index.ts';
 import { navHotkey } from './nav.ts';
-import './i18n.ts';
 
 /** Max item results per query. */
 export const PALETTE_ITEMS = 30;

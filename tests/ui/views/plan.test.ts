@@ -4,8 +4,7 @@ import { toSnapshot, validateRaw } from '../../../src/api/normalize.ts';
 import { LS_VIEWPREFS, OPTIMIZER } from '../../../src/config.ts';
 import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.ts';
 import { allocate } from '../../../src/domain/optimizer.ts';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang, t } from '../../../src/i18n/index.ts';
+import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { Allocation, AppState, Catalog, Opportunity, Route, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
@@ -67,13 +66,6 @@ afterEach(() => {
   setLang('tr');
 });
 
-describe('plan i18n', () => {
-  it('TR and EN have identical keys', () => {
-    const { tr, en } = dictKeys('plan');
-    expect(tr.length).toBeGreaterThan(40);
-    expect(en).toEqual(tr);
-  });
-});
 
 describe('plan view', () => {
   it('fixture yields opportunities of several kinds', () => {

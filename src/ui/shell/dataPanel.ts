@@ -4,7 +4,6 @@ import { sanitizeSettings } from '../../state/appState.ts';
 import type { AppState, HistoryRepo, Store, ToastKind } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
 import { fmtAge, fmtInt, locale } from '../format.ts';
-import './i18n.ts';
 
 export const SETTINGS_FILE = 'bazaar-masasi-settings.json';
 /** how long the "click again to clear" state lasts */

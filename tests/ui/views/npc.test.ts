@@ -5,8 +5,7 @@ import { LS_VIEWPREFS } from '../../../src/config.ts';
 import { catalogFromFile } from '../../../src/data/catalog.ts';
 import { computeNpcFlips } from '../../../src/domain/npc.ts';
 import { computeShopRows } from '../../../src/domain/shops.ts';
-import { dictKeys, setLang, t } from '../../../src/i18n/index.ts';
-import '../../../src/i18n/common.ts';
+import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AppState, Catalog, CatalogFile, Route, ShopOffer, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
@@ -384,9 +383,6 @@ describe('npc view: language and lifecycle', () => {
     expect(box('flips').querySelector('th')!.textContent).toContain('Item');
     expect(segBtn('shops').textContent).toBe('Shops');
     expect(q('.npc-note').textContent).toContain('640/day');
-    const k = dictKeys('npc');
-    expect(k.tr.length).toBeGreaterThan(50);
-    expect(k.en).toEqual(k.tr);
   });
 
   it('unmount releases everything', async () => {

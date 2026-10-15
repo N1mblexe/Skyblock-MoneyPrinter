@@ -1,6 +1,6 @@
-import { registerDict } from '../../../i18n/index.ts';
+import type { Messages } from '../en/index.ts';
 
-const tr = {
+export const plan: Messages['plan'] = {
   title: 'Planlayıcı',
   intro: 'Sermayeni ve sipariş slotlarını flip, craft, kitap ve NPC fırsatları arasında saatlik kârı en yükseğe çıkaracak şekilde paylaştırır.',
 
@@ -94,95 +94,3 @@ const tr = {
   disclaimer:
     'Tüm rakamlar tahmindir. Siparişler birbirini etkiler: aynı malzemeyi birden çok fırsat alırsa ya da başka oyuncular aynı anda girerse dolum hızı düşer. Fiyatlar yenilendikten sonra planı yeniden kontrol et.',
 };
-
-const en: Record<keyof typeof tr, string> = {
-  title: 'Planner',
-  intro: 'Splits your capital and order slots across flip, craft, book and NPC opportunities to maximize profit per hour.',
-
-  capital: 'Capital (coins)',
-  slots: 'Order slots',
-  share: 'Max capital per item (%)',
-  suspect: 'Exclude suspect',
-  fromSettings: 'Empty = settings: {v}',
-  fromDefault: 'Empty = default: {v}',
-  kindFlip: 'Flip',
-  kindCraft: 'Craft & Forge',
-  kindBook: 'Books',
-  kindNpc: 'NPC',
-  fillModel: 'Fill model: {v}',
-  openSettings: 'Change in settings',
-  inputsAria: 'Plan inputs',
-
-  summaryAria: 'Plan summary',
-  pph: 'Total profit / hour',
-  capitalUsed: 'Capital used',
-  slotsUsed: 'Slots used',
-  positions: 'Positions',
-  ofAvail: '{used} / {avail}',
-  unlimited: 'unlimited',
-  capitalFull: 'All capital is in use.',
-  slotsFull: 'All order slots are used; more slots could raise profit.',
-  computing: 'Computing…',
-  suspectHidden: '{n} suspect opportunities excluded',
-  showSuspect: 'Include',
-  oppsCount: 'from {n} opportunities',
-
-  colKind: 'Kind',
-  colItem: 'Item',
-  colUnits: 'Units',
-  colCapital: 'Capital',
-  colSlots: 'Slots',
-  colPph: 'Profit / h',
-  colShare: 'Share',
-  colRisk: 'Risk',
-  colWhy: 'Why',
-  colWhyTitle: 'Why this row was picked and why it is not bigger',
-  empty: 'No profitable allocation with these inputs. Change capital, slots or kinds.',
-  emptyNoOpps: 'No profitable opportunities of the selected kinds.',
-  waiting: 'Waiting for price data…',
-  catalogLoading: 'Loading the catalog; the plan needs recipes.',
-  catalogError: 'Could not load the catalog: {err}',
-
-  whyBest: 'best profit per coin',
-  whyRank: '#{n} profit per coin',
-  why_volume: 'limited by volume',
-  why_share: 'capped at {pct}% of capital',
-  why_capital: 'uses the remaining capital',
-  whyLong_volume: 'Takes every unit the market fills per cycle ({n}); more would not fill.',
-  whyLong_share: 'One item gets at most {pct}% of capital, and this one reached it.',
-  whyLong_capital: 'Gets the capital left after better opportunities; it grows with more capital.',
-
-  detailAlloc: 'Allocation',
-  detailOpp: 'Opportunity (estimate)',
-  dUnits: 'Units / cycle',
-  dCapital: 'Capital tied up',
-  dCapitalShare: 'Share of capital',
-  dSlots: 'Order slots',
-  dPph: 'Profit / hour',
-  dProfitShare: 'Share of total profit',
-  dPerCoin: 'Profit / hour per coin',
-  dUnitCost: 'Coins tied up per unit',
-  dUnitCostPipe: 'Twice the buy cost under the pipelined fill model.',
-  dProfitUnit: 'Profit per unit',
-  dMargin: 'Margin',
-  dUph: 'Units / hour (no capital limit)',
-  dMaxUnits: 'Max units per cycle',
-  dOppSlots: 'Slots at that size',
-  dOppPph: 'Profit / hour at full volume',
-  dWhy: 'Why',
-  dRiskFlags: 'Risk flags',
-  dRiskNone: 'No risk flags.',
-  openSource: 'Open in {tab}',
-  openItem: 'Item page',
-  tab_flip: 'Flips',
-  tab_craft: 'Craft & Forge',
-  tab_book: 'Books',
-  tab_npc: 'NPC',
-  watch: 'Watch',
-  unwatch: 'Unwatch',
-
-  disclaimer:
-    'All numbers are estimates. Orders interact: when several picks buy the same ingredient, or other players pile in, fills slow down. Re-check the plan after prices refresh.',
-};
-
-registerDict('plan', { tr, en });

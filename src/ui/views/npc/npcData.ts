@@ -1,7 +1,7 @@
 // NPC & Shops view helpers: URL/localStorage schemas, row filtering, currency grouping. Pure (no DOM).
 import { LS_VIEWPREFS } from '../../../config.ts';
 import { matchesQuery, normalizeText } from '../../../domain/search.ts';
-import { getLang, t } from '../../../i18n/index.ts';
+import { locale, t } from '../../../i18n/index.ts';
 import { lsGet, lsSet } from '../../../storage/local.ts';
 import type { Catalog, NpcFlipRow, Settings, ShopRow, Snapshot } from '../../../types/contracts.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
@@ -150,7 +150,7 @@ export function currencyOptions(rows: readonly ShopRow[], catalog: Catalog | nul
     o.count++;
     if (r.coinsPerCurrency != null && (o.best?.coinsPerCurrency == null || r.coinsPerCurrency > o.best.coinsPerCurrency)) o.best = r;
   }
-  const coll = new Intl.Collator(getLang());
+  const coll = new Intl.Collator(locale());
   return [...by.values()].sort((a, b) => b.count - a.count || coll.compare(a.label, b.label));
 }
 

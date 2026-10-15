@@ -1,7 +1,6 @@
 // App shell (trading-terminal layout): sidebar nav / mobile bottom nav, top bar (palette search, status,
 // mayor, AH scan, language, refresh, settings), settings drawer, global hotkeys, and the view container.
 import type { AppState, Density, HistoryRepo, Lang, Route, RouteId, Store, Theme, ToastKind } from '../types/contracts.ts';
-import '../i18n/common.ts';
 import { HOTKEYS, LS_VIEWPREFS, UI } from '../config.ts';
 import { getLang, onLangChange, setLang, t } from '../i18n/index.ts';
 import { lsGet, lsSet } from '../storage/local.ts';
@@ -9,7 +8,6 @@ import { esc } from './dom.ts';
 import { createDrawer, currentPalette, openPalette, registerHotkeys, toast as kitToast, type Drawer, type HotkeyMap } from './kit/index.ts';
 import { routeToHash } from './router.ts';
 import { createDataPanel } from './shell/dataPanel.ts';
-import './shell/i18n.ts';
 import { icon } from './shell/icons.ts';
 import { createManualLoad } from './shell/manualLoad.ts';
 import { createAhStatus, createMayorChip } from './shell/marketChips.ts';

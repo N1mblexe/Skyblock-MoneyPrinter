@@ -4,7 +4,6 @@ import { onLangChange, t } from '../../i18n/index.ts';
 import type { AppState, Density, Lang, Settings, Store, TaxRate, Theme } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
 import { fmtInt } from '../format.ts';
-import './i18n.ts';
 
 type Control = HTMLInputElement & HTMLSelectElement;
 type FieldName =

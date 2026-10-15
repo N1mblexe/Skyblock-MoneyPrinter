@@ -22,7 +22,6 @@ import {
 } from './fusionCalc.ts';
 import { downloadRecipes, parseRecipesJson, recipesToJson } from './fusionIo.ts';
 import './fusion.css';
-import './i18n.ts';
 
 type ItemField = 'a' | 'b' | 'out';
 type QtyField = 'qa' | 'qb' | 'qo';

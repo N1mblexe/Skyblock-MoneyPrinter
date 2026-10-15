@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
 import { createDetailPanel } from '../../../src/ui/kit/panel.ts';
 import { createDrawer } from '../../../src/ui/kit/drawer.ts';
 import { focusables, isTypingTarget, trapTab } from '../../../src/ui/kit/util.ts';

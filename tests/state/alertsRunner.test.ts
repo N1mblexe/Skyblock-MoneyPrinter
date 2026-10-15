@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ALERTS } from '../../src/config.ts';
-import { dictKeys, setLang } from '../../src/i18n/index.ts';
+import { setLang } from '../../src/i18n/index.ts';
 import { alertMessage, fmtMetric, startAlerts } from '../../src/state/alertsRunner.ts';
 import { initialState } from '../../src/state/appState.ts';
 import { createDerived } from '../../src/state/derived.ts';
@@ -140,9 +140,4 @@ describe('alert messages', () => {
     expect(alertMessage({ ruleKey: 'k', id: 'X', metric: 'bid', value: 5, at: 0 }, 6, 'lt', 'Şey').title).toBe('Alarm: Şey');
   });
 
-  it('TR/EN dictionaries have the same keys', () => {
-    const k = dictKeys('alerts');
-    expect(k.tr.length).toBeGreaterThan(5);
-    expect(k.tr).toEqual(k.en);
-  });
 });

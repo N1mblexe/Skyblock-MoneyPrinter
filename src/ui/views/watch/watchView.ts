@@ -22,7 +22,6 @@ import {
 } from '../../kit/index.ts';
 import { sparklineSvg } from '../../sparkline.ts';
 import { fmtTime, logMessage, ruleText } from './alertText.ts';
-import './i18n.ts';
 import { exportFileName, exportJson, makeRule, mergeImport, parseImport } from './model.ts';
 import { createRulesEditor, type RulesEditor } from './rulesEditor.ts';
 import './watch.css';

@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang } from '../../../src/i18n/index.ts';
-import '../../../src/ui/kit/i18n.ts';
+import { setLang } from '../../../src/i18n/index.ts';
 import { createFilterBar, FILTER_DEBOUNCE_MS, parseNumberInput } from '../../../src/ui/kit/filterBar.ts';
 import { bindQueryState } from '../../../src/ui/kit/queryState.ts';
 import type { FilterSpec, QuerySchema } from '../../../src/ui/kit/types.ts';
@@ -135,9 +133,4 @@ describe('createFilterBar', () => {
     expect(parseNumberInput('x')).toBeUndefined();
   });
 
-  it('kit dictionary has TR/EN parity', () => {
-    const k = dictKeys('kit');
-    expect(k.tr.length).toBeGreaterThan(0);
-    expect(k.tr).toEqual(k.en);
-  });
 });

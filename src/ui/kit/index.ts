@@ -56,7 +56,6 @@
  *   must call the returned unregister on unmount.
  * - Strings: everything user-visible goes through t(); kit strings live in 'common' and 'kit' namespaces.
  */
-import './i18n.ts';
 
 export type * from './types.ts';
 export { createKitTable, cssRowHeight } from './table.ts';

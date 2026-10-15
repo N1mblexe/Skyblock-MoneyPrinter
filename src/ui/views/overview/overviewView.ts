@@ -7,7 +7,6 @@ import { fmtAge, fmtCoins, fmtCompact, fmtInt, fmtPct } from '../../format.ts';
 import { bindQueryState, type QuerySchema, type QueryState, type QueryValues } from '../../kit/index.ts';
 import { sparklineSvg } from '../../sparkline.ts';
 import { logMessage } from '../watch/alertText.ts';
-import './i18n.ts';
 import './overview.css';
 import { mostConsistent, movers, planSummary, topBooks, topCrafts, topFlips, type Mover, type MoverWindow } from './select.ts';
 

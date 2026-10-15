@@ -3,7 +3,7 @@ import { createStore } from '../src/state/store.ts';
 import { sanitizeSettings, defaultSettings } from '../src/state/appState.ts';
 import { median, mad, robustZ, pctChange } from '../src/domain/stats.ts';
 import { deriveName } from '../src/domain/ids.ts';
-import { registerDict, setLang, t } from '../src/i18n/index.ts';
+import { setLang, t } from '../src/i18n/index.ts';
 
 describe('store', () => {
   it('notifies only on change', () => {
@@ -50,13 +50,14 @@ describe('deriveName', () => {
 });
 
 describe('i18n', () => {
-  it('translates with params and falls back', () => {
-    registerDict('x', { tr: { hi: 'Merhaba {n}', only: 'tr' }, en: { hi: 'Hello {n}' } });
-    expect(t('x.hi', { n: 2 })).toBe('Merhaba 2');
+  it('translates with params, follows the language and returns unknown keys as-is', () => {
+    setLang('tr');
+    expect(t('common.rows', { n: 2 })).toBe('2 satır');
     setLang('en');
-    expect(t('x.hi', { n: 2 })).toBe('Hello 2');
-    expect(t('x.only')).toBe('tr');
-    expect(t('x.missing')).toBe('x.missing');
+    expect(t('common.rows', { n: 2 })).toBe('2 rows');
+    expect(t('common.rows')).toBe('{n} rows');
+    expect(t('nope.missing')).toBe('nope.missing');
+    expect(t('common.missing')).toBe('common.missing');
     setLang('tr');
   });
 });

@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
 import { setLang } from '../../../src/i18n/index.ts';
 import { LS_COLUMNS, UI } from '../../../src/config.ts';
 import { createKitTable, cssRowHeight, type KitColumn, type KitTableOptions } from '../../../src/ui/kit/index.ts';

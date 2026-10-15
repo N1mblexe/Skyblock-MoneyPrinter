@@ -4,8 +4,7 @@ import { toSnapshot, validateRaw } from '../../../src/api/normalize.ts';
 import { ALERTS, LS_VIEWPREFS } from '../../../src/config.ts';
 import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.ts';
 import { metricValue } from '../../../src/domain/alerts.ts';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang } from '../../../src/i18n/index.ts';
+import { setLang } from '../../../src/i18n/index.ts';
 import { fmtMetric } from '../../../src/state/alertsRunner.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
@@ -67,11 +66,6 @@ afterEach(() => {
 });
 
 describe('watch view', () => {
-  it('TR/EN dictionaries have identical keys', () => {
-    const k = dictKeys('watch');
-    expect(k.tr.length).toBeGreaterThan(60);
-    expect(k.en).toEqual(k.tr);
-  });
 
   it('renders the h1, empty states and an empty log', () => {
     mount();

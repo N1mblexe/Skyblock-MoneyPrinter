@@ -4,7 +4,6 @@ import type { AppState, ElectionInfo, Store } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
 import { fmtAge } from '../format.ts';
 import { icon } from './icons.ts';
-import './i18n.ts';
 
 /** AH age text refresh period. */
 export const AH_TICK_MS = 15_000;

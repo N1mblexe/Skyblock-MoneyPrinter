@@ -165,7 +165,8 @@ export interface Catalog {
 // ---------------------------------------------------------------- Settings
 export type CostMode = 'order' | 'insta';
 export type SellMode = 'offer' | 'insta';
-export type Lang = 'tr' | 'en';
+export type { Lang } from '../i18n/languages.ts';
+import type { Lang } from '../i18n/languages.ts';
 export type Theme = 'auto' | 'light' | 'dark';
 export type TaxRate = 0.0125 | 0.01125 | 0.01;
 /** sequential: buy the batch, then sell it; pipelined: buy and sell overlap (needs 2x capital) */

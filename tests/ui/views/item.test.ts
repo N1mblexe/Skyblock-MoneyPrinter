@@ -3,9 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toSnapshot, validateRaw } from '../../../src/api/normalize.ts';
 import { LS_VIEWPREFS } from '../../../src/config.ts';
 import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.ts';
-import '../../../src/i18n/common.ts';
-import { dictKeys, setLang, t } from '../../../src/i18n/index.ts';
-import '../../../src/state/alertsI18n.ts';
+import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type {
@@ -107,13 +105,6 @@ afterEach(() => {
   setLang('tr');
 });
 
-describe('item view i18n', () => {
-  it('TR and EN have identical keys', () => {
-    const { tr, en } = dictKeys('item');
-    expect(tr.length).toBeGreaterThan(30);
-    expect(en).toEqual(tr);
-  });
-});
 
 describe('item view', () => {
   it('shows a loading message before the snapshot arrives, then renders', async () => {

@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import '../../../src/i18n/common.ts';
 import { clearToasts, toast, TOAST_MAX, TOAST_MS } from '../../../src/ui/kit/toast.ts';
 
 afterEach(() => {

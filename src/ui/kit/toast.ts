@@ -1,7 +1,6 @@
 // Toasts: one shared aria-live="polite" region, newest at the bottom, auto-dismiss (paused on hover/focus).
 import type { ToastKind } from '../../types/contracts.ts';
 import { t } from '../../i18n/index.ts';
-import './i18n.ts';
 
 /** Auto-dismiss delay per kind (ms). */
 export const TOAST_MS: Record<ToastKind, number> = { info: 4000, ok: 4000, warn: 4000, err: 8000 };
