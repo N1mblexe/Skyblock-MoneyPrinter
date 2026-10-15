@@ -330,6 +330,7 @@ describe('item view: your flip, stats, AH, shard', () => {
     await flush();
     expect(dd('item-ah', 'ahPrice')).toBe(fmtPrice(1234));
     expect(dd('item-ah', 'ahCount')).toBe('3');
+    expect(dd('item-ah', 'ahNet')).toBe(fmtPrice(1234 * 0.99)); // 1 % listing fee, no claim tax below 1M
     expect(dd('item-ah', 'ahAge')).toContain('5 dk');
     const txt = q('[data-testid="item-ah"]').textContent!;
     expect(txt).toContain('yıldız');

@@ -38,7 +38,7 @@ The bazaar API names its sides the other way round: `sell_summary` holds buy ord
 
 ## Tax
 
-Bazaar sales receive `price × (1 − taxRate)`. Buys, NPC sales and AH sales are not taxed by the model (AH tax is not modelled at all, see below). The Bazaar Flipper upgrades in the Community Shop lower the rate to 1.125 % and 1 %.
+Bazaar sales receive `price × (1 − taxRate)`. Buys and NPC sales are not taxed. AH sales pay the AH fees below. The Bazaar Flipper upgrades in the Community Shop lower the rate to 1.125 % and 1 %.
 
 ## Fill rates
 
@@ -158,7 +158,12 @@ The id is `ExtraAttributes.id`, with two adjustments: pets become `TYPE;RARITY` 
 
 - one lowest BIN covers every copy of a base id, whatever its stars, reforge, enchantments or pet level. A starred or levelled item is valued like the cheapest copy;
 - the lowest BIN is taken as your sale price, without undercutting;
-- AH listing fees and claim tax are not deducted.
+- every AH sale pays the seller fees (`AH.fees` in `src/config.ts`, `ahNet` in `src/domain/pricing.ts`), per item listed:
+
+| fee | amount |
+|---|---|
+| BIN listing fee | 1 % up to 10M, 2 % up to 100M, 2.5 % above |
+| claim tax | 1 % of sales above 1M, never taking the payout below 1M; ×4 while Derpy is mayor (read from the election data) |
 
 AH values are used only for craft outputs that aren't bazaar products, and only while the AH scan is on. The item page also shows the lowest BIN.
 
@@ -293,7 +298,6 @@ Robust z = `0.6745 × (x − median) / MAD`. Hard flags weigh `suspectScore = 3`
 
 - **Minion calculator.** There are no usable drop tables.
 - **Automatic shard-fusion candidates.** NEU's `attribute_shards.json` has no recipes, so fusion recipes are entered by hand.
-- **AH tax.** Listing fees and claim tax are not deducted from AH values.
 - **Collection and recipe requirements.** Every recipe is assumed to be unlocked.
 - **Order book changes during fills.** Prices, competition and volume are taken from the current snapshot and held constant while your orders fill.
 - **Fusion fees.** `FUSION_FEE_COINS = 0`.

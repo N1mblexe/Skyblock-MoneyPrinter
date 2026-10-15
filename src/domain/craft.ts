@@ -1,7 +1,7 @@
 import { AH, CRAFT_RECURSION_DEPTH } from '../config.ts';
 import type { CalcCtx, CraftRow, IngredientLine, Product, QuoteSource, Recipe, RiskReport } from '../types/contracts.ts';
 import { bookUnits } from './book.ts';
-import { afterTax, buyQuote, buySide, npcBuyRate, sellQuote, sellSide, throughput, type SideBound } from './pricing.ts';
+import { afterTax, ahNet, buyQuote, buySide, npcBuyRate, sellQuote, sellSide, throughput, type SideBound } from './pricing.ts';
 import { assessRisk, combineRisk, reportFromFlags } from './risk.ts';
 
 interface Resolved {
@@ -182,7 +182,8 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
     const ns = catalog.items[out]?.npcSell;
     const npcVal = ns != null && ns > 0 ? recipe.outCount * ns : null;
     const ah = outputOffBazaar ? ctx.ah?.(out) : null;
-    const ahVal = ah && ah.price > 0 && Number.isFinite(ah.price) ? recipe.outCount * ah.price : null;
+    // each item is its own BIN listing: listing fee + claim tax per item (ahNet)
+    const ahVal = ah && ah.price > 0 && Number.isFinite(ah.price) ? recipe.outCount * ahNet(ah.price, ctx.derpy) : null;
     let value = 0;
     let valueSource: CraftRow['valueSource'] = 'bazaar';
     // NPC and AH sales are not bound by bazaar volume: only the inputs / forge limit the rate.
@@ -201,7 +202,7 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
       value = npcVal;
       valueSource = 'npc';
     } else if (ahVal != null) {
-      // TODO: AH listing/claim tax is not modelled; the lowest BIN is taken as the sale price.
+      // sold at the lowest BIN (no undercut), after the listing fee and claim tax
       value = ahVal;
       valueSource = 'ah';
       if (ah!.count < AH.minCount) risks.unshift(reportFromFlags(['AH_THIN']));

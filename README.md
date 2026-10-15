@@ -174,7 +174,7 @@ Every number is an estimate built from the live order book:
 <summary><b>⚠️ What isn't modelled</b></summary>
 <br>
 
-- AH listing and claim tax, and anything that makes one AH item worth more than another with the same id (stars, reforges, enchantments, pet level)
+- Anything that makes one AH item worth more than another with the same id (stars, reforges, enchantments, pet level)
 - Collection and recipe requirements
 - Changes to the order book while your orders fill
 - The anvil XP cost of combining books

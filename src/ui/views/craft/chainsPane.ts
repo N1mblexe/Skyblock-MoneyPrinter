@@ -216,6 +216,7 @@ export function createChainsPane(): View {
     settings: () => ctx!.store.get().settings,
     product: (id) => ctx?.store.get().snapshot?.products[id],
     ah: (id) => ctx?.derived.calcCtx()?.ah?.(id) ?? null,
+    derpy: () => ctx?.derived.calcCtx()?.derpy ?? false,
     recipe(key) {
       const cat = ctx?.store.get().catalog;
       if (!cat) return undefined;

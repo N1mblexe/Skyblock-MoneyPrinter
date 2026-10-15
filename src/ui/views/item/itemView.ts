@@ -1,6 +1,8 @@
 // Item detail view: #/item/<id>. Header actions (watch, quick alert, copy id), key facts, your flip (same as the
 // Flips tab), market stats, AH lowest BIN, shard info, risk, top-10 order book, price history chart, recipes.
 // Catalog / AH items that are not bazaar products get a reduced page (no book, chart or flip).
+import { ahClaimTax, ahListingFee, ahNet } from '../../../domain/pricing.ts';
+import { isDerpy } from '../../../state/derived.ts';
 import { ALERT_METRICS } from '../../../domain/alertMetrics.ts';
 import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
 import { flipPlanFor, metricValue } from '../../../domain/alerts.ts';
@@ -424,13 +426,20 @@ export function createItemView(): View {
     const ah = s.ah;
     const a = ah?.lowestBin[id];
     if (!ah || !a) return null;
+    const derpy = isDerpy(s.election);
     const rows: KvRow[] = [
       [t('ahLowest'), esc(fmtPrice(a.price)), '', 'ahPrice'],
       [t('ahCount'), esc(fmtInt(a.count)), '', 'ahCount'],
+      [
+        t('ahNet'),
+        `<span title="${esc(t('ahNetTitle', { fee: fmtPrice(ahListingFee(a.price)), tax: fmtPrice(ahClaimTax(a.price, derpy)) }))}">${esc(fmtPrice(ahNet(a.price, derpy)))}</span>`,
+        '',
+        'ahNet',
+      ],
       [t('ahAge'), esc(t('ahAgeVal', { age: fmtAge(Date.now() - ah.fetchedAt) })), '', 'ahAge'],
     ];
     const partial = ah.failedPages?.length ? note(t('ahPartial', { n: ah.failedPages.length })) : '';
-    return kv(rows) + partial + note(t('ahCaveat'));
+    return kv(rows) + partial + (derpy ? note(t('ahDerpy')) : '') + note(t('ahCaveat'));
   }
 
   function shardHtml(s: AppState): string | null {
