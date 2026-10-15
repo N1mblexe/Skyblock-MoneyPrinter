@@ -14,6 +14,8 @@ export const RISK_FLAGS: readonly RiskFlag[] = [
   'QUICK_DIVERGENCE',
   'VOLUME_IMBALANCE',
   'AH_THIN',
+  'AH_GAP',
+  'AH_VARIANT',
   'NO_HISTORY',
 ];
 

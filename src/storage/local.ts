@@ -1,16 +1,32 @@
+import { ALERT_METRICS } from '../domain/alertMetrics.ts';
 import {
   ALERTS,
   LS_ALERT_LOG,
   LS_ALERTS,
   LS_FUSION,
+  LS_JOURNAL,
   LS_LAST_ROUTE,
   LS_LEGACY_FUSION,
   LS_LEGACY_TAB,
+  LS_OPP_ALERTS,
+  LS_ORDERS,
   LS_SETTINGS,
   LS_WATCH,
 } from '../config.ts';
 import { sanitizeSettings } from '../state/appState.ts';
-import type { AlertEvent, AlertMetric, AlertRule, FusionRecipe, Settings, WatchEntry } from '../types/contracts.ts';
+import type {
+  AlertEvent,
+  AlertMetric,
+  AlertRule,
+  FusionRecipe,
+  JournalEntry,
+  MyOrder,
+  OppAlertRule,
+  OppHit,
+  OpportunityKind,
+  Settings,
+  WatchEntry,
+} from '../types/contracts.ts';
 
 function storage(): Storage | null {
   try {
@@ -71,15 +87,15 @@ export function saveFusion(r: FusionRecipe[]): void {
 }
 
 // ---- watchlist / alerts: entries are validated field by field; invalid ones are dropped, duplicates keep the first
-const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
-const idStr = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= 200;
-const time = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
-const METRICS: ReadonlySet<unknown> = new Set<AlertMetric>(['ask', 'bid', 'spreadPct', 'flipMargin', 'flipProfit']);
+export const isObj = (x: unknown): x is Record<string, unknown> => !!x && typeof x === 'object' && !Array.isArray(x);
+export const idStr = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '' && v.length <= 200;
+export const time = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+const METRICS: ReadonlySet<unknown> = new Set<AlertMetric>(ALERT_METRICS);
 /** cooldowns above a week are treated as invalid */
 const MAX_COOLDOWN_MIN = 7 * 24 * 60;
 
 /** Parse a stored array, keeping valid entries (cleaned by `parse`); with `key`, only the first one per key. */
-function loadList<T>(lsKey: string, parse: (x: Record<string, unknown>) => T | null, key?: (t: T) => string): T[] {
+export function loadList<T>(lsKey: string, parse: (x: Record<string, unknown>) => T | null, key?: (t: T) => string): T[] {
   const raw = lsGet<unknown>(lsKey, []);
   if (!Array.isArray(raw)) return [];
   const out: T[] = [];
@@ -137,6 +153,82 @@ export const saveAlerts = (a: AlertRule[]): void => lsSet(LS_ALERTS, a);
 /** Persisted alert log (newest first, capped at ALERTS.logMax); invalid events dropped. */
 export const loadAlertLog = (): AlertEvent[] => loadList(LS_ALERT_LOG, parseEvent).slice(0, ALERTS.logMax);
 export const saveAlertLog = (l: AlertEvent[]): void => lsSet(LS_ALERT_LOG, l.slice(0, ALERTS.logMax));
+
+// ---- market alerts
+const OPP_SCOPE = new Set(['flip', 'craft', 'forge', 'chain', 'book', 'npc']);
+const OPP_METRICS = new Set(['profitPerHour', 'profit', 'margin']);
+
+export function parseOppRule(x: Record<string, unknown>): OppAlertRule | null {
+  const { key, scope, metric, value } = x;
+  if (!idStr(key) || !Array.isArray(scope) || !OPP_METRICS.has(metric as string) || typeof value !== 'number' || !Number.isFinite(value)) return null;
+  const sc = [...new Set(scope.filter((k): k is OpportunityKind => OPP_SCOPE.has(k as string)))];
+  if (!sc.length) return null;
+  const hits = Array.isArray(x.hits)
+    ? x.hits.flatMap((h): OppHit[] =>
+        isObj(h) && idStr(h.key) && idStr(h.id) && OPP_SCOPE.has(h.kind as string) && typeof h.value === 'number' && time(h.at)
+          ? [{ key: h.key, kind: h.kind as OpportunityKind, id: h.id, name: typeof h.name === 'string' ? h.name : h.id, value: h.value, at: h.at }]
+          : [],
+      )
+    : [];
+  return {
+    key,
+    scope: sc,
+    metric: metric as OppAlertRule['metric'],
+    value,
+    maxRisk: x.maxRisk === 'caution' ? 'caution' : 'ok',
+    enabled: x.enabled !== false,
+    seen: Array.isArray(x.seen) ? x.seen.filter(idStr) : [],
+    hits: hits.slice(0, 10),
+    ...(time(x.lastFiredAt) ? { lastFiredAt: x.lastFiredAt } : {}),
+  };
+}
+
+export const loadOppAlerts = (): OppAlertRule[] => loadList(LS_OPP_ALERTS, parseOppRule, (r) => r.key);
+export const saveOppAlerts = (r: OppAlertRule[]): void => lsSet(LS_OPP_ALERTS, r);
+
+// ---- trades: my orders and the trade journal
+const posNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+const nonNeg = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+const note = (v: unknown) => (typeof v === 'string' && v.trim() ? { note: v.slice(0, 500) } : {});
+const STATUSES = new Set(['top', 'tied', 'outbid', 'undercut', 'unknown']);
+
+export function parseOrder(x: Record<string, unknown>): MyOrder | null {
+  const { key, id, side, price, qty, placedAt } = x;
+  if (!idStr(key) || !idStr(id) || (side !== 'buy' && side !== 'sell') || !posNum(price) || !posNum(qty)) return null;
+  return {
+    key,
+    id,
+    side,
+    price,
+    qty,
+    placedAt: time(placedAt) ? placedAt : 0,
+    ...(posNum(x.cost) ? { cost: x.cost } : {}),
+    ...note(x.note),
+    ...(STATUSES.has(x.lastStatus as string) ? { lastStatus: x.lastStatus as MyOrder['lastStatus'] } : {}),
+  };
+}
+
+export function parseJournal(x: Record<string, unknown>): JournalEntry | null {
+  const { key, id, qty, buy, sell, tax, fees, at, source } = x;
+  if (!idStr(key) || !idStr(id) || !posNum(qty) || !nonNeg(buy) || !nonNeg(sell)) return null;
+  return {
+    key,
+    id,
+    qty,
+    buy,
+    sell,
+    tax: nonNeg(tax) && tax < 1 ? tax : 0,
+    fees: nonNeg(fees) ? fees : 0,
+    at: time(at) ? at : 0,
+    source: source === 'order' || source === 'plan' ? source : 'manual',
+    ...note(x.note),
+  };
+}
+
+export const loadOrders = (): MyOrder[] => loadList(LS_ORDERS, parseOrder, (o) => o.key);
+export const saveOrders = (o: MyOrder[]): void => lsSet(LS_ORDERS, o);
+export const loadJournal = (): JournalEntry[] => loadList(LS_JOURNAL, parseJournal, (e) => e.key);
+export const saveJournal = (j: JournalEntry[]): void => lsSet(LS_JOURNAL, j);
 
 // ---- legacy single-file tool (bazaar-masasi.html) migration
 /** legacy tab -> route hash (the legacy tool only had these three tabs) */

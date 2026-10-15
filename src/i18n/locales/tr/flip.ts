@@ -121,6 +121,7 @@ export const flip: Messages['flip'] = {
   bookEmpty: 'Emir yok',
   linksTitle: 'Bağlantılar',
   openItem: 'Ürün sayfasını aç',
+  trackOrder: 'Alış emrimi takip et',
   watchAdd: '★ İzlemeye ekle',
   watchRemove: '★ İzlemeden çıkar',
   starred: '{name} izleme listesine eklendi',

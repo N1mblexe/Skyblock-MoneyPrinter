@@ -83,6 +83,8 @@ export const RISK = {
     QUICK_DIVERGENCE: 1,
     VOLUME_IMBALANCE: 1,
     AH_THIN: 2,
+    AH_GAP: 2,
+    AH_VARIANT: 1,
     NO_HISTORY: 0,
   },
 } as const;
@@ -120,6 +122,33 @@ export const AH = {
   concurrency: 4,
   /** fewer BIN listings than this adds an AH thin-market risk flag */
   minCount: 2,
+  /**
+   * Seller fees (hypixelskyblock.minecraft.wiki/w/Auction_House, checked 2026-10): a BIN listing fee by price tier
+   * (`[upTo, rate]`, first match), and a claim tax of up to 1 % on sales above 1M that never takes the payout below
+   * 1M. Mayor Derpy quadruples the claim tax (not the listing fee).
+   */
+  fees: {
+    listing: [
+      [10_000_000, 0.01],
+      [100_000_000, 0.02],
+      [Infinity, 0.025],
+    ] as const,
+    claimTax: 0.01,
+    claimFloor: 1_000_000,
+    derpyClaimMul: 4,
+  },
+} as const;
+
+/** AH flip finder (src/domain/ahFlips.ts): buy the lowest BIN, relist just under the second-lowest. */
+export const AH_FLIP = {
+  /** fewer BIN listings than this: no flip row (too few to trust the second price) */
+  minCount: 3,
+  /** relist this many coins under the second-lowest BIN */
+  undercut: 1,
+  /** second price more than this many times the lowest: AH_GAP risk flag */
+  gapRatio: 3,
+  /** item categories (Hypixel items API) whose copies differ by stars, reforges or enchants */
+  variantCategories: ['SWORD', 'LONGSWORD', 'BOW', 'WAND', 'HELMET', 'CHESTPLATE', 'LEGGINGS', 'BOOTS', 'DRILL', 'PICKAXE', 'GAUNTLET', 'AXE', 'HOE', 'SHOVEL', 'FISHING_ROD', 'FISHING_WEAPON', 'DEPLOYABLE', 'NECKLACE', 'CLOAK', 'BELT', 'GLOVES', 'BRACELET'],
 } as const;
 
 export const ELECTION_POLL_MS = 30 * 60_000;
@@ -145,7 +174,7 @@ export const HOTKEYS = {
   star: ['s'],
   export: ['e'],
   close: ['Escape'],
-  go: { overview: 'g o', flip: 'g f', craft: 'g c', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', watch: 'g w' },
+  go: { overview: 'g o', flip: 'g f', ahflip: 'g a', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', sell: 'g v', trades: 'g t', watch: 'g w' },
 } as const;
 
 // ---- localStorage keys
@@ -153,6 +182,10 @@ export const LS_SETTINGS = 'bazaarMasasi.settings';
 export const LS_FUSION = 'bazaarMasasi.fusion';
 export const LS_VIEWPREFS = 'bazaarMasasi.view.'; // + view id
 export const LS_WATCH = 'bazaarMasasi.watch';
+export const LS_SELL = 'bazaarMasasi.sell';
+export const LS_ORDERS = 'bazaarMasasi.orders';
+export const LS_OPP_ALERTS = 'bazaarMasasi.oppAlerts';
+export const LS_JOURNAL = 'bazaarMasasi.journal';
 export const LS_ALERTS = 'bazaarMasasi.alerts';
 export const LS_ALERT_LOG = 'bazaarMasasi.alertLog';
 export const LS_LAST_ROUTE = 'bazaarMasasi.lastRoute';

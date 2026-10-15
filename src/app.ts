@@ -7,6 +7,7 @@ import { toSnapshot, validateRaw } from './api/normalize.ts';
 import { loadCatalog } from './data/catalog.ts';
 import { msgOf, msgText, setLang, t } from './i18n/index.ts';
 import { startAlerts } from './state/alertsRunner.ts';
+import { startOrderWatch } from './state/ordersRunner.ts';
 import { initialState } from './state/appState.ts';
 import { createDerived } from './state/derived.ts';
 import { createStore } from './state/store.ts';
@@ -15,6 +16,9 @@ import {
   loadAlertLog,
   loadAlerts,
   loadFusion,
+  loadJournal,
+  loadOppAlerts,
+  loadOrders,
   loadSettings,
   loadWatchlist,
   lsGet,
@@ -23,6 +27,9 @@ import {
   saveAlertLog,
   saveAlerts,
   saveFusion,
+  saveJournal,
+  saveOppAlerts,
+  saveOrders,
   saveSettings,
   saveWatchlist,
 } from './storage/local.ts';
@@ -41,6 +48,9 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     ...initialState(settings),
     fusion: loadFusion(),
     watchlist: loadWatchlist(),
+    oppAlerts: loadOppAlerts(),
+    orders: loadOrders(),
+    journal: loadJournal(),
     alerts: loadAlerts(),
     alertLog: loadAlertLog(),
   });
@@ -51,6 +61,9 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     if (s.settings !== prev.settings) saveSettings(s.settings);
     if (s.fusion !== prev.fusion) saveFusion(s.fusion);
     if (s.watchlist !== prev.watchlist) saveWatchlist(s.watchlist);
+    if (s.oppAlerts !== prev.oppAlerts) saveOppAlerts(s.oppAlerts);
+    if (s.orders !== prev.orders) saveOrders(s.orders);
+    if (s.journal !== prev.journal) saveJournal(s.journal);
     if (s.alerts !== prev.alerts) saveAlerts(s.alerts);
     if (s.alertLog !== prev.alertLog) saveAlertLog(s.alertLog);
   });
@@ -151,14 +164,11 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   });
 
   // ---- alerts, auction house, election
-  startAlerts({
-    store,
-    derived,
-    toast,
-    notify: (title, body) => {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body });
-    },
-  });
+  const notify = (title: string, body: string) => {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'granted') new Notification(title, { body });
+  };
+  startAlerts({ store, derived, toast, notify });
+  startOrderWatch({ store, toast, notify });
   const ah = createAhScanner({
     onSnapshot: (snap) => store.set({ ah: snap }),
     onProgress: (p) => store.set({ ahProgress: p }),

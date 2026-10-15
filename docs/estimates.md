@@ -38,7 +38,7 @@ The bazaar API names its sides the other way round: `sell_summary` holds buy ord
 
 ## Tax
 
-Bazaar sales receive `price × (1 − taxRate)`. Buys, NPC sales and AH sales are not taxed by the model (AH tax is not modelled at all, see below). The Bazaar Flipper upgrades in the Community Shop lower the rate to 1.125 % and 1 %.
+Bazaar sales receive `price × (1 − taxRate)`. Buys and NPC sales are not taxed. AH sales pay the AH fees below. The Bazaar Flipper upgrades in the Community Shop lower the rate to 1.125 % and 1 %.
 
 ## Fill rates
 
@@ -144,7 +144,7 @@ The **Chains** tab of Craft & Forge (`#/craft?view=chains`, `src/domain/chains.t
 
 **Steps and ladders.** A `craft` recipe with a bazaar output is a chain step when its main input (the input with the largest quantity) is a bazaar item, makes up at least `CHAIN.mainShare = 0.5` of the recipe's input items, and goes in faster than the output comes out (`qty / outCount > 1`; this drops uncrafting such as Hay Bale → 9 Wheat). The other inputs are side ingredients. When several recipes link the same two items, the one with the fewest side inputs wins, then the one with the fewest main units per output. Steps join into ladders from a root (an item no step produces) to a top; a tier with two steps up gives two ladders.
 
-**Moves.** A move buys one tier and crafts it up at least `CHAIN.minSteps = 2` steps (single steps are the Recipes tab's rows). It is priced as one recipe: `need` units of the first tier plus every step's side ingredients, summed top-down (crafts at a step = units needed of its output / outCount), producing one unit of the top tier. Pricing is the craft model above, with one difference: the first tier is always bought (bazaar or NPC), never sub-crafted, so a move means what it says. Side ingredients still take their cheapest source.
+**Moves.** A move buys one tier and crafts it up at least `CHAIN.minSteps = 2` steps (single steps are the Recipes tab's rows). It is priced as one recipe: `need` units of the first tier plus every step's side ingredients, summed top-down (crafts at a step = units needed of its output / outCount), producing one unit of the top tier. Pricing is the craft model above, with one difference: the first tier is always bought, never sub-crafted, so a move means what it says. By default it is bought on the bazaar (`ChainStart` `bazaar`): an NPC shop is often cheaper per item, but its daily limit makes long ladders crawl. The tab's "First tier from: Cheapest" switch allows the NPC price too. Side ingredients always take their cheapest source.
 
 **Best per ladder.** By default the tab shows each ladder's move with the highest profit per hour. The planner gets every priced, profitable move as a `chain` opportunity; a move and the same item's craft row share the planner's one-position-per-item rule.
 
@@ -158,9 +158,49 @@ The id is `ExtraAttributes.id`, with two adjustments: pets become `TYPE;RARITY` 
 
 - one lowest BIN covers every copy of a base id, whatever its stars, reforge, enchantments or pet level. A starred or levelled item is valued like the cheapest copy;
 - the lowest BIN is taken as your sale price, without undercutting;
-- AH listing fees and claim tax are not deducted.
+- every AH sale pays the seller fees (`AH.fees` in `src/config.ts`, `ahNet` in `src/domain/pricing.ts`), per item listed:
+
+| fee | amount |
+|---|---|
+| BIN listing fee | 1 % up to 10M, 2 % up to 100M, 2.5 % above |
+| claim tax | 1 % of sales above 1M, never taking the payout below 1M; ×4 while Derpy is mayor (read from the election data) |
 
 AH values are used only for craft outputs that aren't bazaar products, and only while the AH scan is on. The item page also shows the lowest BIN.
+
+## AH flips
+
+The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) uses the AH scan's two lowest BIN prices per id (scan v2; an older cached scan shows a "rescan needed" note until the next scan). A row buys the lowest BIN and relists it at the second-lowest minus `AH_FLIP.undercut = 1` coin:
+
+`profit = ahNet(next − 1) − lowest`, `margin = profit / lowest`, using the AH fees above (×4 claim tax under Derpy).
+
+Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter is 5). Because one id covers every copy of an item, two flags warn about variants: `AH_VARIANT` for pets and for gear and tools (`AH_FLIP.variantCategories`), and `AH_GAP` when the second price is more than `AH_FLIP.gapRatio = 3` times the lowest. Both together make a row suspect, hidden while "Hide suspicious" is on. Prices can change before you reach the listing; the page copies `/viewauction <uuid>` for the cheapest listing.
+
+## Sell or craft?
+
+The **Sell or craft?** page (`#/sell`, `src/domain/sell.ts`) values items you already own. Raw options for `qty` items:
+
+| option | you get |
+|---|---|
+| insta-sell | walk the buy orders for `qty` (VWAP), after bazaar tax; if the book holds fewer, only the filled part counts and the row says so |
+| sell offer | `(ask − 0.1)` after tax × qty; time = qty / your sell rate (your share of weekly volume) |
+| NPC | NPC sell price × qty |
+| AH | `ahNet(lowest BIN)` × qty, for auctionable items with a scanned price |
+
+**Craft up:** for every chain ladder (see Craft chains) that contains the item, every higher tier is an option. Your items are free inputs; side ingredients are bought at their cheapest source (the craft pricer); only whole crafts count (`made = floor(qty / need)`); leftover items are sold at the best raw price per item. `net = made × (value of one crafted item − its side-ingredient cost) + leftover × best raw price`. Options are listed best first; the page total adds each item's best option.
+
+## Trades: my orders and the journal
+
+**My orders** (`src/domain/orders.ts`): for each tracked order, against the current book —
+
+| status | buy order | sell offer |
+|---|---|---|
+| top | your price is the highest bid | your price is the lowest ask |
+| tied | others are at your price too (orders > 1 or more items than yours) | same |
+| outbid / undercut | a bid above yours | an ask below yours |
+
+"Ahead of you" = items at better prices + others at your price. The fill estimate assumes the whole weekly insta volume on your side (insta-sells for buy orders, insta-buys for sell offers) serves the queue in price order: `(ahead + yours) / (week / 168)` hours. Re-price suggests best ± 0.1. On every new live snapshot the order watcher (`src/state/ordersRunner.ts`) stores each status and toasts (and notifies, if on) once when an order goes from top/tied to outbid/undercut. **Filled** on a buy order opens a sell offer for the same items with the buy price as its cost; on a sell offer it logs a journal entry.
+
+**Journal** (`src/domain/journal.ts`): `profit = qty × sell × (1 − tax) − qty × buy − fees`, where `tax` is the bazaar tax at the time (0 for sales entered net, e.g. from the planner). Totals for today (since local midnight), the last 7 days and all time, ROI = profit / (qty × buy + fees), best and worst items.
 
 ## Book combining
 
@@ -267,6 +307,8 @@ An alert rule watches one item: `ask`, `bid`, `spreadPct` (`(ask − bid) / bid`
 - A fired alert shows a toast, and a browser notification if notifications are on and permitted. The log keeps the last 100 (`ALERTS.logMax`).
 - **Alerts only run while a tab with the app is open.** There is no background service.
 
+
+**Market alerts** (`src/domain/oppAlerts.ts`, Watchlist page): rules over every opportunity instead of one item: kinds (flip, craft, forge, chain, book, NPC), a metric (profit/hour, profit per item or margin) above a value, and the highest risk level allowed (clean, or clean and caution). On each new live snapshot the runner checks the rows of every page; a rule fires only for rows that were not meeting it at the previous check (`seen`), so a lasting opportunity is reported once, and again only after it drops out and comes back. One grouped toast (and notification) per rule lists the best three; the latest 10 hits are kept on the rule with links to their page.
 ## Risk flags
 
 Each product's market is checked against `config.RISK`. Some flags need price history: the baseline is the last 24 h, thinned to one point per 15 minutes, leaving out the last 15 minutes so that a fresh spike doesn't become its own baseline.
@@ -293,7 +335,6 @@ Robust z = `0.6745 × (x − median) / MAD`. Hard flags weigh `suspectScore = 3`
 
 - **Minion calculator.** There are no usable drop tables.
 - **Automatic shard-fusion candidates.** NEU's `attribute_shards.json` has no recipes, so fusion recipes are entered by hand.
-- **AH tax.** Listing fees and claim tax are not deducted from AH values.
 - **Collection and recipe requirements.** Every recipe is assumed to be unlocked.
 - **Order book changes during fills.** Prices, competition and volume are taken from the current snapshot and held constant while your orders fill.
 - **Fusion fees.** `FUSION_FEE_COINS = 0`.

@@ -1,0 +1,78 @@
+/* Trades page (scoped under .trades-view; theme tokens only) */
+.trades-view {
+  display: grid;
+  gap: var(--s-3);
+  min-width: 0;
+}
+.trades-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.trades-head h1 {
+  margin: 0;
+  font-size: var(--fs-2xl);
+}
+.trades-head h1:focus {
+  outline: none;
+}
+.trades-head p {
+  margin: 0;
+}
+.trades-tabs {
+  justify-self: start;
+  margin-top: var(--s-1);
+}
+.trades-view section[data-pane] {
+  display: grid;
+  gap: var(--s-3);
+}
+.trades-view section[hidden] {
+  display: none;
+}
+.trades-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--s-3);
+}
+.trades-form .field {
+  min-width: 8rem;
+}
+.trades-form .field:first-child {
+  flex: 1 1 14rem;
+}
+.trades-sums {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--s-3);
+}
+.trades-sum {
+  display: grid;
+  gap: var(--s-1);
+}
+.trades-sum strong {
+  font-size: var(--fs-xl);
+}
+.trades-io {
+  display: flex;
+  gap: var(--s-2);
+}
+.trades-import {
+  cursor: pointer;
+}
+.trades-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+}
+.trades-items:empty {
+  display: none;
+}
+.trades-items h3 {
+  margin: 0 0 var(--s-1);
+  font-size: var(--fs-md);
+}
+.trades-items ol {
+  margin: 0;
+  padding-left: 1.2em;
+}

@@ -1,15 +1,15 @@
 import type { Messages } from '../en/index.ts';
 
 export const craft: Messages['craft'] = {
-  title: 'Craft & Forge',
-  intro: 'Malzemeleri al, craftla (veya forge’la), çıktıyı sat. Her malzeme için en ucuz yol seçilir. Satıra tıkla, detay yan panelde açılır.',
+  title: 'Craft',
+  intro: 'Malzemeleri al, craftla, ürünü sat. Her malzeme için en ucuz yol kullanılır. Ayrıntılar için bir satıra tıkla.',
+  forgeTitle: 'Forge',
+  forgeIntro: 'Malzemeleri al, forge’a koy, sonucu sat. Forge süresi ve forge slotların saatte kaç tane yapacağını sınırlar. Ayrıntılar için bir satıra tıkla.',
+  colDuration: 'Forge süresi',
 
   // filters
   search: 'Ara (çıktı veya malzeme)',
   searchPh: 'enchanted, sugar…',
-  kind: 'Tür',
-  kindAll: 'Hepsi',
-  kindCraft: 'Craft',
   kindForge: 'Forge',
   market: 'Çıktı pazarı',
   marketAll: 'Hepsi',
@@ -98,8 +98,9 @@ export const craft: Messages['craft'] = {
   stepSellOffer: 'Bazaarda sell offer ile sat. Vergi (%{tax}) sonrası ≈ <b>{value}</b>',
   stepSellInsta: 'Bazaarda insta-sell ile sat. Vergi (%{tax}) sonrası ≈ <b>{value}</b>',
   stepSellNpc: 'NPC’ye sat (vergi yok) ≈ <b>{value}</b>',
-  stepSellAh_one: 'Müzayedede ~en düşük BIN fiyatından listele (adet {price}, {count} ilan) ≈ <b>{value}</b>',
-  stepSellAh_other: 'Müzayedede ~en düşük BIN fiyatından listele (adet {price}, {count} ilan) ≈ <b>{value}</b>',
+  stepSellAh_one: 'Müzayedede ~en düşük BIN fiyatından listele (adet {price}, {count} ilan); {fees} ilan ücreti ve tahsil vergisi sonrası ≈ <b>{value}</b>',
+  stepSellAh_other: 'Müzayedede ~en düşük BIN fiyatından listele (adet {price}, {count} ilan); {fees} ilan ücreti ve tahsil vergisi sonrası ≈ <b>{value}</b>',
+  derpyNote: 'Belediye başkanı Derpy: müzayede tahsil vergisi 4 kat.',
   stepProfit: 'Kâr / craft: <b class="{cls}">{profit}</b> ({margin})',
   ahWarn: 'En düşük BIN; yıldız, reforge, pet seviyesi ve diğer eşya özelliklerini hesaba katmaz. Müzayede vergisi ve listeleme ücreti de düşülmedi. Listelemeden önce oyunda kontrol et.',
   cannotPrice: 'Bu tarif fiyatlanamadı; eksik fiyat: {ids}.',
@@ -176,11 +177,14 @@ export const craft: Messages['craft'] = {
   chNote1:
     'Bir tarif, girdi ürünlerinin en az yarısı tek bir bazaar malzemesiyse ve o malzemeden çıkandan fazlası giriyorsa <strong>zincir adımıdır</strong> (Wheat → Enchanted Wheat). Adımlar <strong>merdivenlere</strong> bağlanır; geri açma (Hay Bale → 9 Wheat) adım sayılmaz.',
   chNote2:
-    'Her satır bir <strong>hamledir</strong>: ilk kademeyi al, son kademeye kadar her adımı craftla, sat. İlk kademe her zaman satın alınır, craftlanmaz; diğer malzemeler Tarifler sekmesindeki gibi bazaar, NPC ve alt craft arasından en ucuzuyla alınır.',
+    'Her satır bir <strong>hamledir</strong>: ilk kademeyi al, son kademeye kadar her adımı craftla, sat. İlk kademe her zaman satın alınır, craftlanmaz: varsayılan olarak bazaardan (NPC dükkânı birim başına çoğu zaman daha ucuzdur ama günlük limiti uzun merdivenleri çok yavaşlatır) ya da “İlk kademe” ile en ucuz kaynaktan. Diğer malzemeler Tarifler sekmesindeki gibi bazaar, NPC ve alt craft arasından en ucuzuyla alınır.',
   chNote3:
     '<strong>Merdiven başına en iyi hamle</strong> her merdivenin en kârlı (kâr/saat) hamlesini bırakır. Bir satırı açınca merdivenin her kademesini karşılaştırırsın: bir ürünün ilk kademenin bir birimi başına değeri ve orada durmanın kârı.',
   chSearchPh: 'wheat, gem, egg…',
   chBest: 'Merdiven başına en iyi hamle',
+  chStart: 'İlk kademe',
+  chStartBazaar: 'Bazaar',
+  chStartCheapest: 'En ucuz (NPC dahil)',
   chMinSteps: 'Min. adım',
   chCount_one: '{n} / {total} hamle',
   chCount_other: '{n} / {total} hamle',

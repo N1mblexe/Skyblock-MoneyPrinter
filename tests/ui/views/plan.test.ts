@@ -203,6 +203,22 @@ describe('plan view', () => {
     expect(sourceHref({ ...opp, kind: 'book', id: 'ENCHANTMENT_A_2' })).toBe('#/books?q=ENCHANTMENT_A_2');
     expect(sourceHref({ ...opp, kind: 'craft' })).toBe('#/craft?q=X');
     expect(sourceHref({ ...opp, kind: 'npc' })).toBe('#/npc?q=X');
+    expect(sourceHref({ ...opp, kind: 'forge' })).toBe('#/forge?q=X');
+    expect(sourceHref({ ...opp, kind: 'chain' })).toBe('#/craft?view=chains&q=X');
+  });
+
+  it('filterKinds: kind toggles and the AH-sold toggle', () => {
+    const base = { id: 'X', name: 'X', unitCost: 1, profitPerUnit: 1, unitsPerHour: 1, maxUnits: 1, slots: 0, risk: { level: 'ok' as const, score: 0, flags: [] } };
+    const opps = [
+      { ...base, kind: 'craft' as const, key: 'craft:A' },
+      { ...base, kind: 'forge' as const, key: 'forge:B', ahSold: true },
+      { ...base, kind: 'forge' as const, key: 'forge:C' },
+      { ...base, kind: 'flip' as const, key: 'flip:D' },
+    ];
+    const v = { flip: true, craft: true, forge: true, chain: true, book: true, npc: true, ah: true };
+    expect(filterKinds(opps, v)).toBe(opps);
+    expect(filterKinds(opps, { ...v, forge: false }).map((o) => o.key)).toEqual(['craft:A', 'flip:D']);
+    expect(filterKinds(opps, { ...v, ah: false }).map((o) => o.key)).toEqual(['craft:A', 'forge:C', 'flip:D']);
   });
 
   it('opens the detail panel with opportunity numbers and a source link', () => {
@@ -216,6 +232,7 @@ describe('plan view', () => {
     expect(q('[data-testid="plan-detail"] dd[data-k="maxUnits"]')).toBeTruthy();
     expect(q('[data-testid="plan-detail"] dd[data-k="unitCost"]').textContent).toBe(fmtCoins(alloc.opp.unitCost));
     expect(q('[data-testid="plan-source"]').getAttribute('href')).toBe(sourceHref(alloc.opp));
+    expect(q('[data-testid="plan-log"]').getAttribute('href')).toMatch(new RegExp(String.raw`^#/trades\?view=journal&add=${encodeURIComponent(alloc.opp.id)}&qty=\d+&buy=[\d.]+&sell=[\d.]+&tax=0&src=plan$`));
     expect(q('[data-testid="plan-why-long"]').textContent!.length).toBeGreaterThan(20);
   });
 

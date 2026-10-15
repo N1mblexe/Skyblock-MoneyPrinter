@@ -79,9 +79,10 @@ describe('overview view', () => {
     mount();
     expect(root.querySelector('h1')!.textContent).toBe('Genel bakış');
     const keys = [...root.querySelectorAll<HTMLElement>('[data-card]')].map((c) => c.dataset.card);
-    expect(keys).toEqual(['flips', 'crafts', 'books', 'movers', 'consistent', 'plan', 'watch', 'alerts', 'election', 'market']);
+    expect(keys).toEqual(['flips', 'crafts', 'forges', 'books', 'movers', 'consistent', 'plan', 'watch', 'alerts', 'election', 'market']);
     expect(card('flips').querySelector('h2 a')!.getAttribute('href')).toBe('#/flip');
     expect(card('crafts').querySelector('h2 a')!.getAttribute('href')).toBe('#/craft');
+    expect(card('forges').querySelector('h2 a')!.getAttribute('href')).toBe('#/forge');
     expect(card('books').querySelector('h2 a')!.getAttribute('href')).toBe('#/books');
     expect(card('plan').querySelector('h2 a')!.getAttribute('href')).toBe('#/plan');
     expect(card('watch').querySelector('h2 a')!.getAttribute('href')).toBe('#/watch');
@@ -288,6 +289,16 @@ describe('overview view', () => {
     expect(root.childElementCount).toBe(0);
     // remount works
     view.mount(root, ctx, { id: 'overview' });
-    expect(root.querySelectorAll('[data-card]')).toHaveLength(10);
+    expect(root.querySelectorAll('[data-card]')).toHaveLength(11);
+  });
+});
+
+describe('topCrafts by kind', () => {
+  it('crafts and forges are listed apart', () => {
+    store.set({ snapshot: SNAP, catalog: CATALOG });
+    const all = ctx.derived.crafts();
+    expect(topCrafts(all, 50, 'craft').every((r) => r.recipe.kind === 'craft')).toBe(true);
+    const forges = topCrafts(all, 50, 'forge');
+    expect(forges.every((r) => r.recipe.kind === 'forge')).toBe(true);
   });
 });

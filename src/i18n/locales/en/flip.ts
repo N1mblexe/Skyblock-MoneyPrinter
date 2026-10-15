@@ -119,6 +119,7 @@ export const flip = {
   bookEmpty: 'No orders',
   linksTitle: 'Links',
   openItem: 'Open item page',
+  trackOrder: 'Track my buy order',
   watchAdd: '★ Add to watchlist',
   watchRemove: '★ Remove from watchlist',
   starred: '{name} added to the watchlist',

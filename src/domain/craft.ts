@@ -1,7 +1,7 @@
 import { AH, CRAFT_RECURSION_DEPTH } from '../config.ts';
 import type { CalcCtx, CraftRow, IngredientLine, Product, QuoteSource, Recipe, RiskReport } from '../types/contracts.ts';
 import { bookUnits } from './book.ts';
-import { afterTax, buyQuote, buySide, npcBuyRate, sellQuote, sellSide, throughput, type SideBound } from './pricing.ts';
+import { afterTax, ahNet, buyQuote, buySide, npcBuyRate, sellQuote, sellSide, throughput, type SideBound } from './pricing.ts';
 import { assessRisk, combineRisk, reportFromFlags } from './risk.ts';
 
 interface Resolved {
@@ -33,6 +33,8 @@ export function computeCrafts(ctx: CalcCtx): CraftRow[] {
 export interface PriceOptions {
   /** inputs bought as they are (bazaar or NPC), never sub-crafted; a chain move uses it for its starting tier */
   directIds?: ReadonlySet<string>;
+  /** inputs bought on the bazaar only (no NPC shop, no sub-craft) */
+  bazaarIds?: ReadonlySet<string>;
 }
 
 export interface CraftPricer {
@@ -57,15 +59,20 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
     return r;
   };
 
-  /** Cheapest of bazaar buy quote and NPC buy price. */
-  const direct = (id: string): Resolved | null => {
-    if (directMemo.has(id)) return directMemo.get(id)!;
-    let best: Resolved | null = null;
+  /** Bazaar buy quote in the cost mode, null when the item can't be bought there. */
+  const bazaar = (id: string): Resolved | null => {
     const p = snap.products[id];
     const side = p ? buySide(p, costMode, share, undefined, catalog.items[id]?.npcSell) : null;
     const q = side?.quote;
-    if (q && q.price > 0 && Number.isFinite(q.price))
-      best = { unit: q.price, source: q.source, rate: side.rate, bound: 'volume', orderUnits: q.source === 'order' ? 1 : 0 };
+    return q && q.price > 0 && Number.isFinite(q.price)
+      ? { unit: q.price, source: q.source, rate: side.rate, bound: 'volume', orderUnits: q.source === 'order' ? 1 : 0 }
+      : null;
+  };
+
+  /** Cheapest of bazaar buy quote and NPC buy price. */
+  const direct = (id: string): Resolved | null => {
+    if (directMemo.has(id)) return directMemo.get(id)!;
+    let best = bazaar(id);
     const nb = catalog.items[id]?.npcBuy;
     if (nb != null && nb > 0 && (!best || nb < best.unit)) best = { unit: nb, source: 'npc', rate: npcRate, bound: 'npcLimit', orderUnits: 0 };
     directMemo.set(id, best);
@@ -138,7 +145,11 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
     const capDepth = (v: number) => (depthCap = depthCap == null ? v : Math.min(depthCap, v));
 
     for (const inp of recipe.inputs) {
-      const res = opts?.directIds?.has(inp.id) ? direct(inp.id) : resolve(inp.id, 0, new Set([recipe.output])).res;
+      const res = opts?.bazaarIds?.has(inp.id)
+        ? bazaar(inp.id)
+        : opts?.directIds?.has(inp.id)
+          ? direct(inp.id)
+          : resolve(inp.id, 0, new Set([recipe.output])).res;
       const line: IngredientLine = {
         id: inp.id,
         name: catalog.name(inp.id),
@@ -182,7 +193,8 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
     const ns = catalog.items[out]?.npcSell;
     const npcVal = ns != null && ns > 0 ? recipe.outCount * ns : null;
     const ah = outputOffBazaar ? ctx.ah?.(out) : null;
-    const ahVal = ah && ah.price > 0 && Number.isFinite(ah.price) ? recipe.outCount * ah.price : null;
+    // each item is its own BIN listing: listing fee + claim tax per item (ahNet)
+    const ahVal = ah && ah.price > 0 && Number.isFinite(ah.price) ? recipe.outCount * ahNet(ah.price, ctx.derpy) : null;
     let value = 0;
     let valueSource: CraftRow['valueSource'] = 'bazaar';
     // NPC and AH sales are not bound by bazaar volume: only the inputs / forge limit the rate.
@@ -201,7 +213,7 @@ export function createCraftPricer(ctx: CalcCtx): CraftPricer {
       value = npcVal;
       valueSource = 'npc';
     } else if (ahVal != null) {
-      // TODO: AH listing/claim tax is not modelled; the lowest BIN is taken as the sale price.
+      // sold at the lowest BIN (no undercut), after the listing fee and claim tax
       value = ahVal;
       valueSource = 'ah';
       if (ah!.count < AH.minCount) risks.unshift(reportFromFlags(['AH_THIN']));

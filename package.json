@@ -14,6 +14,8 @@
     "sanity": "tsx scripts/sanity.ts",
     "smoke": "tsx scripts/smoke.ts",
     "screenshots": "tsx scripts/screenshots.ts",
+    "icons": "tsx scripts/icons.ts",
+    "pwa:check": "tsx scripts/pwa-check.ts",
     "check:owners": "tsx scripts/check-ownership.ts",
     "coverage": "vitest run --coverage"
   },

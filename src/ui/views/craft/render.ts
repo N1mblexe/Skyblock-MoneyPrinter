@@ -16,6 +16,8 @@ export interface RenderEnv {
   product(id: string): Product | undefined;
   /** AH lowest BIN for an off-bazaar output (only when the AH scan is on) */
   ah(id: string): AhPrice | null;
+  /** mayor Derpy in office (AH claim tax ×4) */
+  derpy(): boolean;
   /** recipe lookup by key (for viaRecipe) */
   recipe(key: string): Recipe | undefined;
   watched(id: string): boolean;
@@ -55,8 +57,21 @@ function bottleneck(r: CraftRow): IngredientLine | undefined {
 const outBott = (r: CraftRow) => !isUnpriced(r) && Number.isFinite(r.outCraftsPerHour) && r.outCraftsPerHour <= r.inCraftsPerHour;
 const inBott = (r: CraftRow) => !isUnpriced(r) && Number.isFinite(r.inCraftsPerHour) && r.inCraftsPerHour < r.outCraftsPerHour;
 
-export function craftColumns(env: RenderEnv): KitColumn<CraftRow>[] {
+export function craftColumns(env: RenderEnv, kind: 'craft' | 'forge' = 'craft'): KitColumn<CraftRow>[] {
   const coins = (v: (r: CraftRow) => number) => (r: CraftRow) => (isUnpriced(r) ? null : v(r));
+  const duration: KitColumn<CraftRow>[] =
+    kind === 'forge'
+      ? [
+          {
+            key: 'duration',
+            label: () => t('craft.colDuration'),
+            get: (r) => r.recipe.durationSec ?? null,
+            align: 'right',
+            priority: 2,
+            html: (r) => (r.recipe.durationSec ? esc(fmtHours(r.recipe.durationSec / 3600)) : dash),
+          },
+        ]
+      : [];
   return [
     {
       key: 'name',
@@ -74,6 +89,7 @@ export function craftColumns(env: RenderEnv): KitColumn<CraftRow>[] {
         );
       },
     },
+    ...duration,
     {
       key: 'count',
       label: () => t('craft.colOutCount'),
@@ -310,8 +326,11 @@ export function sellStepsHtml(env: RenderEnv, r: CraftRow): string[] {
   if (r.valueSource === 'npc') li.push(t('craft.stepSellNpc', { value }));
   else if (r.valueSource === 'ah') {
     const ah = env.ah(r.id);
-    const unit = r.recipe.outCount > 0 ? r.value / r.recipe.outCount : r.value;
-    li.push(t('craft.stepSellAh', { price: esc(fmtCoins(ah?.price ?? unit)), count: esc(ah ? fmtInt(ah.count) : '?'), value }));
+    const n = r.recipe.outCount > 0 ? r.recipe.outCount : 1;
+    const price = ah?.price ?? r.value / n;
+    const fees = n * price - r.value;
+    li.push(t('craft.stepSellAh', { price: esc(fmtCoins(price)), count: esc(ah ? fmtInt(ah.count) : '?'), fees: esc(fmtCoins(fees)), value }));
+    if (env.derpy()) li.push(esc(t('craft.derpyNote')));
   } else if (s.sellMode === 'insta') li.push(t('craft.stepSellInsta', { tax, value }));
   else li.push(t('craft.stepSellOffer', { tax, value }));
   li.push(t('craft.stepProfit', { cls: signCls(r.profit), profit: esc(fmtCoins(r.profit)), margin: esc(fmtPct(r.margin)) }));

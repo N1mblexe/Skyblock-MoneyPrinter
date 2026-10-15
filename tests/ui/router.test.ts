@@ -26,7 +26,12 @@ describe('parseHash', () => {
     ['#/item/INK_SACK%3A4', { id: 'item', param: 'INK_SACK:4' }],
     ['#/item/INK_SACK:4', { id: 'item', param: 'INK_SACK:4' }],
     ['#/craft?q=gold', { id: 'craft', query: { q: 'gold' } }],
-    ['#/craft?q=enchanted+gold&kind=forge', { id: 'craft', query: { q: 'enchanted gold', kind: 'forge' } }],
+    ['#/forge', { id: 'forge' }],
+    // the old Craft & Forge kind filter: forge links open the Forge page, other kinds just drop the filter
+    ['#/craft?q=enchanted+gold&kind=forge', { id: 'forge', query: { q: 'enchanted gold' } }],
+    ['#/craft?kind=forge', { id: 'forge' }],
+    ['#/craft?kind=craft&q=x', { id: 'craft', query: { q: 'x' } }],
+    ['#/craft?kind=all', { id: 'craft' }],
     ['#/item/%E0%A4%A', { id: 'item', param: '%E0%A4%A' }],
   ])('%s', (hash, route) => expect(parseHash(hash)).toEqual(route));
 });

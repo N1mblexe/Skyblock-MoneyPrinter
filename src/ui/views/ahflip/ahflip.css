@@ -1,0 +1,42 @@
+/* AH flip finder (scoped under .ahf-view; theme tokens only) */
+.ahf-view {
+  gap: var(--s-3);
+  min-width: 0;
+}
+.ahf-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.ahf-head h1 {
+  margin: 0;
+  font-size: var(--fs-2xl);
+}
+.ahf-head h1:focus {
+  outline: none;
+}
+.ahf-intro {
+  margin: 0;
+}
+.ahf-view .ahf-state[hidden],
+.ahf-view .tbl[hidden],
+.ahf-view .ahf-tools[hidden] {
+  display: none;
+}
+.ahf-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-3);
+}
+.ahf-detail {
+  display: grid;
+  gap: var(--s-3);
+}
+.ahf-detail .ahf-badges,
+.ahf-detail .ahf-actions {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}

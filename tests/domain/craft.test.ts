@@ -336,7 +336,8 @@ describe('computeCrafts off-bazaar outputs', () => {
     expect(n.profitPerHour).toBeCloseTo(2 * 47, 9);
 
     const a = by.get('GEAR_A#1')!;
-    expect(a).toMatchObject({ outputOffBazaar: true, valueSource: 'ah', value: 2000, cost: 3, unpriced: [] });
+    // 2 items, each listed at the 1,000 lowest BIN: 1 % listing fee, no claim tax below 1M
+    expect(a).toMatchObject({ outputOffBazaar: true, valueSource: 'ah', value: 2 * 990, cost: 3, unpriced: [] });
     expect(a.outCraftsPerHour).toBe(Infinity);
     expect(a.risk.flags).toEqual(['AH_THIN']); // fewer than AH.minCount listings
     expect(a.tp.unitsPerHour).toBe(2);
@@ -348,9 +349,18 @@ describe('computeCrafts off-bazaar outputs', () => {
   it('NPC vs AH: the higher value wins', () => {
     const both = (price: number) => (id: string): AhPrice | null => (id === 'GEAR_N' ? { price, count: 5 } : null);
     const hi = rowsBy(computeCrafts({ ...ctx({}, { ah: both(80) }), catalog: cat })).get('GEAR_N#0')!;
-    expect(hi).toMatchObject({ valueSource: 'ah', value: 80 });
+    expect(hi.valueSource).toBe('ah');
+    expect(hi.value).toBeCloseTo(80 * 0.99, 9);
     const lo = rowsBy(computeCrafts({ ...ctx({}, { ah: both(20) }), catalog: cat })).get('GEAR_N#0')!;
     expect(lo).toMatchObject({ valueSource: 'npc', value: 50 });
+  });
+
+  it('AH value is after the listing fee and claim tax; Derpy quadruples the claim tax', () => {
+    const big = (id: string): AhPrice | null => (id === 'GEAR_A' ? { price: 5_000_000, count: 5 } : null);
+    const plain = rowsBy(computeCrafts({ ...ctx({}, { ah: big }), catalog: cat })).get('GEAR_A#1')!;
+    expect(plain.value).toBeCloseTo(2 * (5_000_000 - 50_000 - 50_000), 6);
+    const derpy = rowsBy(computeCrafts({ ...ctx({}, { ah: big, derpy: true }), catalog: cat })).get('GEAR_A#1')!;
+    expect(derpy.value).toBeCloseTo(2 * (5_000_000 - 50_000 - 200_000), 6);
   });
 
   it('enough AH listings -> no AH flag; no ctx.ah -> unpriced', () => {

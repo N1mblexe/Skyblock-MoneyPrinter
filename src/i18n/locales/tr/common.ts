@@ -4,6 +4,7 @@ import type { Messages } from '../en/index.ts';
 // View agents may reuse any key here via t('common.<key>').
 export const common: Messages['common'] = {
   appTitle: 'Bazaar Masası',
+  updateReady: 'Bazaar Desk’in yeni sürümü hazır: kullanmak için sayfayı yenile.',
   // the sidebar brand shows the title in two parts, the second one accented
   appTitleMain: 'Bazaar',
   appTitleAccent: 'Masası',
@@ -113,10 +114,14 @@ export const common: Messages['common'] = {
   nav_overview: 'Genel bakış',
   nav_flip: 'Flipler',
   nav_books: 'Kitaplar',
-  nav_craft: 'Craft & Forge',
+  nav_ahflip: 'Müzayede flip',
+  nav_craft: 'Craft',
+  nav_forge: 'Forge',
   nav_fusion: 'Fusion',
   nav_npc: 'NPC & Dükkanlar',
   nav_plan: 'Planlayıcı',
+  nav_sell: 'Sat mı, craftla mı?',
+  nav_trades: 'İşlemler',
   nav_watch: 'İzleme',
   nav_item: 'Ürün',
   navGroup_markets: 'Piyasalar',

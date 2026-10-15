@@ -241,6 +241,10 @@ export type RiskFlag =
   | 'PRICE_SPIKE'
   /** off-bazaar output valued from fewer than AH.minCount auction listings */
   | 'AH_THIN'
+  /** AH id that covers many variants (pets: level; gear and tools: stars, reforges, enchants) */
+  | 'AH_VARIANT'
+  /** the second-lowest BIN is far above the lowest: likely a different variant or a mispriced listing */
+  | 'AH_GAP'
   | 'NO_HISTORY';
 
 export type RiskLevel = 'ok' | 'caution' | 'suspect';
@@ -438,7 +442,7 @@ export interface MarketStat {
   sellVolTrend: number | null;
 }
 
-export type OpportunityKind = 'flip' | 'craft' | 'chain' | 'book' | 'npc';
+export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc';
 
 export interface Opportunity {
   kind: OpportunityKind;
@@ -457,6 +461,8 @@ export interface Opportunity {
   /** order slots used */
   slots: number;
   risk: RiskReport;
+  /** the output is valued at the AH lowest BIN (planner can leave these out) */
+  ahSold?: boolean;
 }
 
 export interface Allocation {
@@ -472,6 +478,75 @@ export interface PlanResult {
   capitalUsed: number;
   slotsUsed: number;
   profitPerHour: number;
+}
+
+// ---------------------------------------------------------------- Market (opportunity) alerts
+export type OppMetric = 'profitPerHour' | 'profit' | 'margin';
+
+/** One row that met a market alert. */
+export interface OppHit {
+  /** opportunity key, e.g. `flip:ID`, `chain:A>B>C` */
+  key: string;
+  kind: OpportunityKind;
+  id: string;
+  name: string;
+  value: number;
+  at: number;
+}
+
+/** "Tell me when any <kinds> beats <value> <metric> with risk up to <maxRisk>": not tied to one item. */
+export interface OppAlertRule {
+  key: string;
+  scope: OpportunityKind[];
+  metric: OppMetric;
+  /** profit/hour or profit per unit in coins; margin as a ratio */
+  value: number;
+  maxRisk: 'ok' | 'caution';
+  enabled: boolean;
+  /** keys meeting the rule at the last check: only rows not in here fire */
+  seen: string[];
+  /** latest hits, newest first (capped) */
+  hits: OppHit[];
+  lastFiredAt?: number;
+}
+
+// ---------------------------------------------------------------- Trades (my orders, journal)
+export type OrderSide = 'buy' | 'sell';
+/** where your order stands against the live book */
+export type OrderStatusKind = 'top' | 'tied' | 'outbid' | 'undercut' | 'unknown';
+
+/** A bazaar order you placed in game and track here. */
+export interface MyOrder {
+  key: string;
+  id: string;
+  side: OrderSide;
+  /** coins per unit */
+  price: number;
+  qty: number;
+  placedAt: number;
+  /** sell offers: what the items cost you per unit (carried into the journal when filled) */
+  cost?: number;
+  note?: string;
+  /** last status seen by the order watcher (alerts fire on top/tied -> outbid/undercut) */
+  lastStatus?: OrderStatusKind;
+}
+
+/** A finished trade. profit = qty × sell × (1 − tax) − qty × buy − fees */
+export interface JournalEntry {
+  key: string;
+  id: string;
+  qty: number;
+  /** coins per unit you paid (0 for items you farmed) */
+  buy: number;
+  /** coins per unit you sold for, before tax */
+  sell: number;
+  /** sale tax rate applied (bazaar tax; 0 for NPC / AH sales entered net) */
+  tax: number;
+  /** other costs in coins (AH fees, side ingredients…) */
+  fees: number;
+  at: number;
+  source: 'manual' | 'order' | 'plan';
+  note?: string;
 }
 
 export interface WatchEntry {
@@ -507,9 +582,17 @@ export interface AhPrice {
   price: number;
   /** number of BIN listings seen */
   count: number;
+  /** second-lowest BIN price (scan v2+; absent with a single listing) */
+  next?: number;
+  /** auction uuid of the cheapest listing (for /viewauction) */
+  uuid?: string;
+  /** display name of the cheapest listing (pets: "[Lvl 100] Ender Dragon") */
+  name?: string;
 }
 
 export interface AhSnapshot {
+  /** 2 = lowestBin entries carry next / uuid / name; older cached scans have none */
+  v?: number;
   fetchedAt: number;
   /** Hypixel lastUpdated of page 0 */
   lastUpdated: number;
@@ -544,6 +627,8 @@ export interface CalcCtx {
   stats?: (id: string) => PriceStats | null;
   /** lowest BIN on the auction house, if scanned */
   ah?: (id: string) => AhPrice | null;
+  /** mayor Derpy is in office (AH claim tax ×4) */
+  derpy?: boolean;
 }
 
 // ---------------------------------------------------------------- Storage
@@ -595,7 +680,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'overview' | 'flip' | 'craft' | 'books' | 'npc' | 'fusion' | 'plan' | 'watch' | 'item';
+export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'sell' | 'trades' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;
@@ -621,6 +706,12 @@ export interface AppState {
   /** ms epoch of the next scheduled poll, null if not scheduled */
   nextPollAt: number | null;
   watchlist: WatchEntry[];
+  /** market alerts (any flip/craft/… above a threshold) */
+  oppAlerts: OppAlertRule[];
+  /** bazaar orders you track (Trades page) */
+  orders: MyOrder[];
+  /** finished trades, newest first */
+  journal: JournalEntry[];
   alerts: AlertRule[];
   /** newest first, capped at ALERTS.logMax */
   alertLog: AlertEvent[];
@@ -636,7 +727,8 @@ export type TFn = (key: string, params?: Record<string, string | number>) => str
 export interface Derived {
   flips(): FlipRow[];
   crafts(): CraftRow[];
-  chains(): ChainRow[];
+  /** craft chain moves; `start` = where the first tier is bought (default 'bazaar') */
+  chains(start?: 'bazaar' | 'cheapest'): ChainRow[];
   npc(): NpcFlipRow[];
   books(): BookRow[];
   shops(): ShopRow[];

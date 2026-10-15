@@ -22,10 +22,12 @@ export const overview = {
   d_flips: 'Top {n} by profit per hour when buying with a buy order and selling with a sell offer. Suspect items left out.',
   e_flips: 'No profitable clean flips with the current settings. Try changing your capital or volume share.',
 
-  c_crafts: 'Top crafts and forges',
+  c_crafts: 'Top crafts',
   d_crafts: 'Top {n} by profit per hour when buying the inputs, crafting and selling. Unpriced and suspect recipes left out.',
-  e_crafts: 'No profitable clean craft or forge recipe right now.',
-  forge: 'Forge',
+  e_crafts: 'No profitable clean craft recipe right now.',
+  c_forges: 'Top forges',
+  d_forges: 'Top {n} forge recipes by profit per hour with your forge slots. Unpriced and suspect recipes left out.',
+  e_forges: 'No profitable clean forge recipe right now.',
 
   c_books: 'Top book combines',
   d_books: 'Profit per hour from combining lower-level books on an anvil and selling. Verified chains only.',

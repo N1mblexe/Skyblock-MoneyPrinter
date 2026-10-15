@@ -13,6 +13,8 @@ export const risk = {
   VOLUME_IMBALANCE: 'Imbalanced volume: buy and sell volume differ by more than {imbalance}x.',
   PRICE_SPIKE: 'Price spike: far from the 24h median.',
   AH_THIN: 'Very few auction listings: the lowest BIN may not be reliable.',
+  AH_VARIANT: 'Variant item: pets differ by level, gear and tools by stars, reforges and enchants. The cheapest copy may not be the same item as the second.',
+  AH_GAP: 'Big gap to the second-lowest BIN: likely a different variant, or a listing that will be bought or pulled first.',
   NO_HISTORY: 'Not enough price history yet (spike check skipped).',
   srcOrder: 'Buy order',
   srcInsta: 'Insta',

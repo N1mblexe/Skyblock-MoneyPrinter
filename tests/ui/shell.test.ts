@@ -13,7 +13,7 @@ afterEach(() => {
   h = null;
 });
 
-const TR_NAV = ['Genel bakış', 'Flipler', 'Kitaplar', 'Craft & Forge', 'Fusion', 'NPC & Dükkanlar', 'Planlayıcı', 'İzleme'];
+const TR_NAV = ['Genel bakış', 'Flipler', 'Kitaplar', 'Müzayede flip', 'Craft', 'Forge', 'Fusion', 'NPC & Dükkanlar', 'Planlayıcı', 'Sat mı, craftla mı?', 'İşlemler', 'İzleme'];
 const navTexts = (hh: Harness) => hh.qa('.sidebar [data-nav] .sb-label').map((e) => e.textContent);
 
 describe('shell layout + nav', () => {
@@ -92,7 +92,7 @@ describe('shell layout + nav', () => {
     expect(h.store.get().settings.lang).toBe('en');
     expect(getLang()).toBe('en');
     expect(document.documentElement.lang).toBe('en');
-    expect(navTexts(h)).toEqual(['Overview', 'Flips', 'Books', 'Craft & Forge', 'Fusion', 'NPC & Shops', 'Planner', 'Watchlist']);
+    expect(navTexts(h)).toEqual(['Overview', 'Flips', 'Books', 'AH flips', 'Craft', 'Forge', 'Fusion', 'NPC & Shops', 'Planner', 'Sell or craft?', 'Trades', 'Watchlist']);
     expect(h.qa('.sb-gh').map((e) => e.textContent)).toEqual(['Markets', 'Production', 'Trade', 'Tools']);
     expect(h.q('[data-testid="lang-en"]').getAttribute('aria-pressed')).toBe('true');
     expect(h.q('.refresh-lbl').textContent).toBe('Refresh');
@@ -328,7 +328,7 @@ describe('command palette', () => {
     h = harness();
     h.mount();
     key('/');
-    type(h, 'müzayede');
+    type(h, 'şimdi tara');
     expect(h.qa('.kp-opt')).toHaveLength(0);
     currentPalette()!.close();
     h.shell!.destroy();
@@ -336,7 +336,7 @@ describe('command palette', () => {
     h.ctx.scanAh = vi.fn();
     h.mount();
     key('/');
-    key('Enter', {}, type(h, 'müzayede'));
+    key('Enter', {}, type(h, 'şimdi tara'));
     expect(h.ctx.scanAh).toHaveBeenCalledTimes(1);
   });
 });
@@ -410,7 +410,7 @@ describe('mobile layout', () => {
     const sheet = h.q('[data-testid="more-sheet"]');
     expect(sheet.hasAttribute('open')).toBe(true);
     expect(more.getAttribute('aria-expanded')).toBe('true');
-    expect([...sheet.querySelectorAll<HTMLElement>('[data-nav]')].map((a) => a.dataset.nav)).toEqual(['books', 'fusion', 'npc', 'plan']);
+    expect([...sheet.querySelectorAll<HTMLElement>('[data-nav]')].map((a) => a.dataset.nav)).toEqual(['books', 'ahflip', 'forge', 'fusion', 'npc', 'plan', 'sell', 'trades']);
     // an active secondary route marks the More button
     h.store.set({ route: { id: 'plan' } });
     expect(more.classList.contains('has-current')).toBe(true);

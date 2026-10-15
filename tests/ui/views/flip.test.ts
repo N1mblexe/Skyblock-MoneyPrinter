@@ -227,6 +227,7 @@ describe('flip view', () => {
     expect(panel().hidden).toBe(false);
     expect(q('.kit-panel-title').textContent).toBe('Enchanted Melon');
     expect(q(`tr[data-key="${MELON}"]`).getAttribute('aria-selected')).toBe('true');
+    expect(q('.kit-panel [data-testid="flip-track"]').getAttribute('href')).toMatch(/^#\/trades\?add=ENCHANTED_MELON&side=buy&price=[\d.]+&qty=\d+$/);
     const steps = [...panel().querySelectorAll('.dp-steps li')].map((li) => li.textContent);
     expect(steps).toHaveLength(3);
     expect(steps[0]).toMatch(/adetlik buy order ver/);

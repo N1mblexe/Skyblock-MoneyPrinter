@@ -4,7 +4,7 @@ import { toSnapshot, validateRaw } from '../../../src/api/normalize.ts';
 import { ALERTS, LS_VIEWPREFS } from '../../../src/config.ts';
 import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.ts';
 import { metricValue } from '../../../src/domain/alerts.ts';
-import { setLang } from '../../../src/i18n/index.ts';
+import { setLang, t } from '../../../src/i18n/index.ts';
 import { fmtMetric } from '../../../src/state/alertsRunner.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
@@ -350,5 +350,33 @@ describe('watch view', () => {
     setLang('tr');
     await flush();
     expect(root.childElementCount).toBe(0);
+  });
+});
+
+describe('watch view: market alerts', () => {
+  it('adds, edits and deletes market alert rules', async () => {
+    mount();
+    const sec = q('.w-opp');
+    expect(sec.querySelector('h2')!.textContent).toBe(t('watch.oppTitle'));
+    q<HTMLButtonElement>('[data-testid="opp-add"]').click();
+    expect(store.get().oppAlerts).toHaveLength(1);
+    const r0 = store.get().oppAlerts[0]!;
+    expect(r0).toMatchObject({ scope: ['flip'], metric: 'profitPerHour', value: 1_000_000, maxRisk: 'ok', enabled: true });
+    const box = () => q(`[data-opp="${r0.key}"]`);
+    const craft = box().querySelector<HTMLInputElement>('[data-opp-kind="craft"]')!;
+    craft.checked = true;
+    craft.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(store.get().oppAlerts[0]!.scope).toEqual(['flip', 'craft']);
+    const metric = box().querySelector<HTMLSelectElement>('[data-opp-metric]')!;
+    metric.value = 'margin';
+    metric.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(store.get().oppAlerts[0]).toMatchObject({ metric: 'margin', value: 0.2 });
+    const value = box().querySelector<HTMLInputElement>('[data-opp-value]')!;
+    expect(value.value).toBe('20'); // shown in percent
+    value.value = '35';
+    value.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(store.get().oppAlerts[0]!.value).toBeCloseTo(0.35, 9);
+    box().querySelector<HTMLButtonElement>('[data-opp-delete]')!.click();
+    expect(store.get().oppAlerts).toEqual([]);
   });
 });

@@ -28,7 +28,7 @@ export const PLAN_DEBOUNCE_MS = 300;
 /** Window event the shell may listen to for opening the settings drawer. */
 export const OPEN_SETTINGS_EVENT = 'bm:open-settings';
 
-const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc' } as const;
+const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', forge: 'kindForge', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc' } as const;
 
 interface Memo {
   opps: readonly Opportunity[];
@@ -71,7 +71,7 @@ export function createPlanView(): View {
 
   // ---------------------------------------------------------------- compute
   const keyOf = (v: PlanQuery, o: AllocateOptions) =>
-    JSON.stringify([KINDS.map((k) => v[k]), o.capital, o.slots, o.maxShare, o.excludeSuspect]);
+    JSON.stringify([KINDS.map((k) => v[k]), v.ah, o.capital, o.slots, o.maxShare, o.excludeSuspect]);
 
   function wanted(): { opps: readonly Opportunity[]; v: PlanQuery; opts: AllocateOptions; key: string } {
     const opps = ctx!.derived.opportunities();
@@ -249,7 +249,9 @@ export function createPlanView(): View {
       `<div class="plan-detail" data-testid="plan-detail">` +
       `<p class="plan-detail-badges">${kindBadge(o.kind)} ${riskBadge(o.risk)} <span class="id-sub">${esc(o.id)}</span></p>` +
       `<p class="plan-detail-links"><a class="btn btn-sm" data-testid="plan-source" href="${esc(sourceHref(o))}">${esc(t('openSource', { tab }))} →</a> ` +
-      `<a class="btn btn-sm btn-ghost" href="#/item/${encodeURIComponent(o.id)}">${esc(t('openItem'))} →</a></p>` +
+      `<a class="btn btn-sm btn-ghost" href="#/item/${encodeURIComponent(o.id)}">${esc(t('openItem'))} →</a> ` +
+      // sell is the net per unit (after tax and fees), so the journal entry is logged untaxed
+      `<a class="btn btn-sm btn-ghost" data-testid="plan-log" href="#/trades?${new URLSearchParams({ view: 'journal', add: o.id, qty: String(Math.max(1, Math.round(a.units))), buy: String(Math.round(buyCost * 10) / 10), sell: String(Math.round((buyCost + o.profitPerUnit) * 10) / 10), tax: '0', src: 'plan' })}">${esc(t('logTrade'))} →</a></p>` +
       `<h3>${esc(t('detailAlloc'))}</h3>` +
       kv([
         [t('dUnits'), esc(fmtInt(a.units)), 'units'],
@@ -355,6 +357,7 @@ export function createPlanView(): View {
         },
         { kind: 'toggle', key: 'suspect', label: () => t('suspect') },
         ...KINDS.map((k) => ({ kind: 'toggle' as const, key: k, label: () => t(KIND_LABEL[k]) })),
+        { kind: 'toggle', key: 'ah', label: () => t('includeAh') },
       ],
       qs,
     );

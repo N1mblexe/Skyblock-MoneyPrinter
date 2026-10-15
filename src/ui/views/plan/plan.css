@@ -92,6 +92,10 @@
   background: var(--violet-soft);
   color: var(--violet);
 }
+.plan-kind-forge {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
 /* chains are crafts too: same hue, outlined so the two kinds stay apart */
 .plan-kind-chain {
   background: transparent;

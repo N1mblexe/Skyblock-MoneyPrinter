@@ -56,9 +56,23 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
       Track items, set price or margin rules and get notified. History is kept for 7 days in your browser.
     </td>
   </tr>
+  <tr>
+    <td valign="top">
+      <h3>🔗 Craft chains</h3>
+      Multi-step ladders (Wheat → Ench. Wheat → Ench. Hay Bale, gem tiers, Magmafish…): where to start and where to sell.
+    </td>
+    <td valign="top">
+      <h3>💰 Sell or craft?</h3>
+      Enter what you own and compare insta-sell, sell offer, NPC, AH and crafting it up first.
+    </td>
+    <td valign="top">
+      <h3>📒 Trades</h3>
+      Track your own orders (outbid / undercut alerts, re-price) and log finished trades with profit per day and ROI.
+    </td>
+  </tr>
 </table>
 
-Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
+Plus AH flips (lowest BIN vs the next, after AH fees), a separate Forge page, market alerts for any opportunity, an installable offline app, NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
 
 ## 📸 Screenshots
 
@@ -75,6 +89,14 @@ Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion re
     <td><img src="docs/images/palette-light.png" alt="Command palette in the light theme"><p align="center"><b>Command palette</b> (<kbd>/</kbd>), shown in the light theme</p></td>
     <td><img src="docs/images/watchlist-dark.png" alt="Watchlist"><p align="center"><b>Watchlist</b>: live prices and alert rules</p></td>
   </tr>
+  <tr>
+    <td><img src="docs/images/chains-dark.png" alt="Craft chains"><p align="center"><b>Craft chains</b>: a whole ladder with the step-by-step plan</p></td>
+    <td><img src="docs/images/sell-dark.png" alt="Sell or craft?"><p align="center"><b>Sell or craft?</b>: every way to cash out, best first</p></td>
+  </tr>
+  <tr>
+    <td><img src="docs/images/trades-dark.png" alt="My orders"><p align="center"><b>My orders</b>: top, tied, outbid or undercut, live</p></td>
+    <td><img src="docs/images/journal-dark.png" alt="Trade journal"><p align="center"><b>Trade journal</b>: profit today, this week and all time</p></td>
+  </tr>
 </table>
 
 <details>
@@ -89,7 +111,7 @@ Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion re
 
 ## 🚀 Quick start
 
-**Easiest:** open the [live app](https://n1mblexe.github.io/Skyblock-MoneyPrinter/). Nothing to install.
+**Easiest:** open the [live app](https://n1mblexe.github.io/Skyblock-MoneyPrinter/). Nothing to install, but you can: use your browser's *Install app* / *Add to Home Screen* to get it as a desktop or phone app that also opens offline with the last prices.
 
 **Run it locally** (Node.js 20.19+ or 22.12+):
 
@@ -112,9 +134,13 @@ The app opens in English. Switch to Turkish with the **EN / TR** buttons in the 
 | 📊 **Overview** | <kbd>g</kbd> <kbd>o</kbd> | Best flips, crafts and book combines, price movers, watchlist, alerts and the mayor at a glance |
 | 🔁 **Flips** | <kbd>g</kbd> <kbd>f</kbd> | Buy and sell the same bazaar product |
 | 📚 **Books** | <kbd>g</kbd> <kbd>b</kbd> | Combine 2^(L−k) level-k books into one level-L book |
-| ⚒️ **Craft & Forge** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft or forge, sell the result; the Chains tab covers multi-step ladders |
+| 🔨 **AH flips** | <kbd>g</kbd> <kbd>a</kbd> | Lowest BIN vs the next one, after AH fees; copies `/viewauction` |
+| ⚒️ **Craft** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft, sell the result; the Chains tab covers multi-step ladders |
+| 🔥 **Forge** | <kbd>g</kbd> <kbd>h</kbd> | Forge recipes, limited by forge time and your forge slots |
 | 🧬 **Fusion** | <kbd>g</kbd> <kbd>u</kbd> | Your own shard-fusion recipes, editable, with import and export |
 | 🏪 **NPC & Shops** | <kbd>g</kbd> <kbd>n</kbd> | Bazaar ↔ NPC flips and currency-shop offers valued in coins |
+| 💰 **Sell or craft?** | <kbd>g</kbd> <kbd>v</kbd> | What you own: insta-sell, sell offer, NPC, AH or craft it up first, best first |
+| 📒 **Trades** | <kbd>g</kbd> <kbd>t</kbd> | My orders (outbid/undercut alerts, re-price, fill estimate) and a trade journal with profit per day/week |
 | 🎯 **Planner** | <kbd>g</kbd> <kbd>p</kbd> | Spread capital and order slots over every opportunity |
 | ⭐ **Watchlist** | <kbd>g</kbd> <kbd>w</kbd> | Watched items, alert rules and the alert log |
 | 🔍 **Item** | palette | One product in depth: order book, chart (3 h / 24 h / 7 d), risk, recipes |
@@ -131,7 +157,7 @@ Filters and sort orders are stored in the URL, so you can bookmark any filtered 
 | <kbd>r</kbd> | Refresh prices |
 | <kbd>?</kbd> | Shortcuts help |
 | <kbd>Esc</kbd> | Close the dialog or panel |
-| <kbd>g</kbd> then <kbd>o</kbd> <kbd>f</kbd> <kbd>c</kbd> <kbd>b</kbd> <kbd>n</kbd> <kbd>u</kbd> <kbd>p</kbd> <kbd>w</kbd> | Go to a page |
+| <kbd>g</kbd> then <kbd>o</kbd> <kbd>f</kbd> <kbd>a</kbd> <kbd>c</kbd> <kbd>h</kbd> <kbd>b</kbd> <kbd>n</kbd> <kbd>u</kbd> <kbd>p</kbd> <kbd>v</kbd> <kbd>t</kbd> <kbd>w</kbd> | Go to a page |
 | <kbd>↑</kbd> <kbd>↓</kbd> or <kbd>j</kbd> <kbd>k</kbd>, then <kbd>Enter</kbd> | Move between table rows and open one |
 | <kbd>s</kbd> | Watch or unwatch the selected row (Flips, Books) |
 | <kbd>e</kbd> | Download the table as CSV (Flips, Books) |
@@ -174,7 +200,7 @@ Every number is an estimate built from the live order book:
 <summary><b>⚠️ What isn't modelled</b></summary>
 <br>
 
-- AH listing and claim tax, and anything that makes one AH item worth more than another with the same id (stars, reforges, enchantments, pet level)
+- Anything that makes one AH item worth more than another with the same id (stars, reforges, enchantments, pet level)
 - Collection and recipe requirements
 - Changes to the order book while your orders fill
 - The anvil XP cost of combining books
@@ -196,6 +222,7 @@ npm test               # unit tests (vitest)
 npm run build          # typecheck + production build
 npm run smoke          # headless browser test of the build
 npm run screenshots    # regenerate the images in this README
+npm run pwa:check      # offline check of the installable app (after GITHUB_PAGES=1 npm run build)
 ```
 
 Scripts, data sources, storage keys, project layout and deployment are documented in **[docs/development.md](docs/development.md)**.

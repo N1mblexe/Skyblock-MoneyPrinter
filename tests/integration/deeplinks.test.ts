@@ -8,8 +8,6 @@ afterEach(teardownApp);
 
 const rows = () => [...document.querySelectorAll<HTMLElement>('#view .tbl-kit tbody [data-key]')];
 const filter = <E extends HTMLElement = HTMLInputElement>(key: string) => document.querySelector<E>(`#view [data-filter="${key}"]`)!;
-const pressed = (key: string) =>
-  [...filter(key).querySelectorAll<HTMLElement>('button[aria-pressed="true"]')].map((b) => b.dataset.value);
 
 /** Column index (0-based) of the header whose text is exactly `label`. */
 function colIndex(label: string): number {
@@ -22,27 +20,24 @@ function colIndex(label: string): number {
 const pct = (s: string) => Number(s.replace('%', '').replace(/,/g, ''));
 
 describe('deep links', () => {
-  it('#/craft?kind=forge&q=gold mounts craft with both filters applied', async () => {
+  it('an old #/craft?kind=forge&q=gold link opens the Forge page with the search applied', async () => {
     const b = await bootApp({ hash: '#/craft?kind=forge&q=gold' });
-    await waitFor(() => !!document.querySelector('#view [data-filter="q"]'), 'craft filter bar');
+    await waitFor(() => !!document.querySelector('#view .forge-view [data-filter="q"]'), 'forge filter bar');
     await settle(2);
-    expect(b.store.get().route).toEqual({ id: 'craft', query: { kind: 'forge', q: 'gold' } });
-    expect(document.querySelector('#view h1')!.textContent).toMatch(/Craft/);
+    expect(b.store.get().route).toEqual({ id: 'forge', query: { q: 'gold' } });
+    expect(document.querySelector('#view h1')!.textContent).toBe('Forge');
     expect(filter('q').value).toBe('gold');
-    expect(pressed('kind')).toEqual(['forge']);
     // no forge recipe in the fixture market matches "gold": the table is empty, not unfiltered
     expect(rows()).toHaveLength(0);
-    expect(location.hash).toBe('#/craft?kind=forge&q=gold');
 
-    // the q filter is live too: switching kind to "all" shows only gold recipes
-    filter<HTMLElement>('kind').querySelector<HTMLElement>('[data-value="all"]')!.click();
+    // the Craft page lists craft recipes only; its search is live
+    await go(b, '#/craft?q=gold');
     await settle(2);
     expect(rows().length).toBeGreaterThan(2);
     for (const r of rows()) expect(r.textContent).toMatch(/gold/i);
-    expect(b.store.get().route.query).toEqual({ q: 'gold' });
 
-    // and kind=forge alone lists only forge recipes
-    await go(b, '#/craft?kind=forge');
+    // and the Forge page alone lists forge recipes
+    await go(b, '#/forge');
     await settle(2);
     expect(rows().length).toBeGreaterThan(0);
     for (const r of rows()) expect(r.textContent).toMatch(/Forge/);

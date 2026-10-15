@@ -1,5 +1,6 @@
 // Fusion recipe JSON import/export. Import is validated like storage loadFusion() and also accepts the
 // legacy single-file tool's shape {a, aq, b, bq, out, oq}.
+import { downloadJson } from '../../kit/download.ts';
 import { convertLegacyFusion } from '../../../storage/local.ts';
 import type { FusionRecipe } from '../../../types/contracts.ts';
 
@@ -68,16 +69,5 @@ export function exportFileName(d: Date = new Date()): string {
 
 /** Trigger a browser download of the recipes; returns the file name. */
 export function downloadRecipes(recipes: readonly FusionRecipe[], now: Date = new Date()): string {
-  const file = exportFileName(now);
-  const blob = new Blob([recipesToJson(recipes)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = file;
-  a.hidden = true;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 0);
-  return file;
+  return downloadJson(exportFileName(now), recipesToJson(recipes));
 }

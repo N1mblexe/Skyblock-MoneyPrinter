@@ -20,11 +20,11 @@ export function topFlips(rows: readonly FlipRow[], n: number): FlipRow[] {
   return rows.filter(ok).sort(byPph).slice(0, n);
 }
 
-/** Best priced, non-suspect crafts and forges by profit/hour; one row per output item (its best recipe). */
-export function topCrafts(rows: readonly CraftRow[], n: number): CraftRow[] {
+/** Best priced, non-suspect recipes of one kind by profit/hour; one row per output item (its best recipe). */
+export function topCrafts(rows: readonly CraftRow[], n: number, kind: 'craft' | 'forge' = 'craft'): CraftRow[] {
   const seen = new Set<string>();
   const out: CraftRow[] = [];
-  for (const r of rows.filter((x) => ok(x) && x.unpriced.length === 0).sort(byPph)) {
+  for (const r of rows.filter((x) => x.recipe.kind === kind && ok(x) && x.unpriced.length === 0).sort(byPph)) {
     if (seen.has(r.id)) continue;
     seen.add(r.id);
     out.push(r);

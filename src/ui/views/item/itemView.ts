@@ -1,6 +1,9 @@
 // Item detail view: #/item/<id>. Header actions (watch, quick alert, copy id), key facts, your flip (same as the
 // Flips tab), market stats, AH lowest BIN, shard info, risk, top-10 order book, price history chart, recipes.
 // Catalog / AH items that are not bazaar products get a reduced page (no book, chart or flip).
+import { ahClaimTax, ahListingFee, ahNet } from '../../../domain/pricing.ts';
+import { isDerpy } from '../../../state/derived.ts';
+import { ALERT_METRICS } from '../../../domain/alertMetrics.ts';
 import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
 import { flipPlanFor, metricValue } from '../../../domain/alerts.ts';
 import { buyQuote } from '../../../domain/pricing.ts';
@@ -51,7 +54,7 @@ const USING_LIMIT = 20;
 const SUGGEST_LIMIT = 8;
 const RANGES: HistoryRange[] = ['3h', '24h', '7d'];
 const PREFS_KEY = LS_VIEWPREFS + 'item';
-const METRICS: AlertMetric[] = ['ask', 'bid', 'spreadPct', 'flipMargin', 'flipProfit'];
+const METRICS = ALERT_METRICS;
 
 interface BookRow {
   key: string;
@@ -203,7 +206,9 @@ export function createItemView(): View {
 
   /** Craft tab link, plus a Books tab link when the output is an enchanted book. */
   const recipeLinks = (r: Recipe) =>
-    `<a class="btn btn-sm" href="#/craft?q=${encodeURIComponent(r.output)}" title="${esc(t('openCraft'))}">${esc(t('openCraftShort'))} →</a>` +
+    (r.kind === 'forge'
+      ? `<a class="btn btn-sm" href="#/forge?q=${encodeURIComponent(r.output)}" title="${esc(t('openForge'))}">${esc(t('openForgeShort'))} →</a>`
+      : `<a class="btn btn-sm" href="#/craft?q=${encodeURIComponent(r.output)}" title="${esc(t('openCraft'))}">${esc(t('openCraftShort'))} →</a>`) +
     (isBookId(r.output)
       ? ` <a class="btn btn-sm" href="#/books?q=${encodeURIComponent(r.output)}" title="${esc(t('openBooksLong'))}">${esc(t('openBooks'))} →</a>`
       : '');
@@ -324,7 +329,9 @@ export function createItemView(): View {
     const link = (href: string, label: string) => `<a class="btn btn-sm btn-ghost" href="${esc(href)}">${esc(label)} →</a>`;
     const q = encodeURIComponent(id);
     if (p) links.push(link(`#/flip?q=${q}`, t('openFlip')));
-    if (s.catalog?.byOutput.get(id)?.length) links.push(link(`#/craft?q=${q}`, t('openCraftShort')));
+    const made = s.catalog?.byOutput.get(id) ?? [];
+    if (made.some((r) => r.kind === 'craft')) links.push(link(`#/craft?q=${q}`, t('openCraftShort')));
+    if (made.some((r) => r.kind === 'forge')) links.push(link(`#/forge?q=${q}`, t('openForgeShort')));
     if (isBookId(id)) links.push(link(`#/books?q=${q}`, t('openBooks')));
     linksEl.innerHTML = links.length ? `<span class="small muted">${esc(t('openIn'))}</span> ${links.join(' ')}` : '';
     const n = s.alerts.filter((r) => r.id === id).length;
@@ -423,13 +430,20 @@ export function createItemView(): View {
     const ah = s.ah;
     const a = ah?.lowestBin[id];
     if (!ah || !a) return null;
+    const derpy = isDerpy(s.election);
     const rows: KvRow[] = [
       [t('ahLowest'), esc(fmtPrice(a.price)), '', 'ahPrice'],
       [t('ahCount'), esc(fmtInt(a.count)), '', 'ahCount'],
+      [
+        t('ahNet'),
+        `<span title="${esc(t('ahNetTitle', { fee: fmtPrice(ahListingFee(a.price)), tax: fmtPrice(ahClaimTax(a.price, derpy)) }))}">${esc(fmtPrice(ahNet(a.price, derpy)))}</span>`,
+        '',
+        'ahNet',
+      ],
       [t('ahAge'), esc(t('ahAgeVal', { age: fmtAge(Date.now() - ah.fetchedAt) })), '', 'ahAge'],
     ];
     const partial = ah.failedPages?.length ? note(t('ahPartial', { n: ah.failedPages.length })) : '';
-    return kv(rows) + partial + note(t('ahCaveat'));
+    return kv(rows) + partial + (derpy ? note(t('ahDerpy')) : '') + note(t('ahCaveat'));
   }
 
   function shardHtml(s: AppState): string | null {

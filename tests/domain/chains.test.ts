@@ -123,6 +123,24 @@ describe('computeChains', () => {
   });
 });
 
+describe('first-tier source', () => {
+  // A is also sold by an NPC for less than the bazaar buy order (1.1)
+  const npcCat = buildCatalog({ ...file, items: { ...file.items, A: { n: 'Alpha', bz: 1, nb: 0.5 } } });
+  const cc = () => ({ ...ctx(), snap: s, catalog: npcCat });
+
+  it("'bazaar' (default) buys the first tier on the bazaar even when an NPC is cheaper", () => {
+    const r = computeChains(cc()).find((x) => x.key === 'A>B>C>D')!.row;
+    expect(r.lines.find((l) => l.id === 'A')).toMatchObject({ unit: 1.1, source: 'order' });
+  });
+
+  it("'cheapest' takes the NPC price and its daily limit", () => {
+    const r = computeChains(cc(), 'cheapest').find((x) => x.key === 'A>B>C>D')!.row;
+    expect(r.lines.find((l) => l.id === 'A')).toMatchObject({ unit: 0.5, source: 'npc' });
+    expect(r.tp.limitedBy).toBe('npcLimit');
+    expect(ladderDetail(cc(), ['A', 'B', 'C', 'D'], 0, 'cheapest')[3]!.move!.lines[0]!.source).toBe('npc');
+  });
+});
+
 describe('real catalog', () => {
   it('finds the wheat ladder up to Enchanted Hay Bale and 4+ tier ladders', () => {
     const g = chainGraph(fixtureCatalog);

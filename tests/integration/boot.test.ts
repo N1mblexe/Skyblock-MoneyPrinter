@@ -98,7 +98,7 @@ describe('auction house', () => {
     const ah = b.store.get().ah!;
     expect(ah.lastUpdated).toBe(1791969906275);
     expect(Object.keys(ah.lowestBin).length).toBeGreaterThan(10);
-    expect(ah.lowestBin[AH_ID]).toEqual({ price: expect.any(Number), count: expect.any(Number) });
+    expect(ah.lowestBin[AH_ID]).toMatchObject({ price: expect.any(Number), count: expect.any(Number) });
     expect(ah.lowestBin[AH_ID]!.price).toBeGreaterThan(0);
     expect(b.warns).not.toHaveBeenCalled();
     expectNoConsoleErrors(b);

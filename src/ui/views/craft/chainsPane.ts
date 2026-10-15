@@ -1,6 +1,6 @@
 // Craft & Forge, Chains tab: multi-step moves along crafting ladders (src/domain/chains.ts). Rows come from
 // ctx.derived.chains(); filters live in the URL (#/craft?view=chains&…); the side panel shows the whole ladder.
-import { bestPerLadder, ladderDetail, type LadderTier } from '../../../domain/chains.ts';
+import { bestPerLadder, ladderDetail, type ChainStart, type LadderTier } from '../../../domain/chains.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, ChainRow, CraftRow, Recipe, View, ViewContext } from '../../../types/contracts.ts';
 import { itemCell, riskBadge } from '../../cells.ts';
@@ -216,6 +216,7 @@ export function createChainsPane(): View {
     settings: () => ctx!.store.get().settings,
     product: (id) => ctx?.store.get().snapshot?.products[id],
     ah: (id) => ctx?.derived.calcCtx()?.ah?.(id) ?? null,
+    derpy: () => ctx?.derived.calcCtx()?.derpy ?? false,
     recipe(key) {
       const cat = ctx?.store.get().catalog;
       if (!cat) return undefined;
@@ -225,8 +226,10 @@ export function createChainsPane(): View {
     watched: (id) => ctx?.watch.has(id) ?? false,
   };
 
+  const startOf = (): ChainStart => (qs?.get().start === 'cheapest' ? 'cheapest' : 'bazaar');
+
   function index(): NonNullable<typeof rowIdx> {
-    const rows = ctx!.derived.chains();
+    const rows = ctx!.derived.chains(startOf());
     if (rowIdx?.rows !== rows) rowIdx = { rows, map: new Map(rows.map((r) => [r.key, r])), best: bestPerLadder(rows) };
     return rowIdx;
   }
@@ -247,7 +250,7 @@ export function createChainsPane(): View {
     const c = ctx?.derived.calcCtx();
     if (!panel || !detailEl || !c) return;
     const ladder = (r.ladders[0] ?? r.key).split('>');
-    detailEl.innerHTML = chainDetail(env, r, ladderDetail(c, ladder, ladder.indexOf(r.fromId)));
+    detailEl.innerHTML = chainDetail(env, r, ladderDetail(c, ladder, ladder.indexOf(r.fromId), startOf()));
     if (reopen || !panel.isOpen()) panel.open(r.row.name, detailEl);
   }
 
@@ -327,6 +330,15 @@ export function createChainsPane(): View {
       bar = createFilterBar(
         [
           { kind: 'search', key: 'q', label: () => t('craft.search'), placeholder: () => t('craft.chSearchPh') },
+          {
+            kind: 'segment',
+            key: 'start',
+            label: () => t('craft.chStart'),
+            options: [
+              { value: 'bazaar', label: () => t('craft.chStartBazaar') },
+              { value: 'cheapest', label: () => t('craft.chStartCheapest') },
+            ],
+          },
           { kind: 'toggle', key: 'best', label: () => t('craft.chBest') },
           { kind: 'number', key: 'minSteps', label: () => t('craft.chMinSteps') },
           { kind: 'number', key: 'minMargin', label: () => t('craft.minMargin'), suffix: '%' },

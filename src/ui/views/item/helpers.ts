@@ -1,4 +1,5 @@
 // Small formatting helpers for the item view (prices keep their 0.1 granularity).
+import { RATIO_METRICS } from '../../../domain/alertMetrics.ts';
 import { fmtCoins, fmtPct, locale } from '../../format.ts';
 
 const cache = new Map<string, Intl.NumberFormat | Intl.DateTimeFormat>();
@@ -55,7 +56,8 @@ export function fmtQty(n: number): string {
 }
 
 /** Alert metrics entered and shown as percentages (stored as ratios). */
-export const PCT_METRICS: ReadonlySet<string> = new Set(['spreadPct', 'flipMargin']);
+/** Metrics edited in percent (the shared RATIO_METRICS). */
+export const PCT_METRICS: ReadonlySet<string> = RATIO_METRICS;
 
 /**
  * Quick-alert prefill in input units: the current value moved 5% toward the trigger (lt: −5%, gt: +5%).

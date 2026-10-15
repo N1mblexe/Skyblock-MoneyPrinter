@@ -7,7 +7,7 @@ import type { ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type Page, type Route } from 'playwright-core';
-import { LS_SETTINGS, LS_WATCH } from '../src/config.ts';
+import { LS_JOURNAL, LS_ORDERS, LS_SELL, LS_SETTINGS, LS_WATCH } from '../src/config.ts';
 import { findBrowser, freePort, loadSmokeFixtures, ROOT, sleep, startServer, withNow } from './lib/browser.ts';
 
 const OUT = join(ROOT, 'docs', 'images');
@@ -19,7 +19,7 @@ type Theme = 'dark' | 'light';
 /** The images README.md uses; every page is still visited, only these are written. */
 const USED = new Set([
   'overview-dark', 'overview-light', 'flip-detail-dark', 'planner-dark', 'craft-dark', 'item-dark', 'watchlist-dark',
-  'palette-light', 'mobile-overview-dark', 'mobile-flips-dark',
+  'palette-light', 'mobile-overview-dark', 'mobile-flips-dark', 'chains-dark', 'sell-dark', 'trades-dark', 'journal-dark',
 ]);
 
 const FIX = loadSmokeFixtures();
@@ -43,14 +43,34 @@ async function openPage(browser: Browser, base: string, theme: Theme, viewport: 
   const context = await browser.newContext({ viewport, deviceScaleFactor: 2, locale: 'en-US', serviceWorkers: 'block', colorScheme: theme });
   await context.route('**/*', stub);
   const now = Date.now();
+  const H = 3600_000;
+  // example data for the Sell or craft? and Trades pages (fixture prices: Ench. Gold 456.2 / 509.8, Wheat 3.4 / 5.6)
+  const seed: Record<string, unknown> = {
+    [LS_SETTINGS]: { lang: 'en', theme },
+    [LS_WATCH]: WATCH.map((id, i) => ({ id, addedAt: now - i * 60_000 })),
+    [LS_SELL]: [
+      { id: 'WHEAT', qty: 60_000 },
+      { id: 'ENCHANTED_CARROT', qty: 2_000 },
+    ],
+    [LS_ORDERS]: [
+      { key: 'o1', id: 'ENCHANTED_GOLD', side: 'buy', price: 455, qty: 1_200, placedAt: now - 20 * 60_000 },
+      { key: 'o2', id: 'ENCHANTED_GOLD', side: 'sell', price: 509.8, qty: 640, placedAt: now - 5 * 60_000, cost: 456 },
+      { key: 'o3', id: 'ENCHANTED_CARROT', side: 'buy', price: 451.8, qty: 2_000, placedAt: now - 2 * H },
+    ],
+    [LS_JOURNAL]: [
+      { key: 'j1', id: 'ENCHANTED_GOLD', qty: 1_200, buy: 456.3, sell: 509.7, tax: 0.0125, fees: 0, at: now - 1 * H, source: 'order' },
+      { key: 'j2', id: 'MAGMA_FISH', qty: 20_000, buy: 4.2, sell: 9.5, tax: 0.0125, fees: 0, at: now - 26 * H, source: 'manual' },
+      { key: 'j3', id: 'ENCHANTED_CARROT', qty: 4_000, buy: 452, sell: 470, tax: 0.0125, fees: 0, at: now - 50 * H, source: 'plan' },
+      { key: 'j4', id: 'ROUGH_RUBY_GEM', qty: 50_000, buy: 0.7, sell: 0.6, tax: 0.0125, fees: 0, at: now - 80 * H, source: 'manual' },
+    ],
+  };
   await context.addInitScript(
-    ([lsSettings, lsWatch, theme, watch]) => {
+    ([lsSettings, seed]) => {
       // only on the first load, so the app's own writes survive navigation
       if (localStorage.getItem(lsSettings)) return;
-      localStorage.setItem(lsSettings, JSON.stringify({ lang: 'en', theme }));
-      localStorage.setItem(lsWatch, JSON.stringify(watch));
+      for (const [k, v] of Object.entries(seed)) localStorage.setItem(k, JSON.stringify(v));
     },
-    [LS_SETTINGS, LS_WATCH, theme, WATCH.map((id, i) => ({ id, addedAt: now - i * 60_000 }))] as const,
+    [LS_SETTINGS, seed] as const,
   );
   const page = await context.newPage();
   page.setDefaultTimeout(T);
@@ -99,6 +119,20 @@ async function desktop(browser: Browser, base: string, theme: Theme): Promise<vo
   await shot(page, `watchlist-${theme}`);
   await go(page, '#/item/ENCHANTED_GOLD', '[data-testid="order-book"] tbody tr');
   await shot(page, `item-${theme}`);
+
+  await go(page, '#/craft?view=chains', '.chains-view tbody tr[data-key]');
+  await page.locator('.chains-view tbody tr[data-key]').first().locator('td.num').last().click();
+  await page.locator('.chain-detail').waitFor({ state: 'visible' });
+  await page.evaluate(() => document.querySelectorAll('#view *').forEach((el) => el.scrollLeft && (el.scrollLeft = 0)));
+  await sleep(400);
+  await shot(page, `chains-${theme}`);
+  await page.keyboard.press('Escape');
+  await go(page, '#/sell', '.sell-card');
+  await shot(page, `sell-${theme}`);
+  await go(page, '#/trades', '.trades-orders tbody tr[data-key]');
+  await shot(page, `trades-${theme}`);
+  await go(page, '#/trades?view=journal', '.trades-journal tbody tr[data-key]');
+  await shot(page, `journal-${theme}`);
 
   await go(page, '#/overview');
   await page.keyboard.press('/');

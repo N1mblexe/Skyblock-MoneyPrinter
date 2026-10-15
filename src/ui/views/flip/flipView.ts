@@ -227,6 +227,7 @@ export function createFlipView(): View {
       section(
         t('flip.linksTitle'),
         `<div class="dp-links"><a class="btn btn-sm" href="#/item/${encodeURIComponent(r.id)}">${esc(t('flip.openItem'))}</a>` +
+          `<a class="btn btn-sm" data-testid="flip-track" href="#/trades?${new URLSearchParams({ add: r.id, side: 'buy', price: String(r.buyAt), qty: String(Math.max(1, Math.ceil(r.tp.batchQty))) })}">${esc(t('flip.trackOrder'))}</a>` +
           `<button type="button" class="btn btn-sm" data-panel="watch" aria-pressed="${watched}">${esc(t(watched ? 'flip.watchRemove' : 'flip.watchAdd'))}</button></div>`,
       ) +
       '</div>'

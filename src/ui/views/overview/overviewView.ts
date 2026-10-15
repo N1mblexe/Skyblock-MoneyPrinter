@@ -23,7 +23,7 @@ export const ALERTS_N = 6;
 /** re-render period for ages ("data 40 s old") */
 export const TICK_MS = 15_000;
 
-type CardKey = 'flips' | 'crafts' | 'books' | 'movers' | 'consistent' | 'plan' | 'watch' | 'alerts' | 'election' | 'market';
+type CardKey = 'flips' | 'crafts' | 'forges' | 'books' | 'movers' | 'consistent' | 'plan' | 'watch' | 'alerts' | 'election' | 'market';
 
 interface Card {
   key: CardKey;
@@ -116,15 +116,26 @@ export function createOverviewView(): View {
       body: () => {
         const nr = notReady(true);
         if (nr) return nr;
-        const rows = topCrafts(ctx.derived.crafts(), TOP_N);
+        const rows = topCrafts(ctx.derived.crafts(), TOP_N, 'craft');
         if (!rows.length) return empty(t('overview.e_crafts'));
         return mini(
           [H_ITEM(), H_MARGIN(), H_PPH()],
-          rows.map((r) => [
-            itemLink(r.id, r.name) + (r.recipe.kind === 'forge' ? ` <span class="badge ov-forge">${esc(t('overview.forge'))}</span>` : ''),
-            esc(fmtPct(r.margin)),
-            `<strong>${span('pos', fmtCoins(r.profitPerHour))}</strong>`,
-          ]),
+          rows.map((r) => [itemLink(r.id, r.name), esc(fmtPct(r.margin)), `<strong>${span('pos', fmtCoins(r.profitPerHour))}</strong>`]),
+        );
+      },
+    },
+    {
+      key: 'forges',
+      href: '#/forge',
+      desc: () => t('overview.d_forges', { n: TOP_N }),
+      body: () => {
+        const nr = notReady(true);
+        if (nr) return nr;
+        const rows = topCrafts(ctx.derived.crafts(), TOP_N, 'forge');
+        if (!rows.length) return empty(t('overview.e_forges'));
+        return mini(
+          [H_ITEM(), H_MARGIN(), H_PPH()],
+          rows.map((r) => [itemLink(r.id, r.name), esc(fmtPct(r.margin)), `<strong>${span('pos', fmtCoins(r.profitPerHour))}</strong>`]),
         );
       },
     },

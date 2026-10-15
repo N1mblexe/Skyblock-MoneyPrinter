@@ -37,6 +37,9 @@ export function calcSettingsKey(s: Settings): string {
  * from: read display settings from the store, not from calcCtx().settings.
  * ctx.ah is only set when settings.ahEnabled.
  */
+/** Mayor Derpy quadruples the AH claim tax. */
+export const isDerpy = (e: AppState['election']): boolean => e?.mayor?.key.toLowerCase() === 'derpy';
+
 export function createDerived(store: Store<AppState>, history: HistoryRepo): Derived {
   let key: unknown[] = [];
   let ctx: CalcCtx | null = null;
@@ -45,7 +48,8 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
 
   function current(): CalcCtx | null {
     const s = store.get();
-    const k = [s.snapshot, s.catalog, calcSettingsKey(s.settings), s.historyTick, s.ah];
+    const derpy = isDerpy(s.election);
+    const k = [s.snapshot, s.catalog, calcSettingsKey(s.settings), s.historyTick, s.ah, derpy];
     if (k.some((v, i) => v !== key[i])) {
       key = k;
       memo.clear();
@@ -59,6 +63,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
               settings: s.settings,
               stats: (id) => history.stats(id),
               ah: ah ? (id) => ah.lowestBin[id] ?? null : undefined,
+              derpy,
             }
           : null;
     }
@@ -78,7 +83,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     calcCtx: current,
     flips: cached('flips', [], computeFlips),
     crafts: cached('crafts', [], computeCrafts),
-    chains: cached('chains', [], computeChains),
+    chains: (start = 'bazaar') => cached(`chains:${start}`, [], (c) => computeChains(c, start))(),
     npc: cached('npc', [], computeNpcFlips),
     books: cached('books', [], computeBookCombines),
     shops: cached('shops', [], computeShopRows),

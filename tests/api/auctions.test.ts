@@ -57,9 +57,16 @@ describe('aggregatePage', () => {
   it('lowest BIN + count per id; non-BIN and claimed ignored', async () => {
     const acc: Record<string, AhPrice> = {};
     const r = await aggregatePage(AUCTIONS, acc);
-    expect(acc.HYPERION).toEqual({ price: 525_000_000, count: 4 });
-    expect(acc.GOD_POTION_2).toEqual({ price: 1_500_000, count: 3 });
-    expect(acc['BLACK_CAT;5']).toEqual({ price: 60_800_000, count: 2 });
+    expect(acc.HYPERION).toMatchObject({ price: 525_000_000, count: 4 });
+    expect(acc.GOD_POTION_2).toMatchObject({ price: 1_500_000, count: 3 });
+    expect(acc['BLACK_CAT;5']).toMatchObject({ price: 60_800_000, count: 2 });
+    // the second-lowest price and the cheapest listing's uuid / name ride along
+    const bins = (name: string) =>
+      AUCTIONS.filter((a) => a.bin && !a.claimed && a.item_name?.includes(name)).sort((x, y) => x.starting_bid - y.starting_bid);
+    const hype = bins('Hyperion');
+    expect(acc.HYPERION!.next).toBe(hype[1]!.starting_bid);
+    expect(acc.HYPERION).toMatchObject({ uuid: hype[0]!.uuid, name: hype[0]!.item_name });
+    expect(acc.HYPERION!.next!).toBeGreaterThanOrEqual(acc.HYPERION!.price);
     // non-BIN fixture listings
     expect(acc.MACHINE_GUN_BOW).toBeUndefined();
     expect(acc['SCATHA;3']).toBeUndefined();
@@ -81,7 +88,8 @@ describe('aggregatePage', () => {
       ],
       acc,
     );
-    expect(acc.HYPERION).toEqual({ price: 300_000_000, count: 3 });
+    // 400M seen before, 300M is the new lowest: 400M becomes next; 900M changes nothing
+    expect(acc.HYPERION).toEqual({ price: 300_000_000, count: 3, next: 400_000_000, uuid: hype.uuid, name: hype.item_name });
     expect(r).toEqual({ bins: 2, errors: 3 });
   });
 });
@@ -94,7 +102,8 @@ describe('scanAuctions', () => {
     expect(f).toHaveBeenCalledTimes(5);
     expect(res.fetchedAt).toBe(T0);
     expect(res.lastUpdated).toBe(fixture.lastUpdated);
-    expect(res.lowestBin.HYPERION).toEqual({ price: 525_000_000, count: 4 });
+    expect(res.lowestBin.HYPERION).toMatchObject({ price: 525_000_000, count: 4 });
+    expect(res.v).toBe(2);
     expect(res.failedPages).toEqual([]);
     expect(res.binCount).toBe(21);
     expect(progress.map((p) => p.page)).toEqual([1, 2, 3, 4, 5]);

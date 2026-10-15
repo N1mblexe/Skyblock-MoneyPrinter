@@ -2,6 +2,7 @@
 // View agents may reuse any key here via t('common.<key>').
 export const common = {
   appTitle: 'Bazaar Desk',
+  updateReady: 'A new version of Bazaar Desk is ready: reload the page to use it.',
   // the sidebar brand shows the title in two parts, the second one accented
   appTitleMain: 'Bazaar',
   appTitleAccent: 'Desk',
@@ -104,10 +105,14 @@ export const common = {
   nav_overview: 'Overview',
   nav_flip: 'Flips',
   nav_books: 'Books',
-  nav_craft: 'Craft & Forge',
+  nav_ahflip: 'AH flips',
+  nav_craft: 'Craft',
+  nav_forge: 'Forge',
   nav_fusion: 'Fusion',
   nav_npc: 'NPC & Shops',
   nav_plan: 'Planner',
+  nav_sell: 'Sell or craft?',
+  nav_trades: 'Trades',
   nav_watch: 'Watchlist',
   nav_item: 'Item',
   navGroup_markets: 'Markets',
