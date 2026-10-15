@@ -4,6 +4,7 @@ import type { Messages } from '../en/index.ts';
 // View agents may reuse any key here via t('common.<key>').
 export const common: Messages['common'] = {
   appTitle: 'Bazaar Masası',
+  updateReady: 'Bazaar Desk’in yeni sürümü hazır: kullanmak için sayfayı yenile.',
   // the sidebar brand shows the title in two parts, the second one accented
   appTitleMain: 'Bazaar',
   appTitleAccent: 'Masası',

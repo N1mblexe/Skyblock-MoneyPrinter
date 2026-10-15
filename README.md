@@ -89,7 +89,7 @@ Plus NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion re
 
 ## 🚀 Quick start
 
-**Easiest:** open the [live app](https://n1mblexe.github.io/Skyblock-MoneyPrinter/). Nothing to install.
+**Easiest:** open the [live app](https://n1mblexe.github.io/Skyblock-MoneyPrinter/). Nothing to install, but you can: use your browser's *Install app* / *Add to Home Screen* to get it as a desktop or phone app that also opens offline with the last prices.
 
 **Run it locally** (Node.js 20.19+ or 22.12+):
 

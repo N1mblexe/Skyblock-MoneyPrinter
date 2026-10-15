@@ -35,6 +35,13 @@ The build scripts cache their downloads in `.cache/`. To use another directory, 
 
 `.github/workflows/pages.yml` runs on every push to `master` (or by hand from the Actions tab): it installs, runs the tests, builds with `GITHUB_PAGES=1` (which sets Vite's `base` to `/Skyblock-MoneyPrinter/`) and publishes `dist/` to GitHub Pages. In the repository settings, Pages → Source must be set to "GitHub Actions" once.
 
+## Installable app (PWA)
+
+- `public/manifest.webmanifest` and `public/icons/` (rendered from `icons/icon.svg` by `npm run icons`) make the app installable; `index.html` links them with relative paths, so the same files work under `/` and under the GitHub Pages base.
+- The service worker is `src/pwa/sw.ts`, built to `dist/sw.js` by the `bazaar-desk-pwa` plugin in `vite.config.ts`, which fills in the precache list (every built file, the page, `data/catalog.json`, the manifest and icons) and a build version. Routing rules live in `src/pwa/swRoutes.ts` (unit-tested): hashed assets and icons cache-first; the page, the catalog and the manifest network-first; Google Fonts stale-while-revalidate; the Hypixel API is never touched. Cache lookups ignore `Vary`, since module scripts send an `Origin` header the precache requests did not.
+- `src/pwa/register.ts` registers it in production builds only; when a new version takes over, a toast suggests reloading.
+- `npm run pwa:check` (after `GITHUB_PAGES=1 npm run build`) loads the app once, stops the server and reloads: the service worker must serve the whole app. It does not use Playwright request routing, because routing makes Playwright bypass service workers.
+
 ## Data sources
 
 | source | refresh | notes |

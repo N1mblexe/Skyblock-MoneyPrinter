@@ -2,6 +2,7 @@
 // View agents may reuse any key here via t('common.<key>').
 export const common = {
   appTitle: 'Bazaar Desk',
+  updateReady: 'A new version of Bazaar Desk is ready: reload the page to use it.',
   // the sidebar brand shows the title in two parts, the second one accented
   appTitleMain: 'Bazaar',
   appTitleAccent: 'Desk',
