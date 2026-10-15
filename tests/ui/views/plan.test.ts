@@ -232,6 +232,7 @@ describe('plan view', () => {
     expect(q('[data-testid="plan-detail"] dd[data-k="maxUnits"]')).toBeTruthy();
     expect(q('[data-testid="plan-detail"] dd[data-k="unitCost"]').textContent).toBe(fmtCoins(alloc.opp.unitCost));
     expect(q('[data-testid="plan-source"]').getAttribute('href')).toBe(sourceHref(alloc.opp));
+    expect(q('[data-testid="plan-log"]').getAttribute('href')).toMatch(new RegExp(String.raw`^#/trades\?view=journal&add=${encodeURIComponent(alloc.opp.id)}&qty=\d+&buy=[\d.]+&sell=[\d.]+&tax=0&src=plan$`));
     expect(q('[data-testid="plan-why-long"]').textContent!.length).toBeGreaterThan(20);
   });
 

@@ -11,6 +11,7 @@ import { createNpcView } from './npc/npcView.ts';
 import { createOverviewView } from './overview/overviewView.ts';
 import { createPlanView } from './plan/planView.ts';
 import { createSellView } from './sell/sellView.ts';
+import { createTradesView } from './trades/tradesView.ts';
 import { createWatchView } from './watch/watchView.ts';
 
 export const views: Record<RouteId, () => View> = {
@@ -24,6 +25,7 @@ export const views: Record<RouteId, () => View> = {
   fusion: createFusionView,
   plan: createPlanView,
   sell: createSellView,
+  trades: createTradesView,
   watch: createWatchView,
   item: createItemView,
 };
@@ -48,5 +50,6 @@ export const NAV: NavEntry[] = [
   { id: 'npc', group: 'trade' },
   { id: 'plan', group: 'tools' },
   { id: 'sell', group: 'tools' },
+  { id: 'trades', group: 'tools' },
   { id: 'watch', group: 'tools' },
 ];

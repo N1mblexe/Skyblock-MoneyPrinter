@@ -174,7 +174,7 @@ export const HOTKEYS = {
   star: ['s'],
   export: ['e'],
   close: ['Escape'],
-  go: { overview: 'g o', flip: 'g f', ahflip: 'g a', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', sell: 'g v', watch: 'g w' },
+  go: { overview: 'g o', flip: 'g f', ahflip: 'g a', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', sell: 'g v', trades: 'g t', watch: 'g w' },
 } as const;
 
 // ---- localStorage keys
@@ -183,6 +183,8 @@ export const LS_FUSION = 'bazaarMasasi.fusion';
 export const LS_VIEWPREFS = 'bazaarMasasi.view.'; // + view id
 export const LS_WATCH = 'bazaarMasasi.watch';
 export const LS_SELL = 'bazaarMasasi.sell';
+export const LS_ORDERS = 'bazaarMasasi.orders';
+export const LS_JOURNAL = 'bazaarMasasi.journal';
 export const LS_ALERTS = 'bazaarMasasi.alerts';
 export const LS_ALERT_LOG = 'bazaarMasasi.alertLog';
 export const LS_LAST_ROUTE = 'bazaarMasasi.lastRoute';

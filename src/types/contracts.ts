@@ -480,6 +480,45 @@ export interface PlanResult {
   profitPerHour: number;
 }
 
+// ---------------------------------------------------------------- Trades (my orders, journal)
+export type OrderSide = 'buy' | 'sell';
+/** where your order stands against the live book */
+export type OrderStatusKind = 'top' | 'tied' | 'outbid' | 'undercut' | 'unknown';
+
+/** A bazaar order you placed in game and track here. */
+export interface MyOrder {
+  key: string;
+  id: string;
+  side: OrderSide;
+  /** coins per unit */
+  price: number;
+  qty: number;
+  placedAt: number;
+  /** sell offers: what the items cost you per unit (carried into the journal when filled) */
+  cost?: number;
+  note?: string;
+  /** last status seen by the order watcher (alerts fire on top/tied -> outbid/undercut) */
+  lastStatus?: OrderStatusKind;
+}
+
+/** A finished trade. profit = qty × sell × (1 − tax) − qty × buy − fees */
+export interface JournalEntry {
+  key: string;
+  id: string;
+  qty: number;
+  /** coins per unit you paid (0 for items you farmed) */
+  buy: number;
+  /** coins per unit you sold for, before tax */
+  sell: number;
+  /** sale tax rate applied (bazaar tax; 0 for NPC / AH sales entered net) */
+  tax: number;
+  /** other costs in coins (AH fees, side ingredients…) */
+  fees: number;
+  at: number;
+  source: 'manual' | 'order' | 'plan';
+  note?: string;
+}
+
 export interface WatchEntry {
   id: string;
   addedAt: number;
@@ -611,7 +650,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'sell' | 'watch' | 'item';
+export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'sell' | 'trades' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;
@@ -637,6 +676,10 @@ export interface AppState {
   /** ms epoch of the next scheduled poll, null if not scheduled */
   nextPollAt: number | null;
   watchlist: WatchEntry[];
+  /** bazaar orders you track (Trades page) */
+  orders: MyOrder[];
+  /** finished trades, newest first */
+  journal: JournalEntry[];
   alerts: AlertRule[];
   /** newest first, capped at ALERTS.logMax */
   alertLog: AlertEvent[];

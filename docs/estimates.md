@@ -188,6 +188,20 @@ The **Sell or craft?** page (`#/sell`, `src/domain/sell.ts`) values items you al
 
 **Craft up:** for every chain ladder (see Craft chains) that contains the item, every higher tier is an option. Your items are free inputs; side ingredients are bought at their cheapest source (the craft pricer); only whole crafts count (`made = floor(qty / need)`); leftover items are sold at the best raw price per item. `net = made × (value of one crafted item − its side-ingredient cost) + leftover × best raw price`. Options are listed best first; the page total adds each item's best option.
 
+## Trades: my orders and the journal
+
+**My orders** (`src/domain/orders.ts`): for each tracked order, against the current book —
+
+| status | buy order | sell offer |
+|---|---|---|
+| top | your price is the highest bid | your price is the lowest ask |
+| tied | others are at your price too (orders > 1 or more items than yours) | same |
+| outbid / undercut | a bid above yours | an ask below yours |
+
+"Ahead of you" = items at better prices + others at your price. The fill estimate assumes the whole weekly insta volume on your side (insta-sells for buy orders, insta-buys for sell offers) serves the queue in price order: `(ahead + yours) / (week / 168)` hours. Re-price suggests best ± 0.1. On every new live snapshot the order watcher (`src/state/ordersRunner.ts`) stores each status and toasts (and notifies, if on) once when an order goes from top/tied to outbid/undercut. **Filled** on a buy order opens a sell offer for the same items with the buy price as its cost; on a sell offer it logs a journal entry.
+
+**Journal** (`src/domain/journal.ts`): `profit = qty × sell × (1 − tax) − qty × buy − fees`, where `tax` is the bazaar tax at the time (0 for sales entered net, e.g. from the planner). Totals for today (since local midnight), the last 7 days and all time, ROI = profit / (qty × buy + fees), best and worst items.
+
 ## Book combining
 
 Two level-k books combine into one level-(k+1) book, so one level-L book takes `2^(L−k)` level-k books. For each output book, the app tries every `k` from `L − 1` down to `L − 4` (`BOOK.maxChainLevels = 4`, at most 16 input books) and keeps the most profitable chain. On a tie, it keeps the shorter chain. One unit is one output book: it costs `count` input books, and the input's fill rate and book depth are divided by `count`.

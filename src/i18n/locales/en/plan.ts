@@ -84,6 +84,7 @@ export const plan = {
   dRiskNone: 'No risk flags.',
   openSource: 'Open in {tab}',
   openItem: 'Item page',
+  logTrade: 'Log as trade',
   tab_flip: 'Flips',
   tab_craft: 'Craft & Forge',
   tab_forge: 'Forge',

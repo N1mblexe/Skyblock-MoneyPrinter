@@ -38,7 +38,7 @@ import { findBrowser, freePort, loadSmokeFixtures, ROOT, sleep, startServer, wit
 const LIVE = process.argv.includes('--live');
 const DESKTOP = { width: 1280, height: 800 };
 const MOBILE = { width: 390, height: 844 };
-const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'plan', 'sell', 'watch'] as const;
+const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'plan', 'sell', 'trades', 'watch'] as const;
 const ITEM = 'ENCHANTED_GOLD';
 const FLIP_Q = 'enchanted';
 const T = 15_000;

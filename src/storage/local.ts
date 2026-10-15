@@ -4,14 +4,16 @@ import {
   LS_ALERT_LOG,
   LS_ALERTS,
   LS_FUSION,
+  LS_JOURNAL,
   LS_LAST_ROUTE,
   LS_LEGACY_FUSION,
   LS_LEGACY_TAB,
+  LS_ORDERS,
   LS_SETTINGS,
   LS_WATCH,
 } from '../config.ts';
 import { sanitizeSettings } from '../state/appState.ts';
-import type { AlertEvent, AlertMetric, AlertRule, FusionRecipe, Settings, WatchEntry } from '../types/contracts.ts';
+import type { AlertEvent, AlertMetric, AlertRule, FusionRecipe, JournalEntry, MyOrder, Settings, WatchEntry } from '../types/contracts.ts';
 
 function storage(): Storage | null {
   try {
@@ -138,6 +140,50 @@ export const saveAlerts = (a: AlertRule[]): void => lsSet(LS_ALERTS, a);
 /** Persisted alert log (newest first, capped at ALERTS.logMax); invalid events dropped. */
 export const loadAlertLog = (): AlertEvent[] => loadList(LS_ALERT_LOG, parseEvent).slice(0, ALERTS.logMax);
 export const saveAlertLog = (l: AlertEvent[]): void => lsSet(LS_ALERT_LOG, l.slice(0, ALERTS.logMax));
+
+// ---- trades: my orders and the trade journal
+const posNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
+const nonNeg = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v >= 0;
+const note = (v: unknown) => (typeof v === 'string' && v.trim() ? { note: v.slice(0, 500) } : {});
+const STATUSES = new Set(['top', 'tied', 'outbid', 'undercut', 'unknown']);
+
+export function parseOrder(x: Record<string, unknown>): MyOrder | null {
+  const { key, id, side, price, qty, placedAt } = x;
+  if (!idStr(key) || !idStr(id) || (side !== 'buy' && side !== 'sell') || !posNum(price) || !posNum(qty)) return null;
+  return {
+    key,
+    id,
+    side,
+    price,
+    qty,
+    placedAt: time(placedAt) ? placedAt : 0,
+    ...(posNum(x.cost) ? { cost: x.cost } : {}),
+    ...note(x.note),
+    ...(STATUSES.has(x.lastStatus as string) ? { lastStatus: x.lastStatus as MyOrder['lastStatus'] } : {}),
+  };
+}
+
+export function parseJournal(x: Record<string, unknown>): JournalEntry | null {
+  const { key, id, qty, buy, sell, tax, fees, at, source } = x;
+  if (!idStr(key) || !idStr(id) || !posNum(qty) || !nonNeg(buy) || !nonNeg(sell)) return null;
+  return {
+    key,
+    id,
+    qty,
+    buy,
+    sell,
+    tax: nonNeg(tax) && tax < 1 ? tax : 0,
+    fees: nonNeg(fees) ? fees : 0,
+    at: time(at) ? at : 0,
+    source: source === 'order' || source === 'plan' ? source : 'manual',
+    ...note(x.note),
+  };
+}
+
+export const loadOrders = (): MyOrder[] => loadList(LS_ORDERS, parseOrder, (o) => o.key);
+export const saveOrders = (o: MyOrder[]): void => lsSet(LS_ORDERS, o);
+export const loadJournal = (): JournalEntry[] => loadList(LS_JOURNAL, parseJournal, (e) => e.key);
+export const saveJournal = (j: JournalEntry[]): void => lsSet(LS_JOURNAL, j);
 
 // ---- legacy single-file tool (bazaar-masasi.html) migration
 /** legacy tab -> route hash (the legacy tool only had these three tabs) */

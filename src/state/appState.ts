@@ -65,6 +65,8 @@ export function initialState(settings: Settings = defaultSettings): AppState {
     historyTick: 0,
     nextPollAt: null,
     watchlist: [],
+    orders: [],
+    journal: [],
     alerts: [],
     alertLog: [],
     ah: null,

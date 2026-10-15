@@ -91,6 +91,7 @@ export const plan: Messages['plan'] = {
   dRiskNone: 'Risk işareti yok.',
   openSource: '{tab} sekmesinde aç',
   openItem: 'Ürün sayfası',
+  logTrade: 'İşlem olarak kaydet',
   tab_flip: 'Flipler',
   tab_craft: 'Craft & Forge',
   tab_forge: 'Forge',

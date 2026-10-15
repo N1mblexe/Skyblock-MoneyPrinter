@@ -8,7 +8,7 @@ import { bootApp, expectNoConsoleErrors, go, liveListeners, settle, teardownApp,
 afterEach(teardownApp);
 
 const ITEM = 'ENCHANTED_MELON';
-const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'plan', 'sell', 'watch', `item/${ITEM}`] as const;
+const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'plan', 'sell', 'trades', 'watch', `item/${ITEM}`] as const;
 const hashOf = (r: string) => `#/${r}`;
 
 /** Accessible name of a form control (aria-label, aria-labelledby, wrapping/for label, title). */
@@ -104,6 +104,7 @@ describe('routes', () => {
       npc: expect.any(String),
       plan: expect.any(String),
       sell: 'Sell or craft?',
+      trades: 'Trades',
       watch: expect.any(String),
       [`item/${ITEM}`]: expect.stringMatching(/Enchanted Melon/i),
     });

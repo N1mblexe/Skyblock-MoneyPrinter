@@ -111,6 +111,7 @@ export const common = {
   nav_npc: 'NPC & Shops',
   nav_plan: 'Planner',
   nav_sell: 'Sell or craft?',
+  nav_trades: 'Trades',
   nav_watch: 'Watchlist',
   nav_item: 'Item',
   navGroup_markets: 'Markets',

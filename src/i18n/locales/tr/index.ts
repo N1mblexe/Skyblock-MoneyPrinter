@@ -3,6 +3,7 @@ import { common } from './common.ts';
 import { err } from './err.ts';
 import { sell } from './sell.ts';
 import { shell } from './shell.ts';
+import { trades } from './trades.ts';
 import { kit } from './kit.ts';
 import { ahflip } from './ahflip.ts';
 import { alerts } from './alerts.ts';
@@ -17,4 +18,4 @@ import { overview } from './overview.ts';
 import { plan } from './plan.ts';
 import { watch } from './watch.ts';
 
-export const tr: Messages = { common, err, ahflip, shell, kit, alerts, risk, flip, books, craft, fusion, item, npc, overview, plan, sell, watch };
+export const tr: Messages = { common, err, ahflip, shell, kit, alerts, risk, flip, books, craft, fusion, item, npc, overview, plan, sell, trades, watch };

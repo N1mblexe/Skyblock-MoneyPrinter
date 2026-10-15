@@ -120,6 +120,7 @@ export const common: Messages['common'] = {
   nav_npc: 'NPC & Dükkanlar',
   nav_plan: 'Planlayıcı',
   nav_sell: 'Sat mı, craftla mı?',
+  nav_trades: 'İşlemler',
   nav_watch: 'İzleme',
   nav_item: 'Ürün',
   navGroup_markets: 'Piyasalar',

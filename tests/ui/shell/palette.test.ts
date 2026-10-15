@@ -27,6 +27,6 @@ describe('palette search', () => {
     expect(items.map((i) => i.id)).toEqual(['page:watch']);
     items[0]!.run();
     expect(nav).toHaveBeenCalledWith({ id: 'watch' });
-    expect(pagesProvider(nav)('')).toHaveLength(11);
+    expect(pagesProvider(nav)('')).toHaveLength(12);
   });
 });
