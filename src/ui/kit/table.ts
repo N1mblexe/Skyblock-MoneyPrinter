@@ -425,7 +425,7 @@ export function createKitTable<T>(opts: KitTableOptions<T>): KitTableHandle<T> {
     const shown = layout === 'cards' ? Math.min(view.length, cardLimit) : view.length;
     const total = layout === 'cards' ? view.length : rows.length;
     if (total > shown) {
-      foot.textContent = t('common.tableShowing', { n: shown, m: total });
+      foot.textContent = t('common.tableShowing', { n: shown, m: total, count: total });
       foot.hidden = false;
     } else {
       foot.textContent = '';

@@ -30,9 +30,11 @@ export const plan: Messages['plan'] = {
   capitalFull: 'Sermayenin tamamı kullanılıyor.',
   slotsFull: 'Tüm sipariş slotları dolu; daha fazla slot kârı artırabilir.',
   computing: 'Hesaplanıyor…',
-  suspectHidden: '{n} şüpheli fırsat hariç tutuldu',
+  suspectHidden_one: '{n} şüpheli fırsat hariç tutuldu',
+  suspectHidden_other: '{n} şüpheli fırsat hariç tutuldu',
   showSuspect: 'Dahil et',
-  oppsCount: '{n} fırsat arasından',
+  oppsCount_one: '{n} fırsat arasından',
+  oppsCount_other: '{n} fırsat arasından',
 
   // table
   colKind: 'Tür',

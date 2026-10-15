@@ -4,6 +4,13 @@ import type { Messages } from '../en/index.ts';
 // View agents may reuse any key here via t('common.<key>').
 export const common: Messages['common'] = {
   appTitle: 'Bazaar Masası',
+
+  // time units (ages, fill times, durations)
+  u_sec: '{n} sn',
+  u_min: '{n} dk',
+  u_hour: '{n} sa',
+  u_day: '{n} gün',
+  u_lt1min: '<1 dk',
   subtitle:
     "Hypixel SkyBlock bazaar fiyatlarından flip, craft, NPC ve shard fusion kârını hesaplar. Sadece hesap yapar, oyunda hiçbir işlem yapmaz.",
 
@@ -34,6 +41,7 @@ export const common: Messages['common'] = {
   st_oldTitle: 'Veri 10 dakikadan eski',
   st_cachedTitle: 'Tarayıcıda saklanan son veri gösteriliyor; canlı veri bekleniyor',
   st_errorTitle: 'Son çekme başarısız oldu',
+  st_errorDetail: 'Son çekme başarısız oldu: {err}',
   st_manualTitle: 'Elle yapıştırılan veri gösteriliyor',
   dataAge: 'veri {age} önce',
   nextIn: 'yenileme {s}',
@@ -128,6 +136,8 @@ export const common: Messages['common'] = {
   filtersN: 'Filtreler ({n})',
   watch: 'İzle',
   unwatch: 'İzlemeyi bırak',
+  watchItem: 'İzle: {name}',
+  unwatchItem: 'İzlemeyi bırak: {name}',
   watched: 'İzleniyor',
   verified: 'Doğrulanmış',
   unverified: 'Doğrulanmamış',
@@ -151,12 +161,21 @@ export const common: Messages['common'] = {
   limited_slots: 'Slot',
   mayor: 'Belediye başkanı',
   minister: 'Bakan',
+  ministerLine: 'Bakan: {name} ({perk})',
+  mayorAria: 'Belediye başkanı: {mayor}',
+  mayorMinisterAria: 'Belediye başkanı: {mayor}, Bakan: {minister}',
+  // two complete sentences in a row (some languages join them without a space)
+  twoSentences: '{a} {b}',
+  // separator for tag-like lists (shard families)
+  listSep: ', ',
   ahScanning: 'Müzayede taranıyor {p}/{n}',
   copied: 'Kopyalandı',
 
   // table / kit
-  tableShowing: '{m} satırın {n} tanesi gösteriliyor',
-  rows: '{n} satır',
+  tableShowing_one: '{m} satırın {n} tanesi gösteriliyor',
+  tableShowing_other: '{m} satırın {n} tanesi gösteriliyor',
+  rows_one: '{n} satır',
+  rows_other: '{n} satır',
   noRows: 'Gösterilecek satır yok.',
   sortHint: 'Başlığa tıklayıp sırala',
   sortAsc: 'artan',

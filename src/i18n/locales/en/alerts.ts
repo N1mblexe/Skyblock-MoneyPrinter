@@ -9,4 +9,6 @@ export const alerts = {
   m_flipProfit: 'flip profit',
   op_lt: '<',
   op_gt: '>',
+  // a rule as a short phrase: "ask < 1,200"
+  rule: '{metric} {op} {value}',
 };

@@ -17,7 +17,7 @@ export function logMessage(e: AlertEvent, rules: readonly AlertRule[], name: str
 
 /** Rule as a short sentence: "ask < 1,200". */
 export function ruleText(r: AlertRule): string {
-  return `${t(`alerts.m_${r.metric}`)} ${t(`alerts.op_${r.op}`)} ${fmtMetric(r.metric, r.value)}`;
+  return t('alerts.rule', { metric: t(`alerts.m_${r.metric}`), op: t(`alerts.op_${r.op}`), value: fmtMetric(r.metric, r.value) });
 }
 
 /** Local date-time for a log entry ("14.10 13:05" style, by the UI locale). */

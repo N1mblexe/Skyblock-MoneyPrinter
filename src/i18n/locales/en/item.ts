@@ -67,6 +67,7 @@ export const item = {
   bookNote: 'Top 10 levels shown. Live data keeps at most 30 levels, cached data 10.',
 
   chartTitle: 'Price history',
+  chartAria: 'Price history: {name} ({range}) · {points}',
   range3h: '3h',
   range24h: '24h',
   range7d: '7d',
@@ -76,7 +77,8 @@ export const item = {
   chartBid: 'Buy order (bid)',
   chartAsk: 'Sell offer (ask)',
   chartNote: 'History is recorded only in this browser while the page is open (per-minute data for 3 hours, 15-minute buckets for 7 days).',
-  chartPoints: '{n} points',
+  chartPoints_one: '{n} point',
+  chartPoints_other: '{n} points',
 
   recipesOutTitle: 'Recipes producing this',
   recipesInTitle: 'Recipes using this',
@@ -105,7 +107,8 @@ export const item = {
   openCraftShort: 'Craft',
   openIn: 'Open in',
   actionsAria: 'Item actions',
-  alertsHere: '{n} alerts on this item',
+  alertsHere_one: '{n} alert on this item',
+  alertsHere_other: '{n} alerts on this item',
   manageAlerts: 'Manage on the watchlist',
 
   alertTitle: 'Quick alert',
@@ -146,6 +149,7 @@ export const item = {
   askCapped: 'The buy order price was capped at the best sell offer {ask}; it fills instantly (like an insta-buy).',
   yourNoteOrder: 'Buy order = best bid + 0.1, sell offer = best ask − 0.1.',
   yourNoteInsta: 'Insta prices walk the book at the batch size (slippage included).',
+  statsLine: '{points}. {note}',
   yourNoteTax: 'Tax is only taken from bazaar sales. Same calculation as the Flips tab.',
 
   statsTitle: 'Market stats',
@@ -155,7 +159,8 @@ export const item = {
   consistency: 'Consistency',
   buyVolTrend: 'Insta-buy volume (estimate)',
   sellVolTrend: 'Insta-sell volume (estimate)',
-  statsPoints: '{n} history points',
+  statsPoints_one: '{n} history point',
+  statsPoints_other: '{n} history points',
   statsNone: 'Not enough history yet; it fills in while the page stays open.',
   statsNote: 'Consistency: share of history points where the flip was profitable after tax. Volume trend is relative to the weekly average (×1 = normal) and is an estimate.',
 
@@ -164,7 +169,8 @@ export const item = {
   ahCount: 'BIN listings',
   ahAge: 'Scanned',
   ahAgeVal: '{age} ago',
-  ahPartial: 'Partial scan ({n} pages skipped)',
+  ahPartial_one: 'Partial scan ({n} page skipped)',
+  ahPartial_other: 'Partial scan ({n} pages skipped)',
   ahCaveat: 'Lowest BIN ignores stars, reforges and pet level; a specific piece can be worth very different.',
 
   shardTitle: 'Shard',

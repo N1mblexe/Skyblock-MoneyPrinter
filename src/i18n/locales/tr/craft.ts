@@ -98,7 +98,8 @@ export const craft: Messages['craft'] = {
   stepSellOffer: 'Bazaarda sell offer ile sat. Vergi (%{tax}) sonrası ≈ <b>{value}</b>',
   stepSellInsta: 'Bazaarda insta-sell ile sat. Vergi (%{tax}) sonrası ≈ <b>{value}</b>',
   stepSellNpc: 'NPC’ye sat (vergi yok) ≈ <b>{value}</b>',
-  stepSellAh: 'Müzayedede ~en düşük BIN fiyatından listele (adet {price}, {count} ilan) ≈ <b>{value}</b>',
+  stepSellAh_one: 'Müzayedede ~en düşük BIN fiyatından listele (adet {price}, {count} ilan) ≈ <b>{value}</b>',
+  stepSellAh_other: 'Müzayedede ~en düşük BIN fiyatından listele (adet {price}, {count} ilan) ≈ <b>{value}</b>',
   stepProfit: 'Kâr / craft: <b class="{cls}">{profit}</b> ({margin})',
   ahWarn: 'En düşük BIN; yıldız, reforge, pet seviyesi ve diğer eşya özelliklerini hesaba katmaz. Müzayede vergisi ve listeleme ücreti de düşülmedi. Listelemeden önce oyunda kontrol et.',
   cannotPrice: 'Bu tarif fiyatlanamadı; eksik fiyat: {ids}.',
@@ -131,8 +132,9 @@ export const craft: Messages['craft'] = {
   srcInstaSell: 'Insta-sell',
   srcAh: 'AH',
   craftFrom: 'şundan craftla: {inputs}',
-  craftFromOut: '(→ {n}×)',
-  ahListings: 'AH: en düşük BIN {price}, {count} ilan',
+  craftFromOut: '{from} (→ {n}×)',
+  ahListings_one: 'AH: en düşük BIN {price}, {count} ilan',
+  ahListings_other: 'AH: en düşük BIN {price}, {count} ilan',
 
   // detail: notes
   notesTitle: 'Hız ve sınırlar',

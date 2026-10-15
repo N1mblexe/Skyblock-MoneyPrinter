@@ -532,7 +532,7 @@ export function createFusionView(): View {
       const replace = d.body.querySelector<HTMLInputElement>('input[type=radio][value=replace]')!.checked;
       importRecipes(res.recipes, replace);
       ctx?.toast(
-        res.skipped ? t('fusion.importSkipped', { n: res.recipes.length, m: res.skipped }) : t('fusion.importOk', { n: res.recipes.length }),
+        res.skipped ? t('fusion.importSkipped', { recipes: t('fusion.nRecipes', { n: res.recipes.length }), invalid: t('fusion.nInvalid', { n: res.skipped }) }) : t('fusion.importOk', { n: res.recipes.length }),
         res.skipped ? 'warn' : 'ok',
       );
       text.value = '';

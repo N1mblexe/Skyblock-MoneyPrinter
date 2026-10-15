@@ -11,4 +11,6 @@ export const alerts: Messages['alerts'] = {
   m_flipProfit: 'flip kârı',
   op_lt: '<',
   op_gt: '>',
+  // a rule as a short phrase: "ask < 1,200"
+  rule: '{metric} {op} {value}',
 };

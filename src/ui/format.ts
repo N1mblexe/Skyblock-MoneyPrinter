@@ -1,5 +1,5 @@
 // Locale-aware formatters; the Intl locale follows the active language (src/i18n/languages.ts).
-import { getLang, locale } from '../i18n/index.ts';
+import { locale, t } from '../i18n/index.ts';
 
 export { locale };
 
@@ -62,31 +62,40 @@ function num1(n: number): string {
   return nf('num1', { maximumFractionDigits: 1 }).format(n);
 }
 
-/** Age in ms => "12 sn" / "3 dk" / "2 sa" / "3 gün" (tr), "12s" / "3m" / "2h" / "3d" (en). */
+/** Age in ms => "12s" / "3m" / "2h" / "3d" (en), "12 sn" / "3 dk" / "2 sa" / "3 gün" (tr); units from common.u_*. */
 export function fmtAge(ms: number): string {
   if (!Number.isFinite(ms)) return Number.isNaN(ms) ? DASH : '∞';
-  const tr = getLang() !== 'en';
   const sec = Math.max(0, Math.floor(ms / 1000));
-  if (sec < 60) return tr ? `${sec} sn` : `${sec}s`;
+  if (sec < 60) return t('common.u_sec', { n: sec });
   const min = Math.floor(sec / 60);
-  if (min < 60) return tr ? `${min} dk` : `${min}m`;
+  if (min < 60) return t('common.u_min', { n: min });
   const hr = Math.floor(min / 60);
-  if (hr < 48) return tr ? `${hr} sa` : `${hr}h`;
-  const d = Math.floor(hr / 24);
-  return tr ? `${d} gün` : `${d}d`;
+  if (hr < 48) return t('common.u_hour', { n: hr });
+  return t('common.u_day', { n: Math.floor(hr / 24) });
 }
 
-/** Duration in hours => "45 dk" / "2,5 sa" / "3 gün" (tr), "45m" / "2.5h" / "3d" (en). Infinity => "∞". */
+/** Duration in hours => "45m" / "2.5h" / "3d" (en), "45 dk" / "2,5 sa" / "3 gün" (tr). Infinity => "∞". */
 export function fmtHours(h: number): string {
   if (h == null || Number.isNaN(h)) return DASH;
   if (h === Infinity) return '∞';
-  const tr = getLang() !== 'en';
   const v = Math.max(0, h);
   if (v * 60 < 59.5) {
     const m = Math.round(v * 60);
-    if (m < 1) return tr ? '<1 dk' : '<1m';
-    return tr ? `${m} dk` : `${m}m`;
+    return m < 1 ? t('common.u_lt1min') : t('common.u_min', { n: m });
   }
-  if (v < 24) return tr ? `${num1(v)} sa` : `${num1(v)}h`;
-  return tr ? `${num1(v / 24)} gün` : `${num1(v / 24)}d`;
+  if (v < 24) return t('common.u_hour', { n: num1(v) });
+  return t('common.u_day', { n: num1(v / 24) });
+}
+
+/**
+ * List in the active language: 'and' => "a, b and c" (Intl.ListFormat); 'tags' => "a, b, c" joined with
+ * common.listSep (labels such as shard families). Falls back to a comma join.
+ */
+export function fmtList(items: readonly string[], kind: 'and' | 'tags' = 'and'): string {
+  if (kind === 'tags') return items.join(t('common.listSep'));
+  try {
+    return new Intl.ListFormat(locale(), { style: 'long', type: 'conjunction' }).format(items);
+  } catch {
+    return items.join(', ');
+  }
 }

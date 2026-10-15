@@ -8,6 +8,7 @@ export const kit: Messages['kit'] = {
   actions: 'İşlemler',
   showAllColumns: 'Tümünü göster',
   dismiss: 'Bildirimi kapat',
-  results: '{n} sonuç',
+  results_one: '{n} sonuç',
+  results_other: '{n} sonuç',
   exported: '{file} indirildi',
 };

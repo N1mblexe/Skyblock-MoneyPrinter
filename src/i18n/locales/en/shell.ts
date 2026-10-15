@@ -5,7 +5,8 @@ export const shell = {
   collapse: 'Collapse menu',
   expand: 'Expand menu',
   search: 'Search…',
-  watchCount: '{n} watched items',
+  watchCount_one: '{n} watched item',
+  watchCount_other: '{n} watched items',
   moreTitle: 'More pages',
   primaryNav: 'Bottom menu',
 
@@ -15,7 +16,8 @@ export const shell = {
   noPerks: 'No perk info',
   ahAge: 'AH {age}',
   ahAgeTitle: 'Auction house scanned {age} ago',
-  ahPartial: '{n} pages could not be read',
+  ahPartial_one: '{n} page could not be read',
+  ahPartial_other: '{n} pages could not be read',
   ahNone: 'AH not scanned',
   ahProgressAria: 'Auction house scan progress',
 

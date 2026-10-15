@@ -6,6 +6,7 @@ export const kit = {
   actions: 'Actions',
   showAllColumns: 'Show all',
   dismiss: 'Dismiss notification',
-  results: '{n} results',
+  results_one: '{n} result',
+  results_other: '{n} results',
   exported: 'Downloaded {file}',
 };

@@ -49,7 +49,8 @@ export const overview = {
   c_watch: 'Watchlist',
   d_watch: 'Ask price, 24h chart and change of the items you watch.',
   e_watch: 'Nothing watched yet. Press ★ in any table or add items on the Watchlist page.',
-  watchMore: '+{n} more items',
+  watchMore_one: '+{n} more item',
+  watchMore_other: '+{n} more items',
 
   c_alerts: 'Recent alerts',
   d_alerts: 'Latest triggers of your rules. Alerts only run while a tab is open.',

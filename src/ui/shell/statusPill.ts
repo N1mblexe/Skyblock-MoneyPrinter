@@ -62,7 +62,7 @@ export function createStatusPill(store: Store<AppState>): { el: HTMLElement; des
     setAttr(pill, 'class', `pill pill-${st}`);
     setAttr(pill, 'data-status', st);
     setText(pill, t(`common.st_${st}`));
-    const tip = st === 'error' && s.lastError ? `${t('common.st_errorTitle')}: ${s.lastError}` : t(`common.st_${st}Title`);
+    const tip = st === 'error' && s.lastError ? t('common.st_errorDetail', { err: s.lastError }) : t(`common.st_${st}Title`);
     setAttr(pill, 'title', tip);
 
     let ageText = '';

@@ -25,7 +25,8 @@ export const npc: Messages['npc'] = {
 
   hiddenShowing: '{n} şüpheli gösteriliyor · gizle',
   hiddenTitle: 'Şüpheli (ölü alış, aşırı makas, sıçrama…) satırlar Genel ayarlar’daki “Şüphelileri gizle” yüzünden gizli. Bu sekmede göstermek için tıkla.',
-  rowsCount: '{n} satır',
+  rowsCount_one: '{n} satır',
+  rowsCount_other: '{n} satır',
 
   col_item: 'Ürün',
   col_buy: 'Alış',
@@ -121,7 +122,8 @@ export const npc: Messages['npc'] = {
   catalogError: 'NPC fiyatları yüklenemedi: {err}. Bu sekme katalog olmadan çalışmaz.',
   emptyNone: 'Bu yönde kârlı NPC flip yok.',
   emptyFiltered: 'Filtrelere uyan satır yok.',
-  emptyHidden: 'Görünen satır yok; {n} şüpheli satır gizli.',
+  emptyHidden_one: 'Görünen satır yok; {n} şüpheli satır gizli.',
+  emptyHidden_other: 'Görünen satır yok; {n} şüpheli satır gizli.',
   emptyShops: 'Katalogda para birimiyle alınan dükkan teklifi yok.',
   watchAria: '{name}: izleme listesine ekle',
   unwatchAria: '{name}: izleme listesinden çıkar',

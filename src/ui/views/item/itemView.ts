@@ -28,7 +28,7 @@ import type {
 } from '../../../types/contracts.ts';
 import { itemCell, riskBadge, riskFlagText } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
-import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtPct } from '../../format.ts';
+import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtList, fmtPct } from '../../format.ts';
 import { parseNumberInput } from '../../kit/index.ts';
 import { createTable, type TableHandle } from '../../table.ts';
 import {
@@ -397,7 +397,7 @@ export function createItemView(): View {
       }
     }
     const insta = set.costMode === 'insta' || set.sellMode === 'insta';
-    body += note(`${t(insta ? 'yourNoteInsta' : 'yourNoteOrder')} ${t('yourNoteTax')}`);
+    body += note(t('common.twoSentences', { a: t(insta ? 'yourNoteInsta' : 'yourNoteOrder'), b: t('yourNoteTax') }));
     return body;
   }
 
@@ -414,7 +414,7 @@ export function createItemView(): View {
         [t('consistency'), pct(m.consistency), '', 'consistency'],
         [t('buyVolTrend'), esc(fmtTrend(m.buyVolTrend)), '', 'buyVolTrend'],
         [t('sellVolTrend'), esc(fmtTrend(m.sellVolTrend)), '', 'sellVolTrend'],
-      ]) + note(`${t('statsPoints', { n: m.n })}. ${t('statsNote')}`)
+      ]) + note(t('statsLine', { points: t('statsPoints', { n: m.n }), note: t('statsNote') }))
     );
   }
 
@@ -436,7 +436,7 @@ export function createItemView(): View {
     if (!sh) return null;
     return kv([
       [t('shardRarity'), esc(sh.rarity || '—'), '', 'shardRarity'],
-      [t('shardFamily'), esc(sh.family.length ? sh.family.join(', ') : '—'), '', 'shardFamily'],
+      [t('shardFamily'), esc(sh.family.length ? fmtList(sh.family, 'tags') : '—'), '', 'shardFamily'],
       [t('shardAlignment'), esc(sh.alignment ?? '—'), '', 'shardAlignment'],
     ]);
   }
@@ -657,7 +657,7 @@ export function createItemView(): View {
         { key: 'ask', label: t('chartAsk'), cls: 'lc-ask', values: pts.map((p) => p.ask) },
       ],
       emptyText: t(emptyKey),
-      ariaLabel: `${t('chartTitle')}: ${nameOf(id)} (${t(`range${range}`)}) · ${t('chartPoints', { n: pts.length })}`,
+      ariaLabel: t('chartAria', { name: nameOf(id), range: t(`range${range}`), points: t('chartPoints', { n: pts.length }) }),
       fmtY: fmtPrice,
       fmtX: fmtTick,
       fmtTip: fmtStamp,

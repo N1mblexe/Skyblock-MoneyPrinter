@@ -23,7 +23,8 @@ export const npc = {
 
   hiddenShowing: 'Showing {n} suspect · hide',
   hiddenTitle: 'Suspect rows (dead bid, extreme spread, spike…) are hidden by “Hide suspicious” in Global settings. Click to show them on this tab.',
-  rowsCount: '{n} rows',
+  rowsCount_one: '{n} row',
+  rowsCount_other: '{n} rows',
 
   col_item: 'Item',
   col_buy: 'Buy at',
@@ -119,7 +120,8 @@ export const npc = {
   catalogError: 'Could not load NPC prices: {err}. This tab needs the catalog.',
   emptyNone: 'No profitable NPC flips in this direction.',
   emptyFiltered: 'No rows match the filters.',
-  emptyHidden: 'Nothing visible; {n} suspect rows are hidden.',
+  emptyHidden_one: 'Nothing visible; {n} suspect row is hidden.',
+  emptyHidden_other: 'Nothing visible; {n} suspect rows are hidden.',
   emptyShops: 'The catalog has no shop offers paid in a currency.',
   watchAria: '{name}: add to watchlist',
   unwatchAria: '{name}: remove from watchlist',

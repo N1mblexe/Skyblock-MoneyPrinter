@@ -470,7 +470,7 @@ export function createWatchView(): View {
       return;
     }
     ctx.store.set({ watchlist: m.watchlist, alerts: m.alerts });
-    els.ioStatus.textContent = t('watch.imported', { items: m.items, rules: m.rules });
+    els.ioStatus.textContent = t('watch.imported', { items: t('watch.nItems', { n: m.items }), rules: t('watch.nRules', { n: m.rules }) });
     els.importText.value = '';
     ctx.toast(els.ioStatus.textContent, 'ok');
   }

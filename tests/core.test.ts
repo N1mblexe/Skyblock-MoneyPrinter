@@ -60,4 +60,18 @@ describe('i18n', () => {
     expect(t('common.missing')).toBe('common.missing');
     setLang('tr');
   });
+
+  it('picks plural forms by params.count ?? params.n, also from formatted counts', () => {
+    setLang('en');
+    expect(t('common.rows', { n: 1 })).toBe('1 row');
+    expect(t('common.rows', { n: 0 })).toBe('0 rows');
+    expect(t('common.rows', { n: '1,234' })).toBe('1,234 rows');
+    expect(t('common.tableShowing', { n: 1, m: 1, count: 1 })).toBe('Showing 1 of 1 row');
+    expect(t('common.tableShowing', { n: 1, m: 9, count: 9 })).toBe('Showing 1 of 9 rows');
+    // no usable count: the plural (_other) form
+    expect(t('craft.ahListings', { price: '5', count: '?' })).toBe('AH: lowest BIN 5, ? listings');
+    setLang('tr');
+    expect(t('common.rows', { n: 1 })).toBe('1 satır');
+    expect(t('common.rows', { n: '1.234' })).toBe('1.234 satır');
+  });
 });

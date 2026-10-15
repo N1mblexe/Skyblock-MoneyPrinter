@@ -211,8 +211,8 @@ export function createBooksView(): View {
           ]),
       ) +
       section(t('flip.riskTitle'), riskListHtml(r.risk)) +
-      section(t('flip.bookTitle') + ' · ' + t('books.inputBook', { name: inName }), orderBookHtml(snap?.products[r.inputId])) +
-      section(t('flip.bookTitle') + ' · ' + t('books.outputBook', { name: r.name }), orderBookHtml(snap?.products[r.id])) +
+      section(t('books.inputBook', { book: t('flip.bookTitle'), name: inName }), orderBookHtml(snap?.products[r.inputId])) +
+      section(t('books.outputBook', { book: t('flip.bookTitle'), name: r.name }), orderBookHtml(snap?.products[r.id])) +
       section(
         t('flip.linksTitle'),
         `<div class="dp-links"><a class="btn btn-sm" href="#/item/${encodeURIComponent(r.inputId)}">${esc(t('books.openInput'))}</a>` +

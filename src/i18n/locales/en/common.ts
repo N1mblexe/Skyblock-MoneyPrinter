@@ -2,6 +2,13 @@
 // View agents may reuse any key here via t('common.<key>').
 export const common = {
   appTitle: 'Bazaar Desk',
+
+  // time units (ages, fill times, durations)
+  u_sec: '{n}s',
+  u_min: '{n}m',
+  u_hour: '{n}h',
+  u_day: '{n}d',
+  u_lt1min: '<1m',
   subtitle:
     'Computes flip, craft, NPC and shard fusion profit from Hypixel SkyBlock bazaar prices. It only calculates; it never acts in game.',
 
@@ -30,6 +37,7 @@ export const common = {
   st_oldTitle: 'Data is over 10 minutes old',
   st_cachedTitle: 'Showing the last data saved in this browser; waiting for live data',
   st_errorTitle: 'The last fetch failed',
+  st_errorDetail: 'The last fetch failed: {err}',
   st_manualTitle: 'Showing manually pasted data',
   dataAge: 'data {age} old',
   nextIn: 'refresh in {s}',
@@ -118,6 +126,8 @@ export const common = {
   filtersN: 'Filters ({n})',
   watch: 'Watch',
   unwatch: 'Unwatch',
+  watchItem: 'Watch: {name}',
+  unwatchItem: 'Unwatch: {name}',
   watched: 'Watching',
   verified: 'Verified',
   unverified: 'Unverified',
@@ -141,11 +151,20 @@ export const common = {
   limited_slots: 'Slots',
   mayor: 'Mayor',
   minister: 'Minister',
+  ministerLine: 'Minister: {name} ({perk})',
+  mayorAria: 'Mayor: {mayor}',
+  mayorMinisterAria: 'Mayor: {mayor}, Minister: {minister}',
+  // two complete sentences in a row (some languages join them without a space)
+  twoSentences: '{a} {b}',
+  // separator for tag-like lists (shard families)
+  listSep: ', ',
   ahScanning: 'Scanning AH {p}/{n}',
   copied: 'Copied',
 
-  tableShowing: 'Showing {n} of {m} rows',
-  rows: '{n} rows',
+  tableShowing_one: 'Showing {n} of {m} row',
+  tableShowing_other: 'Showing {n} of {m} rows',
+  rows_one: '{n} row',
+  rows_other: '{n} rows',
   noRows: 'No rows to show.',
   sortHint: 'Click a header to sort',
   sortAsc: 'ascending',

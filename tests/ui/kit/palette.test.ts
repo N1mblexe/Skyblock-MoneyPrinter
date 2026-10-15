@@ -54,7 +54,7 @@ describe('openPalette', () => {
     input().value = 'ban';
     input().dispatchEvent(new Event('input'));
     expect(opts()).toHaveLength(1);
-    expect(document.querySelector('[role="status"]')!.textContent).toBe('1 results');
+    expect(document.querySelector('[role="status"]')!.textContent).toBe('1 result');
     press('Enter');
     expect(runB).toHaveBeenCalledTimes(1);
     expect(document.querySelector('.kit-palette-root')).toBeNull();

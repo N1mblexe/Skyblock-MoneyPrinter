@@ -26,9 +26,11 @@ export const plan = {
   capitalFull: 'All capital is in use.',
   slotsFull: 'All order slots are used; more slots could raise profit.',
   computing: 'Computing…',
-  suspectHidden: '{n} suspect opportunities excluded',
+  suspectHidden_one: '{n} suspect opportunity excluded',
+  suspectHidden_other: '{n} suspect opportunities excluded',
   showSuspect: 'Include',
-  oppsCount: 'from {n} opportunities',
+  oppsCount_one: 'from {n} opportunity',
+  oppsCount_other: 'from {n} opportunities',
 
   colKind: 'Kind',
   colItem: 'Item',

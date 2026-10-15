@@ -29,7 +29,7 @@ export function fillText(tp: Throughput): string {
 
 /** ★ toggle for a table row (kit rowActions; data-action="watch"). */
 export function watchButton(watched: boolean, name: string): string {
-  const label = `${t(watched ? 'common.unwatch' : 'common.watch')}: ${name}`;
+  const label = t(watched ? 'common.unwatchItem' : 'common.watchItem', { name });
   return `<button type="button" class="btn btn-ghost btn-sm watch-btn${watched ? ' on' : ''}" data-action="watch" aria-pressed="${watched}" aria-label="${esc(label)}" title="${esc(label)}">${watched ? '★' : '☆'}</button>`;
 }
 

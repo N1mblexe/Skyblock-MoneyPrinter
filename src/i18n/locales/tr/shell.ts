@@ -7,7 +7,8 @@ export const shell: Messages['shell'] = {
   collapse: 'Menüyü daralt',
   expand: 'Menüyü genişlet',
   search: 'Ara…',
-  watchCount: '{n} izlenen ürün',
+  watchCount_one: '{n} izlenen ürün',
+  watchCount_other: '{n} izlenen ürün',
   moreTitle: 'Diğer sayfalar',
   primaryNav: 'Alt menü',
 
@@ -18,7 +19,8 @@ export const shell: Messages['shell'] = {
   noPerks: 'Avantaj bilgisi yok',
   ahAge: 'AH {age}',
   ahAgeTitle: 'Müzayede evi {age} önce tarandı',
-  ahPartial: '{n} sayfa okunamadı',
+  ahPartial_one: '{n} sayfa okunamadı',
+  ahPartial_other: '{n} sayfa okunamadı',
   ahNone: 'AH taranmadı',
   ahProgressAria: 'Müzayede tarama ilerlemesi',
 

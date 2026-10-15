@@ -14,11 +14,13 @@ export const flip: Messages['flip'] = {
   riskCaution: 'Şüpheli hariç',
   riskOk: 'Sadece temiz',
   showSuspect: 'Şüphelileri göster',
-  count: '{n} ürün',
+  count_one: '{n} ürün',
+  count_other: '{n} ürün',
   loadingNames: 'Ürün adları yükleniyor…',
   catalogFailed: 'Katalog yüklenemediği için flipler hesaplanamıyor.',
   empty: 'Filtreye uyan ürün yok. Min. hacmi, min. marjı veya min. kâr/saati düşür.',
-  emptyHidden: 'Filtreye uyan temiz ürün yok; {n} şüpheli ürün gizli.',
+  emptyHidden_one: 'Filtreye uyan temiz ürün yok; {n} şüpheli ürün gizli.',
+  emptyHidden_other: 'Filtreye uyan temiz ürün yok; {n} şüpheli ürün gizli.',
   hotkeys: 'Kısayollar: S seçili satırı izler, E CSV indirir.',
 
   col_item: 'Ürün',
@@ -80,8 +82,10 @@ export const flip: Messages['flip'] = {
 
   // detail panel
   planTitle: 'Adım adım plan',
-  stepBuyOrder: '<strong>{price}</strong> fiyattan <strong>{n}</strong> adetlik buy order ver (~{h} içinde dolar).',
-  stepBuyInsta: '<strong>{n}</strong> adet insta-buy yap (ortalama <strong>{price}</strong>, hemen).',
+  stepBuyOrder_one: '<strong>{price}</strong> fiyattan <strong>{n}</strong> adetlik buy order ver (~{h} içinde dolar).',
+  stepBuyOrder_other: '<strong>{price}</strong> fiyattan <strong>{n}</strong> adetlik buy order ver (~{h} içinde dolar).',
+  stepBuyInsta_one: '<strong>{n}</strong> adet insta-buy yap (ortalama <strong>{price}</strong>, hemen).',
+  stepBuyInsta_other: '<strong>{n}</strong> adet insta-buy yap (ortalama <strong>{price}</strong>, hemen).',
   stepSellOffer: '<strong>{price}</strong> fiyattan sell offer ver (~{h} içinde satılır).',
   stepSellInsta: 'Insta-sell yap (ortalama <strong>{price}</strong>, hemen).',
   planZero: 'Bu ayarlarla bir döngüde tam bir adet bile dolmuyor (sınırlayan: {why}). Sermayeyi, hacim payını veya döngü süresini artır.',

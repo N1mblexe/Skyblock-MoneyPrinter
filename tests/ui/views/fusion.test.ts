@@ -317,7 +317,7 @@ describe('fusion view: import / export', () => {
     text.value = JSON.stringify([{ a: 'SHARD_SALMON', aq: 4, b: 'SHARD_WIKI_TIKI', bq: 1, out: 'SHARD_BEEHEEMOTH', oq: 1 }, { bad: true }]);
     go.click();
     expect(store.get().fusion).toEqual([{ ...RECIPE }, { a: 'SHARD_SALMON', qa: 4, b: 'SHARD_WIKI_TIKI', qb: 1, out: 'SHARD_BEEHEEMOTH', qo: 1 }]);
-    expect(ctx.toast).toHaveBeenCalledWith(t('fusion.importSkipped', { n: 1, m: 1 }), 'warn');
+    expect(ctx.toast).toHaveBeenCalledWith('1 tarif içe aktarıldı, 1 geçersiz kayıt atlandı.', 'warn');
 
     btn('fu-import').click();
     document.querySelector<HTMLInputElement>('input[type=radio][value=replace]')!.checked = true;

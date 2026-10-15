@@ -277,7 +277,7 @@ export function createSettingsForm(store: Store<AppState>): SettingsForm {
     btn.textContent = t('shell.permAsk');
     btn.hidden = p !== 'default';
     let msg = t(`shell.perm_${p}`);
-    if (store.get().settings.notify && p !== 'granted' && p !== 'unsupported') msg = `${t('shell.notifyNeedsPerm')} ${msg}`;
+    if (store.get().settings.notify && p !== 'granted' && p !== 'unsupported') msg = t('common.twoSentences', { a: t('shell.notifyNeedsPerm'), b: msg });
     state.textContent = msg;
     state.classList.toggle('warn-text', store.get().settings.notify && p !== 'granted');
   }

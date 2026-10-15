@@ -70,6 +70,7 @@ export const item: Messages['item'] = {
   bookNote: 'İlk 10 seviye gösteriliyor. Canlı veride en fazla 30, önbellekten gelen veride 10 seviye saklanır.',
 
   chartTitle: 'Fiyat geçmişi',
+  chartAria: 'Fiyat geçmişi: {name} ({range}) · {points}',
   range3h: '3 sa',
   range24h: '24 sa',
   range7d: '7 gün',
@@ -79,7 +80,8 @@ export const item: Messages['item'] = {
   chartBid: 'Buy order (bid)',
   chartAsk: 'Sell offer (ask)',
   chartNote: 'Geçmiş sadece bu tarayıcıda, sayfa açıkken kaydedilir (dakikalık veri 3 saat, 15 dakikalık özet 7 gün saklanır).',
-  chartPoints: '{n} nokta',
+  chartPoints_one: '{n} nokta',
+  chartPoints_other: '{n} nokta',
 
   recipesOutTitle: 'Bu ürünü üreten tarifler',
   recipesInTitle: 'Bu ürünü kullanan tarifler',
@@ -109,7 +111,8 @@ export const item: Messages['item'] = {
   openCraftShort: 'Craft',
   openIn: 'Şurada aç',
   actionsAria: 'Ürün işlemleri',
-  alertsHere: 'Bu üründe {n} alarm var',
+  alertsHere_one: 'Bu üründe {n} alarm var',
+  alertsHere_other: 'Bu üründe {n} alarm var',
   manageAlerts: 'İzleme sayfasında yönet',
 
   // quick alert form
@@ -152,6 +155,7 @@ export const item: Messages['item'] = {
   askCapped: 'Buy order fiyatı en iyi sell offer {ask} ile sınırlandı; anında dolar (insta-buy gibi).',
   yourNoteOrder: 'Buy order = en iyi alış + 0,1, sell offer = en iyi satış − 0,1.',
   yourNoteInsta: 'Insta fiyatları parti büyüklüğünde tahtayı yürüyerek hesaplanır (kayma dahil).',
+  statsLine: '{points}. {note}',
   yourNoteTax: 'Vergi sadece bazaar satışlarından kesilir. Flip sekmesiyle aynı hesap.',
 
   // market stats
@@ -162,7 +166,8 @@ export const item: Messages['item'] = {
   consistency: 'Tutarlılık',
   buyVolTrend: 'Insta-buy hacmi (tahmin)',
   sellVolTrend: 'Insta-sell hacmi (tahmin)',
-  statsPoints: '{n} geçmiş noktası',
+  statsPoints_one: '{n} geçmiş noktası',
+  statsPoints_other: '{n} geçmiş noktası',
   statsNone: 'Yeterli geçmiş yok; sayfa açık kaldıkça dolar.',
   statsNote: 'Tutarlılık: geçmiş noktalarının kaçında vergi sonrası flip kârlıydı. Hacim eğilimi haftalık ortalamaya göre (×1 = normal) ve tahmindir.',
 
@@ -172,7 +177,8 @@ export const item: Messages['item'] = {
   ahCount: 'BIN ilanı',
   ahAge: 'Tarama',
   ahAgeVal: '{age} önce',
-  ahPartial: 'Kısmi tarama ({n} sayfa atlandı)',
+  ahPartial_one: 'Kısmi tarama ({n} sayfa atlandı)',
+  ahPartial_other: 'Kısmi tarama ({n} sayfa atlandı)',
   ahCaveat: 'En ucuz BIN yıldız, reforge ve pet seviyesini dikkate almaz; özel bir parçanın değeri çok farklı olabilir.',
 
   // shard

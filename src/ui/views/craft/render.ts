@@ -4,7 +4,7 @@ import { t } from '../../../i18n/index.ts';
 import type { AhPrice, Catalog, CraftRow, IngredientLine, Product, Recipe, Settings } from '../../../types/contracts.ts';
 import { itemCell, riskBadge, sourceBadge } from '../../cells.ts';
 import { esc } from '../../dom.ts';
-import { fmtCoins, fmtHours, fmtInt, fmtPct, locale } from '../../format.ts';
+import { fmtCoins, fmtHours, fmtInt, fmtList, fmtPct, locale } from '../../format.ts';
 import type { KitColumn } from '../../kit/index.ts';
 import { batchCrafts, fewOrders, fmtRate, ownFlipMargin, slippage } from './helpers.ts';
 
@@ -66,7 +66,7 @@ export function craftColumns(env: RenderEnv): KitColumn<CraftRow>[] {
       priority: 0,
       csv: (r) => r.id,
       html: (r) => {
-        const sub = isUnpriced(r) ? t('craft.unpricedList', { ids: r.unpriced.join(', ') }) : inputsList(env, r.recipe);
+        const sub = isUnpriced(r) ? t('craft.unpricedList', { ids: fmtList(r.unpriced) }) : inputsList(env, r.recipe);
         const cnt = r.recipe.outCount > 1 ? `<span class="craft-n">${esc(fmtInt(r.recipe.outCount))}×</span> ` : '';
         return (
           `<span class="craft-line1">${cnt}<a href="#/item/${encodeURIComponent(r.id)}">${esc(r.name)}</a>${outputBadges(r)}</span>` +
@@ -197,7 +197,7 @@ function viaText(env: RenderEnv, key: string | undefined): string {
   const rec = env.recipe(key);
   if (!rec) return '';
   let s = t('craft.craftFrom', { inputs: inputsList(env, rec) });
-  if (rec.outCount > 1) s += ' ' + t('craft.craftFromOut', { n: fmtInt(rec.outCount) });
+  if (rec.outCount > 1) s = t('craft.craftFromOut', { from: s, n: fmtInt(rec.outCount) });
   return `<span class="craft-via small">${esc(s)}</span>`;
 }
 
@@ -414,7 +414,7 @@ export function craftDetail(env: RenderEnv, r: CraftRow): string {
 
   let warn = '';
   if (unpriced) {
-    const msgs = [esc(t('craft.cannotPrice', { ids: r.unpriced.join(', ') }))];
+    const msgs = [esc(t('craft.cannotPrice', { ids: fmtList(r.unpriced) }))];
     if (r.outputOffBazaar && r.unpriced.includes(r.id)) msgs.push(esc(t(s.ahEnabled ? 'craft.offUnpriced' : 'craft.offUnpricedAhOff')));
     warn = `<div class="banner banner-warn craft-unpriced-msg">${msgs.join(' ')}</div>`;
   } else if (r.valueSource === 'ah') {

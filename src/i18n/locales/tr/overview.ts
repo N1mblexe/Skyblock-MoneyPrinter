@@ -51,7 +51,8 @@ export const overview: Messages['overview'] = {
   c_watch: 'İzleme listesi',
   d_watch: 'İzlediğin ürünlerin satış fiyatı, 24 saatlik grafiği ve değişimi.',
   e_watch: 'Henüz izlenen ürün yok. Herhangi bir tabloda ★ düğmesine bas ya da İzleme sayfasından ürün ekle.',
-  watchMore: '+{n} ürün daha',
+  watchMore_one: '+{n} ürün daha',
+  watchMore_other: '+{n} ürün daha',
 
   c_alerts: 'Son alarmlar',
   d_alerts: 'Kurallarının en son tetiklenmeleri. Alarmlar yalnızca sekme açıkken çalışır.',
