@@ -10,7 +10,7 @@ import { parseNumberInput } from '../../kit/index.ts';
 import { sourceHref } from '../plan/model.ts';
 
 const METRICS: readonly OppMetric[] = ['profitPerHour', 'profit', 'margin'];
-const KIND_LABEL = { flip: 'plan.kindFlip', craft: 'plan.kindCraft', forge: 'plan.kindForge', chain: 'plan.kindChain', book: 'plan.kindBook', npc: 'plan.kindNpc' } as const;
+const KIND_LABEL = { flip: 'plan.kindFlip', craft: 'plan.kindCraft', forge: 'plan.kindForge', chain: 'plan.kindChain', book: 'plan.kindBook', npc: 'plan.kindNpc', kat: 'plan.kindKat' } as const;
 
 /** A sensible first rule: clean flips above 1M coins per hour. */
 export const newOppRule = (): OppAlertRule => ({

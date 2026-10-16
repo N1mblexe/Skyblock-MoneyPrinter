@@ -5,6 +5,7 @@ import { computeChains } from '../domain/chains.ts';
 import { computeCrafts } from '../domain/craft.ts';
 import { computeFlips } from '../domain/flip.ts';
 import { computeFusion } from '../domain/fusion.ts';
+import { computeKatFlips } from '../domain/kat.ts';
 import { computeNpcFlips } from '../domain/npc.ts';
 import { toOpportunities } from '../domain/optimizer.ts';
 import { computeShopRows } from '../domain/shops.ts';
@@ -87,6 +88,8 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     npc: cached('npc', [], computeNpcFlips),
     books: cached('books', [], computeBookCombines),
     shops: cached('shops', [], computeShopRows),
+    // the Kat page's defaults: no skip items; the Taming filter is the page's (it drops rows, not prices)
+    kat: cached('kat', [], (c) => computeKatFlips(c, { skip: 'none' })),
     fusion: () => {
       const c = current();
       if (!c) return [];
@@ -95,7 +98,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
       return fusionMemo.rows;
     },
     opportunities: cached('opps', [], (c) =>
-      toOpportunities({ flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc() }, c.settings),
+      toOpportunities({ flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc(), kat: d.kat() }, c.settings),
     ),
     marketStats: () => history.marketStats(store.get().settings.taxRate),
   };

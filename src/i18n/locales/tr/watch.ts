@@ -147,7 +147,7 @@ export const watch: Messages['watch'] = {
   downloaded: '{file} indirildi.',
   // market alerts section
   oppTitle: 'Piyasa alarmları',
-  oppIntro: 'Tek bir ürün yerine herhangi bir flip, craft, forge, zincir, kitap ya da NPC flipi için alarmlar: her fırsat eşiğini ilk geçtiğinde bir kez haber alırsın.',
+  oppIntro: 'Tek bir ürün yerine herhangi bir flip, craft, forge, zincir, kitap, NPC flipi ya da Kat yükseltmesi için alarmlar: her fırsat eşiğini ilk geçtiğinde bir kez haber alırsın.',
   oppAdd: 'Piyasa alarmı ekle',
   oppEmpty: 'Henüz piyasa alarmı yok.',
   oppKinds: 'Bakılacaklar',

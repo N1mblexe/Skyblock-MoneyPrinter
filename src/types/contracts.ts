@@ -207,6 +207,7 @@ export type SellMode = 'offer' | 'insta';
 export type { Lang } from '../i18n/languages.ts';
 import type { Lang } from '../i18n/languages.ts';
 import type { Msg } from '../i18n/errors.ts';
+import type { KatRow } from '../domain/kat.ts';
 export type Theme = 'auto' | 'light' | 'dark';
 export type TaxRate = 0.0125 | 0.01125 | 0.01;
 /** sequential: buy the batch, then sell it; pipelined: buy and sell overlap (needs 2x capital) */
@@ -481,7 +482,7 @@ export interface MarketStat {
   sellVolTrend: number | null;
 }
 
-export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc';
+export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc' | 'kat';
 
 export interface Opportunity {
   kind: OpportunityKind;
@@ -489,6 +490,8 @@ export interface Opportunity {
   key: string;
   /** primary item id (one opportunity per id is allocated) */
   id: string;
+  /** shared by opportunities that can't run side by side (one per group is allocated; default: the id), e.g. 'kat' */
+  group?: string;
   name: string;
   /** coins tied up per unit */
   unitCost: number;
@@ -774,6 +777,8 @@ export interface Derived {
   books(): BookRow[];
   shops(): ShopRow[];
   fusion(): FusionRow[];
+  /** Kat upgrade runs with the page defaults (no skip items, no Taming filter); [] without an AH scan */
+  kat(): KatRow[];
   opportunities(): Opportunity[];
   marketStats(): ReadonlyMap<string, MarketStat>;
   calcCtx(): CalcCtx | null;

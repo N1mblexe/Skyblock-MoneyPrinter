@@ -157,4 +157,14 @@ describe('market alerts in the runner', () => {
     expect(toast).toHaveBeenCalledTimes(1); // same row: no repeat
     stop();
   });
+
+  it('Kat upgrade runs feed market rules', () => {
+    const kat = [{ pet: 'TESTPET', from: 3, to: 4, coins: 1_000_000, hours: 24, items: [] }];
+    const ah = { v: 3, fetchedAt: 0, lastUpdated: 0, lowestBin: { 'TESTPET;3': { price: 1e6, count: 5 }, 'TESTPET;4': { price: 1e7, count: 5 } } };
+    const { store, stop } = setup({ alerts: [], catalog: { ...catalog, kat }, ah });
+    store.set({ oppAlerts: [{ key: 'm', scope: ['kat'], metric: 'profit', value: 1_000_000, maxRisk: 'caution', enabled: true, seen: [], hits: [] }] });
+    store.set({ snapshot: snapAt(T0) });
+    expect(store.get().oppAlerts[0]!.hits.map((h) => [h.key, h.kind])).toEqual([['kat:TESTPET;3>4:any', 'kat']]);
+    stop();
+  });
 });

@@ -4,6 +4,7 @@ import { parseOppRule } from '../../src/storage/local.ts';
 import type { OppAlertRule } from '../../src/types/contracts.ts';
 import { computeFlips } from '../../src/domain/flip.ts';
 import { computeCrafts } from '../../src/domain/craft.ts';
+import type { KatRow } from '../../src/domain/kat.ts';
 import { ctx } from './helpers.ts';
 
 const risk = (level: 'ok' | 'caution' | 'suspect') => ({ level, score: 0, flags: [] });
@@ -48,10 +49,22 @@ describe('market alerts', () => {
 
   it('candidates come from every page with planner-style keys', () => {
     const c = ctx();
-    const cs = oppCandidates({ flips: computeFlips(c), crafts: computeCrafts(c), chains: [], books: [], npc: [] });
+    const cs = oppCandidates({ flips: computeFlips(c), crafts: computeCrafts(c), chains: [], books: [], npc: [], kat: [] });
     expect(cs.some((x) => x.key.startsWith('flip:'))).toBe(true);
     expect(cs.some((x) => x.key.startsWith('craft:'))).toBe(true);
     for (const x of cs.filter((y) => y.kind === 'forge')) expect(x.key.startsWith('forge:')).toBe(true);
+  });
+
+  it('Kat runs: priced rows only, keyed by run (one pet has several)', () => {
+    const k = (key: string, o: Partial<KatRow> = {}) =>
+      ({ key, id: key.split('>')[0], name: 'Ocelot', profitPerHour: 5000, profit: 100_000, margin: 0.1, risk: risk('ok'), unpriced: [], ...o }) as KatRow;
+    const cs = oppCandidates({ flips: [], crafts: [], chains: [], books: [], npc: [], kat: [k('OCELOT;3>4:any'), k('OCELOT;3>5:any'), k('OCELOT;3>4:max', { unpriced: ['X'] })] });
+    expect(cs.map((x) => [x.key, x.kind, x.id])).toEqual([
+      ['kat:OCELOT;3>4:any', 'kat', 'OCELOT;3'],
+      ['kat:OCELOT;3>5:any', 'kat', 'OCELOT;3'],
+    ]);
+    expect(oppMatches(rule({ scope: ['kat'], metric: 'profit', value: 50_000 }), cs)).toHaveLength(2);
+    expect(oppMatches(rule({ metric: 'profit', value: 50_000 }), cs)).toHaveLength(0); // flips only
   });
 
   it('stored rules: invalid fields dropped, defaults filled', () => {
@@ -66,6 +79,9 @@ describe('market alerts', () => {
       hits: [],
     });
     expect(parseOppRule({ key: 'x', scope: [], metric: 'profitPerHour', value: 5 })).toBeNull();
+    // a saved Kat rule (and its hits) survives a reload
+    const kat = parseOppRule({ key: 'k', scope: ['kat'], metric: 'profit', value: 1, hits: [{ key: 'kat:A;3>4:any', kind: 'kat', id: 'A;3', name: 'A', value: 2, at: 1 }] });
+    expect(kat).toMatchObject({ scope: ['kat'], hits: [{ key: 'kat:A;3>4:any', kind: 'kat' }] });
     expect(parseOppRule({ key: 'x', scope: ['flip'], metric: 'price', value: 5 })).toBeNull();
   });
 });

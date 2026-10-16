@@ -14,6 +14,7 @@ import type {
   Settings,
   Throughput,
 } from '../types/contracts.ts';
+import type { KatRow } from './kat.ts';
 
 export interface OpportunitySources {
   flips: readonly FlipRow[];
@@ -22,7 +23,12 @@ export interface OpportunitySources {
   chains?: readonly ChainRow[];
   books: readonly BookRow[];
   npc: readonly NpcFlipRow[];
+  /** Kat upgrade runs (optional: older callers pass none) */
+  kat?: readonly KatRow[];
 }
+
+/** Group of every Kat opportunity: Kat holds one pet, so only one upgrade runs at a time. */
+export const KAT_GROUP = 'kat';
 
 export interface AllocateOptions {
   capital: number;
@@ -76,6 +82,7 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
     cost: number,
     slotsAt: (units: number) => number,
     ahSold = false,
+    group?: string,
   ) => {
     if (!finitePos(row.profit) || !finitePos(cost)) return;
     const { maxUnits, unitsPerHour } = uncappedRate(row.tp, s.cycleHours);
@@ -92,6 +99,7 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
       slots: row.tp.slots != null && maxUnits === row.tp.batchQty ? row.tp.slots : slotsAt(maxUnits),
       risk: row.risk,
       ...(ahSold ? { ahSold } : {}),
+      ...(group ? { group } : {}),
     });
   };
 
@@ -114,6 +122,12 @@ export function toOpportunities(d: OpportunitySources, s: Settings): Opportunity
   for (const r of d.npc) {
     push('npc', `${r.id}:${r.direction}`, r, r.buyAt, (u) => (r.direction === 'bz2npc' ? orders(buyOrder, u) : orders(sellOffer, u)));
   }
+  // kat: one unit = one pet bought, upgraded and sold (tp: one per Kat wait). AH legs only, so no order slots; every
+  // row shares KAT_GROUP, so the allocator runs at most one of them (Kat holds one pet).
+  for (const r of d.kat ?? []) {
+    if (r.unpriced.length > 0) continue;
+    push('kat', r.key, r, r.capital, () => 0, true, KAT_GROUP);
+  }
   return out;
 }
 
@@ -128,6 +142,8 @@ interface Cand {
   /** max units (maxUnits and per-item capital cap) */
   cap: number;
   slots: number;
+  /** one-per-group key: opp.group, else opp.id */
+  g: string;
 }
 
 /** floor with a relative epsilon so 0.5*100/0.1 = 499.999... still yields 500. */
@@ -142,7 +158,8 @@ const LAMBDA_STEPS = 32;
 
 /**
  * Choose units per opportunity maximizing total profit/hour subject to: total capital <= capital (<= 0 = unlimited),
- * total slots <= slots, capital per item id <= maxShare x capital, at most one opportunity per id, and no suspect
+ * total slots <= slots, capital per item id <= maxShare x capital, at most one opportunity per id (per group when set:
+ * all Kat runs share one), and no suspect
  * opportunities when excludeSuspect. Profit/hour is linear in units (profitPerUnit x unitsPerHour / maxUnits) up to
  * maxUnits. A set of picks is filled greedily by profit/hour per coin (integer units, the last pick partially).
  * Sets come from three starts (density greedy, standalone-value greedy, and a Lagrangian capital-price scan solved as
@@ -163,7 +180,7 @@ export function allocate(opps: readonly Opportunity[], o: AllocateOptions): Plan
     const slots = opp.slots > 0 ? Math.ceil(opp.slots) : 0;
     const cap = fl(Math.min(maxUnits, perItem / c));
     if (cap < 1 || slots > slotCap) continue;
-    cands.push({ opp, c, p: (profitPerUnit * unitsPerHour) / maxUnits, cap, slots });
+    cands.push({ opp, c, p: (profitPerUnit * unitsPerHour) / maxUnits, cap, slots, g: opp.group ?? opp.id });
   }
   // rank = index in density order (profit/hour per coin desc, key asc); sets are kept as sorted rank arrays.
   cands.sort((a, b) => b.p / b.c - a.p / a.c || (a.opp.key < b.opp.key ? -1 : a.opp.key > b.opp.key ? 1 : 0));
@@ -183,7 +200,7 @@ export function allocate(opps: readonly Opportunity[], o: AllocateOptions): Plan
   };
   const value = (set: readonly number[]) => fill(set).reduce((v, u, i) => v + u * cands[set[i]!]!.p, 0);
   const slotsOf = (set: readonly number[]) => set.reduce((n, r) => n + cands[r]!.slots, 0);
-  const idsOf = (set: readonly number[]) => new Set(set.map((r) => cands[r]!.opp.id));
+  const idsOf = (set: readonly number[]) => new Set(set.map((r) => cands[r]!.g));
   const insert = (set: readonly number[], r: number) => {
     const i = set.findIndex((x) => x > r);
     return i < 0 ? [...set, r] : [...set.slice(0, i), r, ...set.slice(i)];
@@ -197,11 +214,11 @@ export function allocate(opps: readonly Opportunity[], o: AllocateOptions): Plan
     const ids = new Set<string>();
     for (let r = 0; r < n; r++) {
       const k = cands[r]!;
-      if (ids.has(k.opp.id) || used + k.slots > slotCap) continue;
+      if (ids.has(k.g) || used + k.slots > slotCap) continue;
       const u = Math.min(k.cap, fl(rem / k.c));
       if (u < 1) continue;
       greedy.push(r);
-      ids.add(k.opp.id);
+      ids.add(k.g);
       used += k.slots;
       rem -= u * k.c;
     }
@@ -216,7 +233,7 @@ export function allocate(opps: readonly Opportunity[], o: AllocateOptions): Plan
   let byVal: number[] = [];
   let byValV = 0;
   for (const r of byValue.slice(0, POOL)) {
-    if (idsOf(byVal).has(cands[r]!.opp.id) || slotsOf(byVal) + cands[r]!.slots > slotCap) continue;
+    if (idsOf(byVal).has(cands[r]!.g) || slotsOf(byVal) + cands[r]!.slots > slotCap) continue;
     const next = insert(byVal, r);
     const v = value(next);
     if (v > byValV) {
@@ -232,7 +249,7 @@ export function allocate(opps: readonly Opportunity[], o: AllocateOptions): Plan
     const groups = new Map<string, { r: number; v: number }[]>();
     for (let r = 0; r < n; r++) {
       const v = (cands[r]!.p - lam * cands[r]!.c) * Math.min(cands[r]!.cap, fl(capital / cands[r]!.c));
-      if (v > 0) (groups.get(cands[r]!.opp.id) ?? groups.set(cands[r]!.opp.id, []).get(cands[r]!.opp.id)!).push({ r, v });
+      if (v > 0) (groups.get(cands[r]!.g) ?? groups.set(cands[r]!.g, []).get(cands[r]!.g)!).push({ r, v });
     }
     const gs = [...groups.values()];
     steps += n;
@@ -291,13 +308,13 @@ export function allocate(opps: readonly Opportunity[], o: AllocateOptions): Plan
     for (const i of pool) {
       if (steps >= SEARCH_BUDGET) break;
       const ki = cands[i]!;
-      if (i === banned || ids.has(ki.opp.id) || used + ki.slots > slotCap || cur.includes(i)) continue;
+      if (i === banned || ids.has(ki.g) || used + ki.slots > slotCap || cur.includes(i)) continue;
       const next = insert(cur, i);
       const nv = value(next);
       if (nv > v) {
         cur = next;
         v = nv;
-        ids.add(ki.opp.id);
+        ids.add(ki.g);
         used += ki.slots;
       }
     }
@@ -312,10 +329,10 @@ export function allocate(opps: readonly Opportunity[], o: AllocateOptions): Plan
     for (const i of pool) {
       if (inSet.has(i)) continue;
       const ki = cands[i]!;
-      if (withAdds && !ids.has(ki.opp.id) && used + ki.slots <= slotCap) yield { i, j: -1 };
+      if (withAdds && !ids.has(ki.g) && used + ki.slots <= slotCap) yield { i, j: -1 };
       for (const j of set) {
         const kj = cands[j]!;
-        if (ids.has(ki.opp.id) && ki.opp.id !== kj.opp.id) continue;
+        if (ids.has(ki.g) && ki.g !== kj.g) continue;
         if (used - kj.slots + ki.slots <= slotCap) yield { i, j };
       }
     }

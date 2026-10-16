@@ -28,6 +28,7 @@ describe('createDerived', () => {
     expect(d.flips()).toEqual([]);
     expect(d.crafts()).toEqual([]);
     expect(d.fusion()).toEqual([]);
+    expect(d.kat()).toEqual([]);
     expect(d.opportunities()).toEqual([]);
   });
 
@@ -90,6 +91,25 @@ describe('createDerived', () => {
       expect(d.flips()).not.toBe(f);
       f = d.flips();
     }
+  });
+
+  it('kat: Kat page defaults, fed to the planner, recomputed on AH and election changes', () => {
+    const kat = [{ pet: 'TESTPET', from: 3, to: 4, coins: 1_000_000, hours: 24, items: [] }];
+    const ah = { v: 3, fetchedAt: 0, lastUpdated: 0, lowestBin: { 'TESTPET;3': { price: 1e6, count: 5 }, 'TESTPET;4': { price: 1e7, count: 5 } } };
+    const { store, d } = setup({ catalog: { ...catalog, kat }, ah });
+    const rows = d.kat();
+    expect(rows.map((r) => r.key)).toEqual(['TESTPET;3>4:any']);
+    expect(rows[0]!.skipCost).toBe(0); // no skip items
+    expect(d.kat()).toBe(rows);
+    expect(d.opportunities().filter((o) => o.kind === 'kat').map((o) => [o.key, o.group])).toEqual([['kat:TESTPET;3>4:any', 'kat']]);
+    store.set({ election: { year: 1, mayor: { key: 'derpy', name: 'Derpy', perks: [] }, minister: null, fetchedAt: 0 } });
+    expect(d.kat()).not.toBe(rows);
+    expect(d.kat()[0]!.sellNet).toBeLessThan(rows[0]!.sellNet); // Derpy's claim tax
+    store.set({ ah: { ...ah, lowestBin: {} } });
+    expect(d.kat()).toEqual([]);
+    store.set({ ah });
+    patch(store, { ahEnabled: false });
+    expect(d.kat()).toEqual([]);
   });
 
   it('fusion recomputes on recipe changes only (other results kept)', () => {

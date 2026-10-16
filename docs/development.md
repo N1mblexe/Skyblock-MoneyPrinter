@@ -60,16 +60,17 @@ Everything stays in your browser.
 | where | contents |
 |---|---|
 | IndexedDB `bazaar-masasi` | Price history: every snapshot for 3 h and the last snapshot per 15 min for 7 days. It also keeps the latest snapshot (order books trimmed to 10 levels), so the page has data before the first fetch. The size and a "Clear history" button are in Settings → Data |
-| IndexedDB `bazaar-masasi-ah` | The last AH lowest-BIN scan |
+| IndexedDB `bazaar-masasi-ah` | The last AH lowest-BIN scan (`AhSnapshot.v` 3: pets carry the cheapest listing's XP, max-level pets also go under `PET;RARITY@MAX`, Tier Boost pets are left out; see docs/estimates.md) |
 | `bazaarMasasi.settings` | Settings |
 | `bazaarMasasi.fusion` | Fusion recipes |
 | `bazaarMasasi.oppAlerts` | Market alert rules with their latest hits |
 | `bazaarMasasi.orders`, `bazaarMasasi.journal` | Tracked bazaar orders and the trade journal (Trades page) |
 | `bazaarMasasi.sell` | The Sell or craft? item list |
+| `bazaarMasasi.bits` | Bits shop: your fame rank and an optional custom bits multiplier (`LS_BITS`) |
 | `bazaarMasasi.watch` | Watchlist |
 | `bazaarMasasi.alerts`, `bazaarMasasi.alertLog` | Alert rules and the last 100 fired alerts |
 | `bazaarMasasi.lastRoute` | Last opened page |
-| `bazaarMasasi.view.<view>` | Per-view filters and sort (`flip`, `books`, `craft`, `npc`, `npc.seg`, `npc.shops`, `fusion`, `plan`, `watch`, `overview`, `item`), plus `shell` (sidebar collapsed) |
+| `bazaarMasasi.view.<view>` | Per-view filters and sort (`flip`, `books`, `ahflip`, `craft`, `npc`, `npc.seg`, `npc.shops`, `kat`, `bits`, `fusion`, `plan`, `watch`, `overview`, `item`), plus `shell` (sidebar collapsed) |
 | `bazaarMasasi.cols.<table>` | Hidden table columns |
 
 The old single-file tool's `bazaarMasasi.recipes` and `bazaarMasasi.tab` keys are migrated once at startup. If IndexedDB isn't available, history and the AH scan are kept in memory only.

@@ -138,7 +138,7 @@ export const watch = {
   downloaded: 'Downloaded {file}.',
   // market alerts section
   oppTitle: 'Market alerts',
-  oppIntro: 'Alerts for any flip, craft, forge, chain, book or NPC flip, not one item: you hear about each opportunity once when it first beats your threshold.',
+  oppIntro: 'Alerts for any flip, craft, forge, chain, book, NPC flip or Kat upgrade, not one item: you hear about each opportunity once when it first beats your threshold.',
   oppAdd: 'Add market alert',
   oppEmpty: 'No market alerts yet.',
   oppKinds: 'Look at',

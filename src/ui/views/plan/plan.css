@@ -110,6 +110,10 @@
   background: var(--good-soft);
   color: var(--good);
 }
+.plan-kind-kat {
+  background: var(--bad-soft);
+  color: var(--bad);
+}
 .plan-why {
   display: inline-block;
   max-width: 32ch;

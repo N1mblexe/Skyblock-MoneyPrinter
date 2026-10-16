@@ -4,7 +4,7 @@
 // (context.route), and the expected numbers are computed at startup from the same fixtures with the domain code
 // (computeFlips, computeCrafts, allocate, ...) and default settings, so no threshold here is hand-picked.
 //   bazaar   -> tests/fixtures/smoke/bazaar.json.gz (lastUpdated = now on every request)
-//   auctions -> tests/fixtures/ah-page.json (page 0, totalPages 1)
+//   auctions -> tests/fixtures/ah-page.json (page 0, totalPages 1; the app scans it as AH scan v3, so Kat runs)
 //   election -> tests/fixtures/election.json
 //   Google Fonts CSS -> empty stylesheet; anything else external -> aborted and reported.
 // Suites: desktop 1280x800 (everything), mobile 390x844 (shell + routes + cards), error path (API down, manual load).
@@ -19,8 +19,12 @@ import { toSnapshot, validateRaw } from '../src/api/normalize.ts';
 import { catalogFromFile, validateCatalogFile } from '../src/data/catalog.ts';
 import { computeBookCombines } from '../src/domain/books.ts';
 import { computeAhFlips } from '../src/domain/ahFlips.ts';
+import { computeBitsRows } from '../src/domain/bits.ts';
 import { bestPerLadder, computeChains } from '../src/domain/chains.ts';
+import { computeKatFlips } from '../src/domain/kat.ts';
 import { AHFLIP_SCHEMA, filterAhFlips, type AhFlipQuery } from '../src/ui/views/ahflip/model.ts';
+import { BITS_SCHEMA, filterBitsRows, type BitsQuery } from '../src/ui/views/bits/model.ts';
+import { filterKat, KAT_SCHEMA, type KatQuery } from '../src/ui/views/kat/model.ts';
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
@@ -38,7 +42,7 @@ import { findBrowser, freePort, loadSmokeFixtures, ROOT, sleep, startServer, wit
 const LIVE = process.argv.includes('--live');
 const DESKTOP = { width: 1280, height: 800 };
 const MOBILE = { width: 390, height: 844 };
-const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'plan', 'sell', 'trades', 'watch'] as const;
+const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'kat', 'bits', 'plan', 'sell', 'trades', 'watch'] as const;
 const ITEM = 'ENCHANTED_GOLD';
 const FLIP_Q = 'enchanted';
 const T = 15_000;
@@ -89,6 +93,12 @@ interface Expected {
   chainDefault: number;
   ahFlipTotal: number;
   ahFlipDefault: number;
+  katTotal: number;
+  katDefault: number;
+  /** with suspect rows shown (the fixture's thin pet markets are all suspect) */
+  katSuspect: number;
+  bitsTotal: number;
+  bitsDefault: number;
   npc: Record<(typeof SEGMENTS)[number], number>;
   planPph: { base: string; big: string; baseN: number; bigN: number; positions: number };
   paletteId: string | null;
@@ -140,6 +150,32 @@ async function computeExpected(): Promise<Expected> {
     catalog,
   ).rows.length;
 
+  // Kat page defaults: no skip items, Taming 60 (no rows dropped), both bands, min profit 100k, unpriced and suspect hidden
+  const katAll = computeKatFlips(ctx, { skip: 'none' });
+  const kq = defaults<KatQuery>(KAT_SCHEMA);
+  const katCount = (suspect: boolean) =>
+    filterKat(
+      katAll,
+      {
+        q: kq.q,
+        minProfit: kq.minProfit,
+        maxCapital: kq.maxCapital,
+        maxHours: kq.maxHours,
+        taming: kq.taming,
+        band: kq.band === 'any' || kq.band === 'max' ? kq.band : 'both',
+        showUnpriced: kq.unpriced,
+        hideSuspect: settings.hideSuspicious && !suspect,
+      },
+      catalog,
+    ).rows.length;
+  const katDefault = katCount(kq.suspect);
+  const katSuspect = katCount(true);
+
+  // Bits page defaults: New Player rank (x1, nothing stored), every source, untradeable / unpriced and suspect hidden
+  const bits = computeBitsRows(ctx, { multiplier: 1 }).rows;
+  const bq = defaults<BitsQuery>(BITS_SCHEMA);
+  const bitsDefault = filterBitsRows(bits, { q: bq.q, minCpb: bq.minCpb, src: bq.src, unsold: bq.unsold, hideSuspect: settings.hideSuspicious && !bq.suspect }, catalog).rows.length;
+
   const npcAll = computeNpcFlips(ctx);
   const ff = defaults<FlipFilters>(NPC_FLIP_SCHEMA);
   const sf = defaults<ShopFilters>(SHOP_SCHEMA);
@@ -149,7 +185,7 @@ async function computeExpected(): Promise<Expected> {
     shops: filterShops(computeShopRows(ctx), sf, catalog, settings.hideSuspicious).rows.length,
   };
 
-  const opps = toOpportunities({ flips: flipRows, crafts, chains, books: computeBookCombines(ctx), npc: npcAll }, settings);
+  const opps = toOpportunities({ flips: flipRows, crafts, chains, books: computeBookCombines(ctx), npc: npcAll, kat: katAll }, settings);
   const pq = defaults<PlanQuery>(PLAN_SCHEMA);
   const plan = (capital: number) => allocate(filterKinds(opps, pq), planOptions(pq, { ...settings, capital }));
   const base = plan(settings.capital);
@@ -169,6 +205,11 @@ async function computeExpected(): Promise<Expected> {
     chainDefault,
     ahFlipTotal: ahFlips.length,
     ahFlipDefault,
+    katTotal: katAll.length,
+    katDefault,
+    katSuspect,
+    bitsTotal: bits.length,
+    bitsDefault,
     npc,
     planPph: { base: fmtCoins(base.profitPerHour), big: fmtCoins(big.profitPerHour), baseN: base.profitPerHour, bigN: big.profitPerHour, positions: base.allocations.length },
     paletteId: resolveUserInput(catalog, 'enchanted gold', new Set(Object.keys(snap.products))),
@@ -491,6 +532,39 @@ async function craftSuite(env: Env, exp: Expected): Promise<void> {
     check(
       n.includes(exp.ahFlipDefault) && n.includes(exp.ahFlipTotal),
       `${L} AH flips page shows the domain count (${exp.ahFlipDefault} of ${exp.ahFlipTotal}; UI ${n.join('/')})`,
+    );
+  });
+  await step(`${L} Kat upgrades page`, async () => {
+    await go(page, '#/kat');
+    const n = await until(async () => ints(await textOf(page.locator(tid('kat-count')))), (xs) => xs.includes(exp.katDefault) && xs.includes(exp.katTotal));
+    check(
+      n.includes(exp.katDefault) && n.includes(exp.katTotal),
+      `${L} Kat page shows the domain count (${exp.katDefault} of ${exp.katTotal} upgrades; UI ${n.join('/')})`,
+    );
+    // past the AH-off / no-scan / old-scan / catalog gates: the table (or its empty text), not a blocked notice
+    const blocked = await page.locator('.kat-view .kat-state').isVisible();
+    const rows = await page.locator('.kat-view tbody tr[data-key]').count();
+    check(
+      !blocked && (await page.locator(tid('kat-count')).isVisible()) && (rows === exp.katDefault || (exp.katDefault > 50 && rows > 0)),
+      `${L} Kat table renders, not a blocked state (${rows} rows in the DOM, domain ${exp.katDefault})`,
+    );
+    await go(page, '#/kat?suspect=1');
+    const s = await until(async () => ints(await textOf(page.locator(tid('kat-count')))), (xs) => xs[0] === exp.katSuspect);
+    const sRows = await until(() => page.locator('.kat-view tbody tr[data-key]').count(), (x) => x === exp.katSuspect);
+    check(s[0] === exp.katSuspect && sRows === exp.katSuspect, `${L} Kat suspect toggle from the URL shows ${exp.katSuspect} rows (UI ${s.join('/')}, ${sRows} in the DOM)`);
+    if (sRows > 0) {
+      await page.locator('.kat-view tbody tr[data-key]').first().locator('td.num').last().click();
+      const steps = await until(() => page.locator('.kat-detail .kat-steps > li').count(), (x) => x > 0);
+      check(steps > 0, `${L} Kat row opens its upgrade steps (${steps})`);
+      await page.keyboard.press('Escape');
+    }
+  });
+  await step(`${L} Bits shop page`, async () => {
+    await go(page, '#/bits');
+    const n = await until(async () => ints(await textOf(page.locator(tid('bits-count')))), (xs) => xs.includes(exp.bitsDefault) && xs.includes(exp.bitsTotal));
+    check(
+      exp.bitsTotal > 0 && n.includes(exp.bitsDefault) && n.includes(exp.bitsTotal),
+      `${L} Bits page shows the domain count (${exp.bitsDefault} of ${exp.bitsTotal} items; UI ${n.join('/')})`,
     );
   });
   await step(`${L} craft chains tab`, async () => {
@@ -862,7 +936,7 @@ try {
   if (exp) {
     console.log(
       `info  expected (fixture, default settings): flips ${exp.flipDefault}/${exp.flipRows.length}, q=${FLIP_Q} ${exp.flipQ}, ` +
-        `crafts ${exp.craftAll} of ${exp.craftTotal}, forges ${exp.craftForge} of ${exp.forgeTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, AH flips ${exp.ahFlipDefault} of ${exp.ahFlipTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
+        `crafts ${exp.craftAll} of ${exp.craftTotal}, forges ${exp.craftForge} of ${exp.forgeTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, AH flips ${exp.ahFlipDefault} of ${exp.ahFlipTotal}, Kat ${exp.katDefault} of ${exp.katTotal} (${exp.katSuspect} with suspect), bits ${exp.bitsDefault} of ${exp.bitsTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
         `plan ${exp.planPph.base} -> ${exp.planPph.big} at 1b (${exp.planPph.positions} positions)`,
     );
   }

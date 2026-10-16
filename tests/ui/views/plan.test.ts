@@ -119,7 +119,7 @@ describe('plan view', () => {
   });
 
   it('kind filter limits the plan to the included kinds', () => {
-    const query = { craft: '0', chain: '0', book: '0', npc: '0' };
+    const query = { craft: '0', chain: '0', book: '0', npc: '0', kat: '0' };
     mount(query);
     const kinds = [...root.querySelectorAll('.plan-view [data-key]')].map((r) => r.getAttribute('data-key')!.split(':')[0]);
     expect(kinds.length).toBeGreaterThan(0);
@@ -205,6 +205,8 @@ describe('plan view', () => {
     expect(sourceHref({ ...opp, kind: 'npc' })).toBe('#/npc?q=X');
     expect(sourceHref({ ...opp, kind: 'forge' })).toBe('#/forge?q=X');
     expect(sourceHref({ ...opp, kind: 'chain' })).toBe('#/craft?view=chains&q=X');
+    // Kat: the page searches pet names, not AH keys
+    expect(sourceHref({ ...opp, kind: 'kat', id: 'ENDERMAN;3@MAX', name: 'Enderman' })).toBe('#/kat?q=Enderman&minProfit=0');
   });
 
   it('filterKinds: kind toggles and the AH-sold toggle', () => {
@@ -215,10 +217,31 @@ describe('plan view', () => {
       { ...base, kind: 'forge' as const, key: 'forge:C' },
       { ...base, kind: 'flip' as const, key: 'flip:D' },
     ];
-    const v = { flip: true, craft: true, forge: true, chain: true, book: true, npc: true, ah: true };
+    const v = { flip: true, craft: true, forge: true, chain: true, book: true, npc: true, kat: true, ah: true };
     expect(filterKinds(opps, v)).toBe(opps);
     expect(filterKinds(opps, { ...v, forge: false }).map((o) => o.key)).toEqual(['craft:A', 'flip:D']);
     expect(filterKinds(opps, { ...v, ah: false }).map((o) => o.key)).toEqual(['craft:A', 'forge:C', 'flip:D']);
+  });
+
+  it('Kat runs: one at most, a Kat-specific why, no item page link', () => {
+    const base = { name: 'Enderman', unitsPerHour: 1 / 25, maxUnits: 1, slots: 0, risk: { level: 'ok' as const, score: 0, flags: [] }, ahSold: true, group: 'kat' };
+    const kat: Opportunity[] = [
+      { ...base, kind: 'kat', key: 'kat:ENDERMAN;3>4:max', id: 'ENDERMAN;3@MAX', unitCost: 1_000_000, profitPerUnit: 500_000 },
+      { ...base, kind: 'kat', key: 'kat:OCELOT;3>4:any', id: 'OCELOT;3', name: 'Ocelot', unitCost: 1_000_000, profitPerUnit: 400_000 },
+    ];
+    const opps = [...kat, ...ctx.derived.opportunities()];
+    ctx = fakeViewCtx(store, fakeHistory(), { t, navigate: vi.fn(), derived: { ...ctx.derived, opportunities: () => opps } });
+    mount({ capital: '1000000000', share: '100' });
+    const kinds = rowKeys().map((k) => k.split(':')[0]);
+    expect(kinds.filter((k) => k === 'kat')).toEqual(['kat']);
+    expect(rowKeys()).toContain('kat:ENDERMAN;3>4:max');
+    const row = q<HTMLElement>('.plan-view [data-key="kat:ENDERMAN;3>4:max"]');
+    expect(row.querySelector('a[href^="#/item/"]')).toBeNull();
+    row.querySelector<HTMLElement>('td')!.click();
+    expect(q('[data-testid="plan-source"]').getAttribute('href')).toBe('#/kat?q=Enderman&minProfit=0');
+    expect(q('[data-testid="plan-detail"]').querySelector('a[href^="#/item/"]')).toBeNull();
+    expect(q('[data-testid="plan-why-long"]').textContent).toContain(t('plan.whyLong_kat'));
+    expect(q('[data-testid="plan-detail"] dd[data-k="unitCost"]').textContent).toBe(fmtCoins(1_000_000));
   });
 
   it('opens the detail panel with opportunity numbers and a source link', () => {

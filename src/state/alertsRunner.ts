@@ -88,7 +88,7 @@ export function startAlerts(opts: AlertsRunnerOptions): () => void {
   /** Market alerts: rows of every page that newly meet a rule; one grouped toast / notification per rule. */
   function runOpp(rules: AppState['oppAlerts']): void {
     if (!rules.some((r) => r.enabled)) return;
-    const cands = oppCandidates({ flips: derived.flips(), crafts: derived.crafts(), chains: derived.chains(), books: derived.books(), npc: derived.npc() });
+    const cands = oppCandidates({ flips: derived.flips(), crafts: derived.crafts(), chains: derived.chains(), books: derived.books(), npc: derived.npc(), kat: derived.kat() });
     const res = evaluateOppAlerts(rules, cands, clock());
     if (res.rules.every((r, i) => r === rules[i])) return;
     store.set({ oppAlerts: res.rules });
