@@ -632,7 +632,7 @@ export interface AhPrice {
 }
 
 export interface AhSnapshot {
-  /** 2 = lowestBin entries carry next / uuid / name; older cached scans have none */
+  /** 2 = lowestBin entries carry next / uuid / name; 3 = pets also carry exp and `@MAX` (max-level) keys */
   v?: number;
   fetchedAt: number;
   /** Hypixel lastUpdated of page 0 */

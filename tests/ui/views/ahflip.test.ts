@@ -6,7 +6,7 @@ import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AhSnapshot, AppState, Catalog, Store, View, ViewContext } from '../../../src/types/contracts.ts';
-import { ahFlipRows, createAhFlipView, filterAhFlips } from '../../../src/ui/views/ahflip/ahflipView.ts';
+import { createAhFlipView, filterAhFlips } from '../../../src/ui/views/ahflip/ahflipView.ts';
 import { ahListingCount } from '../../../src/ui/views/ahflip/model.ts';
 import catalogJson from '../../fixtures/catalog.json';
 import { fakeHistory, fakeViewCtx } from '../../helpers/fakes.ts';
@@ -117,8 +117,7 @@ describe('AH flips view', () => {
       v: 3,
       lowestBin: { ...AH.lowestBin, 'BLACK_CAT;5@MAX': { price: 90_000_000, next: 120_000_000, count: 4, name: '[Lvl 100] Black Cat', exp: 2.6e7 } },
     };
-    expect(computeAhFlips(ah, catalog).map((r) => r.id)).toContain('BLACK_CAT;5@MAX'); // the domain would list it
-    expect(ahFlipRows(ah, catalog).map((r) => r.id)).toEqual(computeAhFlips(AH, catalog).map((r) => r.id));
+    expect(computeAhFlips(ah, catalog).map((r) => r.id)).toEqual(computeAhFlips(AH, catalog).map((r) => r.id));
     expect(ahListingCount(ah)).toBe(6 + 8 + 9 + 5);
     store.set({ catalog, ah, settings: { ...store.get().settings, hideSuspicious: false } });
     mount({ minProfit: '0', minMargin: '0' });

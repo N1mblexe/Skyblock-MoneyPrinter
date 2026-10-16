@@ -1,7 +1,7 @@
 // AH flip finder (#/ahflip): lowest BIN -> relist under the second-lowest BIN, after AH fees (src/domain/ahFlips.ts).
 // Rows are recomputed when the AH scan, the catalog or the mayor changes; filters live in the URL.
 import { LS_VIEWPREFS } from '../../../config.ts';
-import type { AhFlipRow } from '../../../domain/ahFlips.ts';
+import { computeAhFlips, type AhFlipRow } from '../../../domain/ahFlips.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
 import { isDerpy } from '../../../state/derived.ts';
 import type { AppState, View, ViewContext } from '../../../types/contracts.ts';
@@ -20,9 +20,9 @@ import {
   type QueryState,
 } from '../../kit/index.ts';
 import './ahflip.css';
-import { AHFLIP_SCHEMA, ahFlipRows, ahListingCount, filterAhFlips, type AhFlipQuery } from './model.ts';
+import { AHFLIP_SCHEMA, ahListingCount, filterAhFlips, type AhFlipQuery } from './model.ts';
 
-export { AHFLIP_SCHEMA, ahFlipRows, filterAhFlips };
+export { AHFLIP_SCHEMA, filterAhFlips };
 
 function columns(): KitColumn<AhFlipRow>[] {
   const coins = (k: 'buy' | 'next' | 'profit') => (r: AhFlipRow) => esc(fmtCoins(r[k]));
@@ -105,7 +105,7 @@ export function createAhFlipView(): View {
     const derpy = isDerpy(s.election);
     if (!s.ah || !s.catalog) return [];
     if (memo?.ah !== s.ah || memo.catalog !== s.catalog || memo.derpy !== derpy)
-      memo = { ah: s.ah, catalog: s.catalog, derpy, rows: ahFlipRows(s.ah, s.catalog, { derpy }) };
+      memo = { ah: s.ah, catalog: s.catalog, derpy, rows: computeAhFlips(s.ah, s.catalog, { derpy }) };
     return memo.rows;
   }
 
