@@ -1,8 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  AH_SCAN_VERSION,
   aggregatePage,
   createAhScanner,
   fetchAhPage,
+  PET_MAX_200,
+  petLevelFromName,
   scanAuctions,
   validateAhPage,
   type AhPageFetcher,
@@ -11,9 +14,10 @@ import {
   type RawAuction,
 } from '../../src/api/auctions.ts';
 import { attachAhWorker, type AhWorkerScope } from '../../src/api/ahWorker.ts';
-import { AH, API_AUCTIONS } from '../../src/config.ts';
+import { AH, API_AUCTIONS, KAT } from '../../src/config.ts';
 import type { AhPrice, AhScanProgress, AhSnapshot } from '../../src/types/contracts.ts';
 import fixture from '../fixtures/api/auctions-page.json' with { type: 'json' };
+import { itemB64, str } from './nbtWriter.ts';
 
 const AUCTIONS = fixture.auctions as RawAuction[];
 const T0 = Date.UTC(2026, 9, 14);
@@ -70,8 +74,18 @@ describe('aggregatePage', () => {
     // non-BIN fixture listings
     expect(acc.MACHINE_GUN_BOW).toBeUndefined();
     expect(acc['SCATHA;3']).toBeUndefined();
-    expect(r).toEqual({ bins: 21, errors: 0 });
-    expect(Object.keys(acc)).toHaveLength(15);
+    expect(r).toEqual({ bins: 21, errors: 0, tierBoosted: 0 });
+    // pets: the cheapest listing's exp; the one [Lvl 100] Black Cat also lands in the max-level bucket
+    expect(acc['BLACK_CAT;5']).toMatchObject({ exp: 0, name: '[Lvl 1] Black Cat' });
+    expect(acc[`BLACK_CAT;5${AH.petMaxSuffix}`]).toEqual({
+      price: 99_350_749,
+      count: 1,
+      uuid: bins('[Lvl 100] Black Cat')[0]!.uuid,
+      name: '[Lvl 100] Black Cat',
+      exp: 2.603692896466553e7,
+    });
+    expect(acc.HYPERION!.exp).toBeUndefined();
+    expect(Object.keys(acc)).toHaveLength(16);
   });
 
   it('claimed listings are skipped, broken ones counted as errors, accumulation continues', async () => {
@@ -90,7 +104,87 @@ describe('aggregatePage', () => {
     );
     // 400M seen before, 300M is the new lowest: 400M becomes next; 900M changes nothing
     expect(acc.HYPERION).toEqual({ price: 300_000_000, count: 3, next: 400_000_000, uuid: hype.uuid, name: hype.item_name });
-    expect(r).toEqual({ bins: 2, errors: 3 });
+    expect(r).toEqual({ bins: 2, errors: 3, tierBoosted: 0 });
+  });
+
+  /** A synthetic BIN pet listing. */
+  const petBin = (uuid: string, item_name: string, price: number, info: Record<string, unknown>): RawAuction => ({
+    uuid,
+    item_name,
+    bin: true,
+    starting_bid: price,
+    item_bytes: itemB64({ id: str('PET'), petInfo: str(JSON.stringify(info)) }),
+  });
+  const MAX = AH.petMaxSuffix;
+
+  it('pets: the cheapest listing exp rides along and follows a new lowest', async () => {
+    const acc: Record<string, AhPrice> = {};
+    await aggregatePage(
+      [
+        petBin('a', '[Lvl 50] Enderman', 500_000, { type: 'ENDERMAN', tier: 'EPIC', exp: 2_000_000 }),
+        petBin('b', '[Lvl 60] Enderman', 600_000, { type: 'ENDERMAN', tier: 'EPIC', exp: 3_000_000 }),
+        petBin('c', '[Lvl 1] Enderman', 100_000, { type: 'ENDERMAN', tier: 'EPIC' }),
+      ],
+      acc,
+    );
+    expect(acc['ENDERMAN;3']).toEqual({ price: 100_000, next: 500_000, count: 3, uuid: 'c', name: '[Lvl 1] Enderman', exp: 0 });
+    await aggregatePage([petBin('d', '[Lvl 30] Enderman', 50_000, { type: 'ENDERMAN', tier: 'EPIC', exp: 400_000 })], acc);
+    expect(acc['ENDERMAN;3']).toMatchObject({ price: 50_000, next: 100_000, uuid: 'd', exp: 400_000 });
+    // a new lowest without petInfo drops the old listing's exp (like uuid / name)
+    const plain: Record<string, AhPrice> = { HYPERION: { price: 9, count: 1, uuid: 'x', name: 'x', exp: 5 } };
+    const hype = AUCTIONS.find((a) => a.bin && a.item_name?.includes('Hyperion'))!;
+    await aggregatePage([{ ...hype, starting_bid: 1 }], plain);
+    expect(plain.HYPERION!.exp).toBeUndefined();
+  });
+
+  it('pets holding a Tier Boost are left out of pricing and counted apart', async () => {
+    const acc: Record<string, AhPrice> = {};
+    const r = await aggregatePage(
+      [
+        petBin('boost', '[Lvl 100] Scatha', 1_000, { type: 'SCATHA', tier: 'EPIC', exp: 4e7, heldItem: KAT.tierBoostId }),
+        petBin('fair', '[Lvl 100] Scatha', 90_000_000, { type: 'SCATHA', tier: 'EPIC', exp: 4e7, heldItem: 'PET_ITEM_COMBAT_SKILL_BOOST_EPIC' }),
+      ],
+      acc,
+    );
+    expect(r).toEqual({ bins: 1, errors: 0, tierBoosted: 1 });
+    expect(acc['SCATHA;3']).toMatchObject({ price: 90_000_000, count: 1, uuid: 'fair' });
+    expect(acc[`SCATHA;3${MAX}`]).toMatchObject({ price: 90_000_000, count: 1, uuid: 'fair' });
+    expect(Object.keys(acc)).toHaveLength(2);
+  });
+
+  it('max-level pets also fold into `${id}@MAX`: level 100, or 200 for the Golden Dragon family', async () => {
+    const acc: Record<string, AhPrice> = {};
+    await aggregatePage(
+      [
+        petBin('e1', '[Lvl 1] Enderman', 30_000, { type: 'ENDERMAN', tier: 'EPIC' }),
+        petBin('e99', '[Lvl 99] Enderman', 700_000, { type: 'ENDERMAN', tier: 'EPIC', exp: 1.7e7 }),
+        petBin('e100', '[Lvl 100] Enderman', 900_000, { type: 'ENDERMAN', tier: 'EPIC', exp: 1.9e7 }),
+        petBin('e100b', '[Lvl 100] Enderman ✦', 950_000, { type: 'ENDERMAN', tier: 'EPIC', exp: 2e7, skin: 'ENDERMAN_X' }),
+        petBin('g100', '[Lvl 100] Golden Dragon', 600_000_000, { type: 'GOLDEN_DRAGON', tier: 'LEGENDARY', exp: 3e7 }),
+        petBin('g200', '[Lvl 200] Golden Dragon', 1_000_000_000, { type: 'GOLDEN_DRAGON', tier: 'LEGENDARY', exp: 2.1e8 }),
+        petBin('j200', '[Lvl 200] Jade Dragon', 900_000_000, { type: 'JADE_DRAGON', tier: 'LEGENDARY', exp: 2.1e8 }),
+        petBin('odd', 'Enderman', 10, { type: 'ENDERMAN', tier: 'RARE' }),
+      ],
+      acc,
+    );
+    expect(acc['ENDERMAN;3']).toMatchObject({ price: 30_000, count: 4 });
+    // skinned listings are not excluded: a skin only raises the price
+    expect(acc[`ENDERMAN;3${MAX}`]).toEqual({ price: 900_000, next: 950_000, count: 2, uuid: 'e100', name: '[Lvl 100] Enderman', exp: 1.9e7 });
+    expect(acc['GOLDEN_DRAGON;4']).toMatchObject({ price: 600_000_000, count: 2 });
+    expect(acc[`GOLDEN_DRAGON;4${MAX}`]).toMatchObject({ price: 1_000_000_000, count: 1, uuid: 'g200' });
+    expect(acc[`JADE_DRAGON;4${MAX}`]).toMatchObject({ count: 1, uuid: 'j200' });
+    expect(acc[`ENDERMAN;2${MAX}`]).toBeUndefined();
+    expect(Object.keys(acc).sort()).toEqual(
+      ['ENDERMAN;2', 'ENDERMAN;3', `ENDERMAN;3${MAX}`, 'GOLDEN_DRAGON;4', `GOLDEN_DRAGON;4${MAX}`, 'JADE_DRAGON;4', `JADE_DRAGON;4${MAX}`].sort(),
+    );
+  });
+
+  it('petLevelFromName and the 200-level set', () => {
+    expect(petLevelFromName('[Lvl 84] Owl')).toBe(84);
+    expect(petLevelFromName('[Lvl 200] Golden Dragon ✦')).toBe(200);
+    expect(petLevelFromName('Hyperion')).toBeNull();
+    expect(petLevelFromName(undefined)).toBeNull();
+    expect([...PET_MAX_200].sort()).toEqual(['GOLDEN_DRAGON', 'JADE_DRAGON', 'ROSE_DRAGON']);
   });
 });
 
@@ -103,9 +197,11 @@ describe('scanAuctions', () => {
     expect(res.fetchedAt).toBe(T0);
     expect(res.lastUpdated).toBe(fixture.lastUpdated);
     expect(res.lowestBin.HYPERION).toMatchObject({ price: 525_000_000, count: 4 });
-    expect(res.v).toBe(2);
+    expect(res.v).toBe(AH_SCAN_VERSION);
+    expect(AH_SCAN_VERSION).toBe(3);
     expect(res.failedPages).toEqual([]);
     expect(res.binCount).toBe(21);
+    expect(res.tierBoosted).toBe(0);
     expect(progress.map((p) => p.page)).toEqual([1, 2, 3, 4, 5]);
     expect(progress.every((p) => p.totalPages === 5)).toBe(true);
     expect(Object.getPrototypeOf(res.lowestBin)).toBe(Object.prototype);
