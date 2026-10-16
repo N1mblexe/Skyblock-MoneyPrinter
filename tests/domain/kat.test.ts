@@ -4,6 +4,8 @@ import {
   computeKatFlips,
   expForLevel,
   katCoins,
+  KAT_MIN_SCAN,
+  katScanReady,
   KAT_TRADE_HOURS,
   levelFromExp,
   petCurve,
@@ -78,6 +80,7 @@ const byKey = (rows: KatRow[], key: string) => {
 
 const curve = (pet: string, r: number) => petCurve(LEVELING, pet, r)!;
 const EPIC_MAX_XP = expForLevel(curve('OCELOT', 3), 100);
+const LEG_MAX_XP = expForLevel(curve('OCELOT', 4), 100);
 
 describe('pet levels', () => {
   it('curves start at the rarity offset and stop at the max level', () => {
@@ -170,7 +173,7 @@ describe('computeKatFlips', () => {
     'OCELOT;2': { price: 500_000, count: 10 },
     'OCELOT;3@MAX': { price: 3_000_000, count: 5, exp: EPIC_MAX_XP, name: '[Lvl 100] Ocelot' },
     'OCELOT;4': { price: 6_000_000, count: 10 },
-    'OCELOT;4@MAX': { price: 9_000_000, count: 10 },
+    'OCELOT;4@MAX': { price: 9_000_000, count: 10, exp: LEG_MAX_XP, name: '[Lvl 100] Ocelot' },
     'OCELOT;5': { price: 12_000_000, count: 10 },
     'OCELOT;5@MAX': { price: 20_000_000, count: 10 },
     PET_ITEM_X: { price: 100_000, count: 4 },
@@ -237,11 +240,49 @@ describe('computeKatFlips', () => {
     expect(chain.sellKey).toBe('OCELOT;5');
   });
 
-  it('a max-band listing without XP is taken as max level', () => {
-    const ah = { ...AH_ROWS, 'OCELOT;3@MAX': { price: 3_000_000, count: 5 } };
-    expect(byKey(run({ ...base, ah }), 'OCELOT;3>4:max').levelStart).toBe(100);
+  it('a max-band listing without XP is taken as max level; the level is a guess and the row is flagged', () => {
+    for (const exp of [undefined, 0]) {
+      const ah = { ...AH_ROWS, 'OCELOT;4@MAX': { price: 9_000_000, count: 10, ...(exp == null ? {} : { exp }), name: '[Lvl 100] Ocelot' } };
+      const r = byKey(run({ ...base, ah }), 'OCELOT;4>5:max');
+      expect(r).toMatchObject({ levelStart: 100, levelEnd: 100, levelKnown: false, sellKey: 'OCELOT;5@MAX' });
+      expect(r.risk.flags).toContain('AH_VARIANT');
+    }
     const any = byKey(run({ ...base, ah: { ...AH_ROWS, 'OCELOT;4': { price: 6_000_000, count: 10 } } }), 'OCELOT;4>5:any');
-    expect(any.levelStart).toBe(1);
+    expect(any).toMatchObject({ levelStart: 1, levelKnown: false });
+    expect(any.risk.flags).toContain('AH_VARIANT');
+    // an any-level listing with 0 XP is a level 1 pet
+    expect(byKey(run(base), 'OCELOT;1>2:any')).toMatchObject({ levelStart: 1, levelKnown: true });
+  });
+
+  it('a @MAX entry whose listing level is not the catalog max level is not trusted', () => {
+    const kat = [step('GOLDEN_DRAGON', 3, 1_000, 1)];
+    // filed under @MAX by a scanner that took 100 as the max level
+    const lvl100 = { price: 1_000, count: 5, exp: 1e12, name: '[Lvl 100] Golden Dragon' };
+    const ah = {
+      'GOLDEN_DRAGON;3': { price: 1_000, count: 5, exp: 1e12 },
+      'GOLDEN_DRAGON;3@MAX': lvl100,
+      'GOLDEN_DRAGON;4': { price: 2_000_000, count: 5 },
+      'GOLDEN_DRAGON;4@MAX': { ...lvl100, price: 9_000_000 },
+    };
+    const rows = run({ kat, ah });
+    expect(rows.map((r) => r.key)).toEqual(['GOLDEN_DRAGON;3>4:any']);
+    expect(rows[0]).toMatchObject({ levelEnd: 200, sellKey: 'GOLDEN_DRAGON;4' });
+    expect(rows[0]!.risk.flags).toContain('AH_VARIANT');
+    // the scanner agreeing with the catalog: trusted
+    const ok = { ...lvl100, name: '[Lvl 200] Golden Dragon' };
+    const keys = run({ kat, ah: { ...ah, 'GOLDEN_DRAGON;3@MAX': ok, 'GOLDEN_DRAGON;4@MAX': { ...ok, price: 9_000_000 } } }).map((r) => [r.key, r.sellKey]);
+    expect(keys).toEqual([
+      ['GOLDEN_DRAGON;3>4:any', 'GOLDEN_DRAGON;4@MAX'],
+      ['GOLDEN_DRAGON;3>4:max', 'GOLDEN_DRAGON;4@MAX'],
+    ]);
+  });
+
+  it('the AH scan needs version KAT_MIN_SCAN', () => {
+    expect(KAT_MIN_SCAN).toBe(3);
+    expect(katScanReady(null)).toBe(false);
+    expect(katScanReady({})).toBe(false);
+    expect(katScanReady({ v: 2 })).toBe(false);
+    expect(katScanReady({ v: 3 })).toBe(true);
   });
 
   it('prices step items on the bazaar, else at the AH lowest BIN; unpriced items keep the row', () => {

@@ -150,8 +150,9 @@ async function computeExpected(): Promise<Expected> {
     catalog,
   ).rows.length;
 
-  // Kat page defaults: no skip items, Taming 60 (no rows dropped), both bands, min profit 100k, unpriced and suspect hidden
-  const katAll = computeKatFlips(ctx, { skip: 'none' });
+  // Kat page defaults: no skip items, settings.taming (60: no rows dropped), both bands, min profit 100k, unpriced and
+  // suspect hidden
+  const katAll = computeKatFlips(ctx, { skip: 'none', taming: settings.taming });
   const kq = defaults<KatQuery>(KAT_SCHEMA);
   const katCount = (suspect: boolean) =>
     filterKat(
@@ -161,7 +162,6 @@ async function computeExpected(): Promise<Expected> {
         minProfit: kq.minProfit,
         maxCapital: kq.maxCapital,
         maxHours: kq.maxHours,
-        taming: kq.taming,
         band: kq.band === 'any' || kq.band === 'max' ? kq.band : 'both',
         showUnpriced: kq.unpriced,
         hideSuspect: settings.hideSuspicious && !suspect,

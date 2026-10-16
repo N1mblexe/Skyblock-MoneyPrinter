@@ -128,7 +128,6 @@ describe('Kat view', () => {
       minProfit: 100_000,
       maxCapital: null,
       maxHours: null,
-      taming: KAT_MAX_TAMING,
       band: 'both',
       showUnpriced: false,
       hideSuspect: true,
@@ -146,14 +145,11 @@ describe('Kat view', () => {
     expect(root.textContent).toContain('Lvl 100 → 96');
   });
 
-  it('filters: band, Taming level, max hours, max capital, search, unpriced', async () => {
+  it('filters: band, max hours, max capital, search, unpriced', async () => {
     ready();
     mount({ band: 'max' });
     await flush();
     expect(keys().every((k) => k.endsWith(':max'))).toBe(true);
-    view.update!({ id: 'kat', query: { taming: '20' } });
-    await flush();
-    expect(keys()).toEqual(['OCELOT;3>4:max']);
     view.update!({ id: 'kat', query: { maxHours: '50' } });
     await flush();
     expect(new Set(keys())).toEqual(new Set(['OCELOT;4>5:any', 'OCELOT;4>5:max']));
@@ -164,6 +160,50 @@ describe('Kat view', () => {
     await flush();
     expect(keys()).toEqual(['BEE;0>1:any']);
     expect(root.textContent).toContain(t('kat.noPrice'));
+  });
+
+  it('the Taming field reads and writes settings.taming, shared with derived.kat()', async () => {
+    store.set({ settings: { ...store.get().settings, taming: 20 } });
+    ready();
+    mount({ band: 'max', taming: '60' });
+    await flush();
+    const inp = q<HTMLInputElement>('.kit-filterbar input[data-setting="taming"]');
+    expect(inp.value).toBe('20');
+    // Mythic needs Taming 25; the old URL param is ignored
+    expect(keys()).toEqual(['OCELOT;3>4:max']);
+    expect(ctx.derived.kat().every((r) => r.to < 5)).toBe(true);
+    inp.value = String(KAT_MAX_TAMING);
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(store.get().settings.taming).toBe(KAT_MAX_TAMING);
+    await flush();
+    expect(keys()).toContain('OCELOT;3>5:max');
+    // with the skip option the page computes its own rows, for the same Taming level
+    const cb = q<HTMLInputElement>('.kit-filterbar input[data-filter="skip"]');
+    cb.checked = true;
+    cb.dispatchEvent(new Event('change', { bubbles: true }));
+    await flush();
+    expect(keys()).toContain('OCELOT;3>5:max');
+    store.set({ settings: { ...store.get().settings, taming: 20 } });
+    await flush();
+    expect(keys()).toEqual(['OCELOT;3>4:max']);
+    expect(inp.value).toBe('20');
+    // invalid: flagged, not written
+    inp.value = '61';
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+    expect(inp.getAttribute('aria-invalid')).toBe('true');
+    expect(store.get().settings.taming).toBe(20);
+  });
+
+  it('the rows without skip items are derived.kat(), kept across display-only setting changes', async () => {
+    ready();
+    mount();
+    await flush();
+    const rows = ctx.derived.kat();
+    const spy = vi.spyOn(ctx.derived, 'kat');
+    store.set({ settings: { ...store.get().settings, theme: 'light', density: 'compact' } });
+    await flush();
+    expect(spy).toHaveBeenCalled();
+    expect(ctx.derived.kat()).toBe(rows);
   });
 
   it('the skip toggle buys Kat Flowers and shortens the wait', async () => {

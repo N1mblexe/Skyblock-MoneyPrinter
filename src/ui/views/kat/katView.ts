@@ -1,11 +1,13 @@
 // Kat upgrades (#/kat): buy a pet on the AH, upgrade its rarity at Kat, sell it on the AH (src/domain/kat.ts).
-// Rows are recomputed when the AH scan, the catalog, the bazaar snapshot, the settings or the mayor change (and per
-// skip option); the other filters live in the URL.
-import { LS_VIEWPREFS } from '../../../config.ts';
-import { computeKatFlips, KAT_RARITIES, type KatItemLine, type KatRow, type KatSkip } from '../../../domain/kat.ts';
+// Rows come from derived.kat() without the skip option, else are recomputed when calcCtx() (AH scan, catalog,
+// snapshot, calc settings, mayor) or settings.taming changes. Taming is a setting (the planner and alerts use it too);
+// the other filters live in the URL.
+import { KAT, LS_VIEWPREFS } from '../../../config.ts';
+import { isPetMaxKey } from '../../../domain/ahFlips.ts';
+import { computeKatFlips, KAT_RARITIES, katScanReady, type KatItemLine, type KatRow, type KatSkip } from '../../../domain/kat.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
 import { isDerpy } from '../../../state/derived.ts';
-import type { AppState, View, ViewContext } from '../../../types/contracts.ts';
+import type { AppState, CalcCtx, Store, View, ViewContext } from '../../../types/contracts.ts';
 import { riskBadge, sourceBadge } from '../../cells.ts';
 import { esc, rafDebounce } from '../../dom.ts';
 import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtList, fmtPct } from '../../format.ts';
@@ -14,6 +16,9 @@ import {
   createDetailPanel,
   createFilterBar,
   createKitTable,
+  debounce,
+  FILTER_DEBOUNCE_MS,
+  parseNumberInput,
   type DetailPanel,
   type FilterBar,
   type KitColumn,
@@ -153,7 +158,7 @@ export function katDetail(r: KatRow, derpy: boolean): string {
     .join('');
   const notes: string[] = [];
   if (!r.levelKnown) notes.push(t('kat.levelGuess'));
-  if (!r.sellKey.endsWith('@MAX')) notes.push(t('kat.sellVariant', { rarity: rarityName(r.to), level: r.levelEnd }));
+  if (!isPetMaxKey(r.sellKey)) notes.push(t('kat.sellVariant', { rarity: rarityName(r.to), level: r.levelEnd }));
   if (r.unpriced.length) notes.push(t('kat.unpricedNote', { items: fmtList(r.unpriced) }));
   if (derpy) notes.push(t('kat.derpy'));
   return `<div class="kat-detail">
@@ -183,40 +188,70 @@ export function katDetail(r: KatRow, derpy: boolean): string {
   </div>`;
 }
 
+/** Taming level field for the filter bar, bound to settings.taming (not the URL). */
+function tamingField(store: Store<AppState>): { el: HTMLElement; sync(): void; relabel(): void; destroy(): void } {
+  const el = document.createElement('label');
+  el.className = 'field';
+  el.innerHTML = '<span class="field-label"></span><input type="text" inputmode="numeric" autocomplete="off" data-setting="taming"><span class="field-help"></span>';
+  const inp = el.querySelector('input')!;
+  const push = debounce(() => {
+    const n = parseNumberInput(inp.value);
+    if (n == null || !Number.isInteger(n) || n < 0 || n > KAT.maxTaming) {
+      inp.setAttribute('aria-invalid', 'true');
+      inp.title = t('common.invalid');
+      return;
+    }
+    inp.removeAttribute('aria-invalid');
+    inp.removeAttribute('title');
+    if (store.get().settings.taming !== n) store.set((s) => ({ settings: { ...s.settings, taming: n } }));
+  }, FILTER_DEBOUNCE_MS);
+  inp.addEventListener('input', () => push());
+  inp.addEventListener('change', () => {
+    push();
+    push.flush();
+  });
+  return {
+    el,
+    sync() {
+      const want = String(store.get().settings.taming);
+      if (inp.value !== want && !push.pending() && document.activeElement !== inp) {
+        inp.value = want;
+        inp.removeAttribute('aria-invalid');
+      }
+    },
+    relabel() {
+      el.querySelector('.field-label')!.textContent = t('kat.taming');
+      el.querySelector('.field-help')!.textContent = t('kat.tamingHelp');
+    },
+    destroy: () => push.cancel(),
+  };
+}
+
 export function createKatView(): View {
   let root: HTMLElement | null = null;
   let ctx: ViewContext | null = null;
   let qs: QueryState<KatQuery> | null = null;
   let bar: FilterBar | null = null;
+  let taming: ReturnType<typeof tamingField> | null = null;
   let table: KitTableHandle<KatRow> | null = null;
   let panel: DetailPanel | null = null;
   let detailEl: HTMLElement | null = null;
   let openKey: string | null = null;
   let lastRows: KatRow[] = [];
   const subs: (() => void)[] = [];
-  /** rows per skip option, for one (AH scan, catalog, snapshot, settings, mayor) */
-  let memo: {
-    ah: AppState['ah'];
-    catalog: AppState['catalog'];
-    snapshot: AppState['snapshot'];
-    settings: AppState['settings'];
-    derpy: boolean;
-    bySkip: Map<KatSkip, KatRow[]>;
-  } | null = null;
+  /** rows with skip items, for one calcCtx() and Taming level (calcCtx() keeps its identity when only Taming changes) */
+  let memo: { c: CalcCtx; taming: number; rows: KatRow[] } | null = null;
 
   const $ = <E extends Element = HTMLElement>(sel: string) => root!.querySelector<E>(sel)!;
 
   function rows(s: AppState, skip: KatSkip): KatRow[] {
-    const derpy = isDerpy(s.election);
-    if (memo?.ah !== s.ah || memo.catalog !== s.catalog || memo.snapshot !== s.snapshot || memo.settings !== s.settings || memo.derpy !== derpy)
-      memo = { ah: s.ah, catalog: s.catalog, snapshot: s.snapshot, settings: s.settings, derpy, bySkip: new Map() };
-    let out = memo.bySkip.get(skip);
-    if (!out) {
-      const c = ctx!.derived.calcCtx();
-      out = c ? computeKatFlips(c, { skip }) : [];
-      memo.bySkip.set(skip, out);
-    }
-    return out;
+    // no skip items: the planner's rows (same options and Taming level)
+    if (skip === 'none') return ctx!.derived.kat();
+    const c = ctx!.derived.calcCtx();
+    if (!c) return [];
+    const lvl = s.settings.taming;
+    if (memo?.c !== c || memo.taming !== lvl) memo = { c, taming: lvl, rows: computeKatFlips(c, { skip, taming: lvl }) };
+    return memo.rows;
   }
 
   function applyLabels(): void {
@@ -240,7 +275,7 @@ export function createKatView(): View {
   function blockedState(s: AppState): string | null {
     if (!s.settings.ahEnabled) return 'off';
     if (!s.ah) return 'waiting';
-    if (s.ah.v == null || s.ah.v < 3) return 'oldScan';
+    if (!katScanReady(s.ah)) return 'oldScan';
     if (!s.catalog || !s.snapshot) return 'waitingData';
     if (!s.catalog.kat.length) return 'noData';
     return null;
@@ -261,6 +296,7 @@ export function createKatView(): View {
     setState('');
     table.el.hidden = false;
     tools.hidden = false;
+    taming?.sync();
     const v = qs.get();
     const all = rows(s, v.skip ? 'flowers' : 'none');
     lastRows = all;
@@ -271,7 +307,6 @@ export function createKatView(): View {
         minProfit: v.minProfit,
         maxCapital: v.maxCapital,
         maxHours: v.maxHours,
-        taming: v.taming,
         band: v.band === 'any' || v.band === 'max' ? v.band : 'both',
         showUnpriced: v.unpriced,
         hideSuspect: s.settings.hideSuspicious && !v.suspect,
@@ -323,7 +358,6 @@ export function createKatView(): View {
           { kind: 'number', key: 'minProfit', label: () => t('kat.minProfit') },
           { kind: 'number', key: 'maxCapital', label: () => t('kat.maxCapital') },
           { kind: 'number', key: 'maxHours', label: () => t('kat.maxHours') },
-          { kind: 'number', key: 'taming', label: () => t('kat.taming'), help: () => t('kat.tamingHelp') },
           {
             kind: 'segment',
             key: 'band',
@@ -341,6 +375,8 @@ export function createKatView(): View {
         state,
       );
       $('.kat-bar').append(bar.el);
+      taming = tamingField(c.store);
+      bar.el.querySelector('[data-filter="maxHours"]')!.closest('.field')!.after(taming.el);
       const extra = document.createElement('div');
       extra.className = 'kat-tools';
       extra.innerHTML = '<span class="kat-count" role="status" data-testid="kat-count"></span><span class="kat-scan muted small"></span>';
@@ -394,11 +430,14 @@ export function createKatView(): View {
         onLangChange(() => {
           applyLabels();
           bar?.refresh();
+          taming?.relabel();
           table?.refresh();
           schedule();
         }),
       );
       applyLabels();
+      taming.relabel();
+      taming.sync();
       render();
     },
     update(route) {
@@ -407,9 +446,11 @@ export function createKatView(): View {
     unmount() {
       for (const off of subs.splice(0)) off();
       bar?.destroy();
+      taming?.destroy();
       table?.destroy();
       panel?.destroy();
       bar = null;
+      taming = null;
       table = null;
       panel = null;
       detailEl = null;

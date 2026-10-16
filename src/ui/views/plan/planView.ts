@@ -254,10 +254,13 @@ export function createPlanView(): View {
       `<div class="plan-detail" data-testid="plan-detail">` +
       `<p class="plan-detail-badges">${kindBadge(o.kind)} ${riskBadge(o.risk)} <span class="id-sub">${esc(o.id)}</span></p>` +
       `<p class="plan-detail-links"><a class="btn btn-sm" data-testid="plan-source" href="${esc(sourceHref(o))}">${esc(t('openSource', { tab }))} →</a> ` +
-      // a Kat run's id is an AH pet key, which has no item page
-      (o.kind === 'kat' ? '' : `<a class="btn btn-sm btn-ghost" href="#/item/${encodeURIComponent(o.id)}">${esc(t('openItem'))} →</a> `) +
-      // sell is the net per unit (after tax and fees), so the journal entry is logged untaxed
-      `<a class="btn btn-sm btn-ghost" data-testid="plan-log" href="#/trades?${new URLSearchParams({ view: 'journal', add: o.id, qty: String(Math.max(1, Math.round(a.units))), buy: String(Math.round(buyCost * 10) / 10), sell: String(Math.round((buyCost + o.profitPerUnit) * 10) / 10), tax: '0', src: 'plan' })}">${esc(t('logTrade'))} →</a></p>` +
+      // a Kat run's id is an AH pet key: no item page, and the journal logs items, not a buy + upgrade + sell run
+      (o.kind === 'kat'
+        ? ''
+        : `<a class="btn btn-sm btn-ghost" href="#/item/${encodeURIComponent(o.id)}">${esc(t('openItem'))} →</a> ` +
+          // sell is the net per unit (after tax and fees), so the journal entry is logged untaxed
+          `<a class="btn btn-sm btn-ghost" data-testid="plan-log" href="#/trades?${new URLSearchParams({ view: 'journal', add: o.id, qty: String(Math.max(1, Math.round(a.units))), buy: String(Math.round(buyCost * 10) / 10), sell: String(Math.round((buyCost + o.profitPerUnit) * 10) / 10), tax: '0', src: 'plan' })}">${esc(t('logTrade'))} →</a>`) +
+      `</p>` +
       `<h3>${esc(t('detailAlloc'))}</h3>` +
       kv([
         [t('dUnits'), esc(fmtInt(a.units)), 'units'],
@@ -339,6 +342,8 @@ export function createPlanView(): View {
   }
 
   function watchBtn(r: PlanRow): string {
+    // the watchlist holds bazaar / AH item ids, not Kat runs
+    if (r.opp.kind === 'kat') return '';
     const on = ctx!.watch.has(r.opp.id);
     const label = on ? t('unwatch') : t('watch');
     return `<button type="button" class="btn btn-ghost btn-sm plan-star" data-action="watch" aria-pressed="${on}" aria-label="${esc(

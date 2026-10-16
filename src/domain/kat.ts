@@ -3,9 +3,10 @@
 // need more XP per level, so its level is recomputed at each rarity (a level 100 Epic is a lower-level Legendary).
 // Kat flowers / bouquets can skip the wait (one item per upgrade, so skipping is priced per step).
 import { AH, AH_FLIP, KAT } from '../config.ts';
-import type { CalcCtx, KatStep, PetLeveling, QuoteSource, RiskFlag, RiskReport, Throughput } from '../types/contracts.ts';
+import type { AhPrice, AhSnapshot, CalcCtx, KatStep, PetLeveling, QuoteSource, RiskFlag, RiskReport, Throughput } from '../types/contracts.ts';
 import { petName } from './ahFlips.ts';
 import { createCraftPricer } from './craft.ts';
+import { petLevelFromName } from './ids.ts';
 import { ahNet } from './pricing.ts';
 import { reportFromFlags } from './risk.ts';
 
@@ -17,6 +18,10 @@ export const KAT_RARITIES = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 
  * is an optimistic guess for a pet listed at the lowest BIN; it mostly keeps instant (fully skipped) upgrades finite.
  */
 export const KAT_TRADE_HOURS = 1;
+
+/** AH scan version Kat rows need (pet `exp` and the `@MAX` keys): the page and derived.kat() both gate on it. */
+export const KAT_MIN_SCAN = 3;
+export const katScanReady = (ah: Pick<AhSnapshot, 'v'> | null): boolean => ah?.v != null && ah.v >= KAT_MIN_SCAN;
 
 /** Pet levels end at 100 unless PetLeveling.custom says otherwise. */
 const DEFAULT_MAX_LEVEL = 100;
@@ -121,6 +126,15 @@ export interface KatRow {
 }
 
 const maxKey = (key: string) => key + AH.petMaxSuffix;
+
+/**
+ * The scanner (no catalog in its worker) files `@MAX` by a hand-kept list of 200-level pets; trust such an entry only
+ * when its listing's level matches the catalog's max level for the pet.
+ */
+const maxOk = (p: AhPrice, maxLevel: number): boolean => {
+  const lvl = petLevelFromName(p.name);
+  return lvl == null || lvl === maxLevel;
+};
 
 interface Curve {
   /** XP to the next level, from level 1 */
@@ -249,16 +263,19 @@ export function computeKatFlips(ctx: CalcCtx, opts: KatOptions = {}): KatRow[] {
         const buy = ah(buyKey);
         if (!buy || !(buy.price > 0)) continue;
         const startCurve = petCurve(catalog.petLeveling, pet, from);
-        // no listing XP: a level 1 pet for 'any' (no discount: the safe guess), a max-level one for 'max'
-        const exp = buy.exp ?? (band === 'max' && startCurve ? expForLevel(startCurve, startCurve.max) : 0);
+        if (band === 'max' && !maxOk(buy, startCurve?.max ?? maxLevelOf(catalog.petLeveling, pet))) continue;
+        // no listing XP (0 on a max-level listing means petInfo had none): a level 1 pet for 'any' (no discount: the
+        // safe guess), a max-level one for 'max'; either way the level is a guess
+        const expKnown = buy.exp != null && (band === 'any' || buy.exp > 0);
+        const exp = expKnown ? buy.exp! : band === 'max' && startCurve ? expForLevel(startCurve, startCurve.max) : 0;
         const steps: KatStepLine[] = [];
-        let levelKnown = !!startCurve;
+        let curves = !!startCurve;
         let level = startCurve ? levelFromExp(startCurve, exp) : band === 'max' ? maxLevelOf(catalog.petLeveling, pet) : 1;
         for (let to = from + 1; byFrom.has(to - 1); to++) {
           const step = byFrom.get(to - 1)!;
           const curve = petCurve(catalog.petLeveling, pet, to);
-          if (!curve) levelKnown = false;
-          const levelAfter = levelKnown && curve ? levelFromExp(curve, exp) : level;
+          if (!curve) curves = false;
+          const levelAfter = curves && curve ? levelFromExp(curve, exp) : level;
           const items = step.items.map((it) => lineOf(it.id, it.qty));
           const skip = opts.skip === 'flowers' ? planSkip(step.hours, unitOrNull(KAT.flowerId), unitOrNull(KAT.bouquetId)) : null;
           steps.push({
@@ -278,7 +295,7 @@ export function computeKatFlips(ctx: CalcCtx, opts: KatOptions = {}): KatRow[] {
           level = levelAfter;
           const req = KAT.tamingReq[to] ?? 0;
           if (opts.taming != null && req > opts.taming) break;
-          rows.push(buildRow(ctx, { pet, from, to, band, buyKey, buy, steps: steps.slice(), level, levelKnown }));
+          rows.push(buildRow(ctx, { pet, from, to, band, buyKey, buy, steps: steps.slice(), level, levelKnown: curves && expKnown }));
         }
       }
     }
@@ -310,7 +327,7 @@ function buildRow(ctx: CalcCtx, x: RowInput): KatRow {
   const maxLevel = petCurve(catalog.petLeveling, x.pet, x.to)?.max ?? maxLevelOf(catalog.petLeveling, x.pet);
   const plainKey = `${x.pet};${x.to}`;
   const atMax = x.level >= maxLevel ? ah(maxKey(plainKey)) : null;
-  const sellKey = atMax && atMax.price > 0 ? maxKey(plainKey) : plainKey;
+  const sellKey = atMax && atMax.price > 0 && maxOk(atMax, maxLevel) ? maxKey(plainKey) : plainKey;
   const sellAh = sellKey === plainKey ? ah(plainKey) : atMax;
   // the plain key's lowest BIN is whatever level is cheapest: maybe not the level you sell
   if (sellKey === plainKey || !x.levelKnown) flags.push('AH_VARIANT');

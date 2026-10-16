@@ -1,8 +1,9 @@
 // Auction house lowest-BIN scanner. Owner: market-apis package.
 import { AH, API_AUCTIONS, FETCH_TIMEOUT_MS, KAT } from '../config.ts';
 import type { AhPrice, AhScanProgress, AhSnapshot } from '../types/contracts.ts';
+import { petLevelFromName } from '../domain/ids.ts';
 import { loadAh, saveAh } from './ahStore.ts';
-import { decodeItemBytes, petInfoFromNbt, skyblockIdFromNbt, type PetInfo } from './nbt.ts';
+import { decodeItemBytes, itemFromNbt, type PetInfo } from './nbt.ts';
 
 export interface AhScannerOptions {
   onSnapshot(s: AhSnapshot): void;
@@ -98,15 +99,13 @@ export const AH_SCAN_VERSION = 3;
 
 /**
  * Pets whose max level is 200 (Golden Dragon and its siblings): their `[Lvl 100]` listings are not max level.
- * Every other pet maxes at 100. Hand-kept; add a type here when Hypixel adds another 200-level pet.
+ * Every other pet maxes at 100. The source of truth is the catalog (`petLeveling.custom[type].maxLevel`), which this
+ * scan cannot read (it runs in a Web Worker); src/domain/kat.ts ignores `@MAX` entries whose level disagrees with it.
+ * Hand-kept; add a type here when Hypixel adds another 200-level pet.
  */
 export const PET_MAX_200: ReadonlySet<string> = new Set(['GOLDEN_DRAGON', 'JADE_DRAGON', 'ROSE_DRAGON']);
 
-/** Level from a pet listing name like "[Lvl 84] Owl" or "[Lvl 200] Golden Dragon ✦", else null. */
-export function petLevelFromName(name: string | undefined): number | null {
-  const m = /^\s*\[Lvl (\d+)\]/.exec(name ?? '');
-  return m ? Number(m[1]) : null;
-}
+export { petLevelFromName };
 
 const abortError = (signal: AbortSignal): unknown => signal.reason ?? new DOMException('Aborted', 'AbortError');
 
@@ -151,9 +150,7 @@ export async function aggregatePage(
     let pet: PetInfo | null = null;
     if (typeof price === 'number' && price > 0 && typeof a.item_bytes === 'string') {
       try {
-        const ea = await decodeItemBytes(a.item_bytes);
-        id = skyblockIdFromNbt(ea);
-        pet = petInfoFromNbt(ea);
+        ({ id, pet } = itemFromNbt(await decodeItemBytes(a.item_bytes)));
       } catch {
         id = null;
       }

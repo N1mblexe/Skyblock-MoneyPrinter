@@ -5,7 +5,7 @@ import { computeChains } from '../domain/chains.ts';
 import { computeCrafts } from '../domain/craft.ts';
 import { computeFlips } from '../domain/flip.ts';
 import { computeFusion } from '../domain/fusion.ts';
-import { computeKatFlips } from '../domain/kat.ts';
+import { computeKatFlips, katScanReady } from '../domain/kat.ts';
 import { computeNpcFlips } from '../domain/npc.ts';
 import { toOpportunities } from '../domain/optimizer.ts';
 import { computeShopRows } from '../domain/shops.ts';
@@ -33,7 +33,7 @@ export function calcSettingsKey(s: Settings): string {
 
 /**
  * Domain results memoized on what they depend on: (snapshot, catalog, calc settings, historyTick, ah) identities;
- * fusion() also on the fusion recipes. Changing lang/theme/density/notify/hideSuspicious/autoRefresh recomputes
+ * fusion() also on the fusion recipes, kat() and opportunities() also on settings.taming. Changing lang/theme/density/notify/hideSuspicious/autoRefresh recomputes
  * nothing. calcCtx() keeps its identity while that key holds, so its `settings` is the object the key was built
  * from: read display settings from the store, not from calcCtx().settings.
  * ctx.ah is only set when settings.ahEnabled.
@@ -80,6 +80,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     };
   }
 
+  const taming = () => store.get().settings.taming;
   const d: Derived = {
     calcCtx: current,
     flips: cached('flips', [], computeFlips),
@@ -88,8 +89,10 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     npc: cached('npc', [], computeNpcFlips),
     books: cached('books', [], computeBookCombines),
     shops: cached('shops', [], computeShopRows),
-    // the Kat page's defaults: no skip items; the Taming filter is the page's (it drops rows, not prices)
-    kat: cached('kat', [], (c) => computeKatFlips(c, { skip: 'none' })),
+    // the Kat page's defaults: no skip items. settings.taming is not in CALC_SETTINGS (it only drops rows), so the
+    // Kat results and the opportunities built from them are memoized per Taming level
+    kat: () =>
+      cached(`kat:${taming()}`, [], (c) => (katScanReady(store.get().ah) ? computeKatFlips(c, { skip: 'none', taming: taming() }) : []))(),
     fusion: () => {
       const c = current();
       if (!c) return [];
@@ -97,9 +100,10 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
       if (fusionMemo?.ctx !== c || fusionMemo.recipes !== recipes) fusionMemo = { ctx: c, recipes, rows: computeFusion(c, recipes) };
       return fusionMemo.rows;
     },
-    opportunities: cached('opps', [], (c) =>
-      toOpportunities({ flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc(), kat: d.kat() }, c.settings),
-    ),
+    opportunities: () =>
+      cached(`opps:${taming()}`, [], (c) =>
+        toOpportunities({ flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc(), kat: d.kat() }, c.settings),
+      )(),
     marketStats: () => history.marketStats(store.get().settings.taxRate),
   };
   return d;

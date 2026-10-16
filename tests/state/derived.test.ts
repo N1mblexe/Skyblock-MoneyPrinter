@@ -110,6 +110,34 @@ describe('createDerived', () => {
     store.set({ ah });
     patch(store, { ahEnabled: false });
     expect(d.kat()).toEqual([]);
+    patch(store, { ahEnabled: true });
+    // a pre-v3 scan (no pet XP, no @MAX keys): no rows, as the Kat page shows none
+    store.set({ ah: { ...ah, v: 2 } });
+    expect(d.kat()).toEqual([]);
+    const { v: _v, ...noVersion } = ah;
+    store.set({ ah: noVersion });
+    expect(d.kat()).toEqual([]);
+    expect(d.opportunities().some((o) => o.kind === 'kat')).toBe(false);
+  });
+
+  it('kat: settings.taming drops upgrades past your level, without recomputing the rest', () => {
+    const kat = [{ pet: 'TESTPET', from: 3, to: 4, coins: 1_000_000, hours: 24, items: [] }];
+    const ah = { v: 3, fetchedAt: 0, lastUpdated: 0, lowestBin: { 'TESTPET;3': { price: 1e6, count: 5 }, 'TESTPET;4': { price: 1e7, count: 5 } } };
+    const { store, d } = setup({ catalog: { ...catalog, kat }, ah });
+    const ctx = d.calcCtx();
+    const flips = d.flips();
+    const rows = d.kat();
+    const opps = d.opportunities();
+    expect(rows).toHaveLength(1);
+    patch(store, { taming: 19 }); // Legendary needs 20
+    expect(d.calcCtx()).toBe(ctx);
+    expect(d.flips()).toBe(flips);
+    expect(d.kat()).toEqual([]);
+    expect(d.opportunities()).not.toBe(opps);
+    expect(d.opportunities().some((o) => o.kind === 'kat')).toBe(false);
+    patch(store, { taming: 20 });
+    expect(d.kat()).toEqual(rows);
+    expect(d.opportunities().filter((o) => o.kind === 'kat')).toHaveLength(1);
   });
 
   it('fusion recomputes on recipe changes only (other results kept)', () => {

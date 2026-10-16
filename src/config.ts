@@ -155,6 +155,8 @@ export const KAT = {
   tierBoostId: 'PET_ITEM_TIER_BOOST',
   /** target rarity index -> Taming level Kat asks for */
   tamingReq: { 1: 1, 2: 5, 3: 10, 4: 20, 5: 25 } as Readonly<Record<number, number>>,
+  /** highest Taming level in the game: the default of settings.taming (no upgrade ruled out) */
+  maxTaming: 60,
   /** fewer BIN listings than this on either side adds a thin-market flag */
   minCount: 3,
 } as const;

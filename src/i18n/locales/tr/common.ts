@@ -92,6 +92,8 @@ export const common: Messages['common'] = {
   sellInsta: 'Insta-sell (ucuz, hızlı)',
   forgeSlots: 'Forge slotu',
   forgeHelp: 'Forge tariflerinde aynı anda çalışan slot sayısı.',
+  taming: 'Taming seviyesi',
+  tamingHelp: 'Seviyenin yetmediği Kat yükseltmeleri dışarıda kalır (60 = sınır yok).',
   hideSuspicious: 'Şüphelileri gizle',
   hideSuspiciousHelp: 'Manipülasyon veya ölü pazar gibi görünen ürünleri listeden çıkarır.',
   autoRefresh: 'Otomatik yenile',

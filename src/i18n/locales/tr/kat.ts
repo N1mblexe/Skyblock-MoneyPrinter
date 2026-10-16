@@ -11,7 +11,7 @@ export const kat: Messages['kat'] = {
   maxCapital: 'En fazla bağlanan coin',
   maxHours: 'En fazla saat',
   taming: 'Taming seviyesi',
-  tamingHelp: 'Kat’in senin seviyende yapmayacağı yükseltmeleri gizler',
+  tamingHelp: 'Kat’in senin seviyende yapmayacağı yükseltmeleri gizler (bir ayar: planlayıcı ve uyarılar da kullanır)',
   band: 'Alış',
   band_both: 'İkisi de',
   band_any: 'Her seviye',

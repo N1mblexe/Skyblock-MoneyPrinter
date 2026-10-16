@@ -1,11 +1,12 @@
 import { gzipSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   base64ToBytes,
   decodeItemBytes,
   decodeItemBytesRoot,
   extraAttributes,
   gunzip,
+  itemFromNbt,
   petInfoFromNbt,
   readNbt,
   skyblockIdFromNbt,
@@ -213,5 +214,24 @@ describe('petInfoFromNbt', () => {
     expect(petInfoFromNbt(ea({}))).toBeNull();
     expect(petInfoFromNbt(ea({ i: [] }))).toBeNull();
     expect(petInfoFromNbt(null)).toBeNull();
+  });
+});
+
+describe('itemFromNbt', () => {
+  const ea = (o: Record<string, unknown>) => o as NbtCompound;
+
+  it('matches skyblockIdFromNbt and petInfoFromNbt on every fixture auction and the edge cases', async () => {
+    const roots: (NbtCompound | null)[] = [null, ea({}), ea({ id: 5 }), ea({ id: 'PET' }), ea({ id: 'PET', petInfo: '{broken' }), ea({ i: [] })];
+    roots.push(ea({ id: 'PET', petInfo: '{"tier":"EPIC"}' }), ea({ id: 'HYPERION', petInfo: '{"type":"X"}' }), ea({ id: 'ENCHANTED_BOOK', enchantments: { telekinesis: 1 } }));
+    for (const a of page.auctions) roots.push(await decodeItemBytes(a.item_bytes), await decodeItemBytesRoot(a.item_bytes));
+    for (const r of roots) expect(itemFromNbt(r)).toEqual({ id: skyblockIdFromNbt(r), pet: petInfoFromNbt(r) });
+    expect(itemFromNbt(ea({ id: 'PET', petInfo: '{"type":"BEE","tier":"RARE","exp":12}' }))).toEqual({ id: 'BEE;2', pet: { type: 'BEE', tier: 'RARE', exp: 12 } });
+  });
+
+  it('parses petInfo once', () => {
+    const parse = vi.spyOn(JSON, 'parse');
+    itemFromNbt(ea({ id: 'PET', petInfo: '{"type":"BEE","tier":"RARE","exp":12}' }));
+    expect(parse).toHaveBeenCalledTimes(1);
+    parse.mockRestore();
   });
 });

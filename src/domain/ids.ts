@@ -130,3 +130,9 @@ export function deriveName(id: string): string {
   if (id.startsWith('ESSENCE_') && id.length > 8) return `${title(id.slice(8))} Essence`;
   return title(id) || id || '?';
 }
+
+/** Level from a pet listing name like "[Lvl 84] Owl" or "[Lvl 200] Golden Dragon ✦", else null. */
+export function petLevelFromName(name: string | undefined): number | null {
+  const m = /^\s*\[Lvl (\d+)\]/.exec(name ?? '');
+  return m ? Number(m[1]) : null;
+}

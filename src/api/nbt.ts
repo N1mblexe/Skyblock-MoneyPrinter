@@ -178,8 +178,7 @@ function parsePetInfo(petInfo: NbtValue | undefined): Record<string, unknown> | 
   return typeof info === 'object' && info !== null ? (info as Record<string, unknown>) : null;
 }
 
-function petId(petInfo: NbtValue | undefined): string | null {
-  const info = parsePetInfo(petInfo);
+function petId(info: Record<string, unknown> | null): string | null {
   if (!info) return null;
   const { type, tier } = info;
   if (typeof type !== 'string' || !type) return null;
@@ -206,10 +205,10 @@ export interface PetInfo {
  * skyblockIdFromNbt falls back to `PET`). Accepts the same inputs as skyblockIdFromNbt.
  */
 export function petInfoFromNbt(root: NbtCompound | null): PetInfo | null {
-  if (!root) return null;
-  const ea = 'i' in root ? extraAttributes(root) : root;
-  if (!ea || ea.id !== 'PET') return null;
-  const info = parsePetInfo(ea.petInfo);
+  return itemFromNbt(root).pet;
+}
+
+function petFields(info: Record<string, unknown> | null): PetInfo | null {
   if (!info) return null;
   const { type, tier, exp, heldItem, skin } = info;
   if (typeof type !== 'string' || !type) return null;
@@ -232,19 +231,31 @@ export function petInfoFromNbt(root: NbtCompound | null): PetInfo | null {
  * Accepts either the decoded item_bytes root (`{i:[...]}`) or an ExtraAttributes compound.
  */
 export function skyblockIdFromNbt(root: NbtCompound | null): string | null {
-  if (!root) return null;
+  return itemFromNbt(root).id;
+}
+
+/**
+ * skyblockIdFromNbt and petInfoFromNbt in one pass (one ExtraAttributes lookup, one petInfo parse), for the AH scan.
+ * Same inputs.
+ */
+export function itemFromNbt(root: NbtCompound | null): { id: string | null; pet: PetInfo | null } {
+  const none = { id: null, pet: null };
+  if (!root) return none;
   const ea = 'i' in root ? extraAttributes(root) : root;
-  if (!ea) return null;
+  if (!ea) return none;
   const id = ea.id;
-  if (typeof id !== 'string' || !id) return null;
-  if (id === 'PET') return petId(ea.petInfo) ?? id;
+  if (typeof id !== 'string' || !id) return none;
+  if (id === 'PET') {
+    const info = parsePetInfo(ea.petInfo);
+    return { id: petId(info) ?? id, pet: petFields(info) };
+  }
   if (id === 'ENCHANTED_BOOK') {
     const ench = ea.enchantments;
     if (isCompound(ench)) {
       const keys = Object.keys(ench);
       const lvl = ench[keys[0]!];
-      if (keys.length === 1 && typeof lvl === 'number') return `ENCHANTMENT_${keys[0]!.toUpperCase()}_${lvl}`;
+      if (keys.length === 1 && typeof lvl === 'number') return { id: `ENCHANTMENT_${keys[0]!.toUpperCase()}_${lvl}`, pet: null };
     }
   }
-  return id;
+  return { id, pet: null };
 }

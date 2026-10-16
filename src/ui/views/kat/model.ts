@@ -5,8 +5,8 @@ import { matchesQuery } from '../../../domain/search.ts';
 import type { AppState } from '../../../types/contracts.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
 
-/** Highest Taming level in the game: the default (no rows dropped). */
-export const KAT_MAX_TAMING = 60;
+/** Highest Taming level in the game: the default of settings.taming (no rows dropped). */
+export const KAT_MAX_TAMING = KAT.maxTaming;
 
 const SORT_KEYS = ['name', 'tiers', 'band', 'buy', 'upgrade', 'sell', 'profit', 'margin', 'hours', 'pph', 'risk'] as const;
 
@@ -15,7 +15,6 @@ export const KAT_SCHEMA = {
   minProfit: { kind: 'number', def: 100_000, min: 0 },
   maxCapital: { kind: 'number', def: null, min: 0 },
   maxHours: { kind: 'number', def: null, min: 0 },
-  taming: { kind: 'number', def: KAT_MAX_TAMING, min: 0, max: KAT_MAX_TAMING },
   band: { kind: 'enum', def: 'both', values: ['both', 'any', 'max'] },
   skip: { kind: 'bool', def: false },
   unpriced: { kind: 'bool', def: false },
@@ -30,16 +29,15 @@ export interface KatFilters {
   minProfit: number | null;
   maxCapital: number | null;
   maxHours: number | null;
-  /** your Taming level; null = no limit */
-  taming: number | null;
   band: KatBand | 'both';
   showUnpriced: boolean;
   hideSuspect: boolean;
 }
 
 /**
- * Filter rows: Taming level (KAT.tamingReq of the target rarity), band, thresholds, search (pet name, id or listing),
- * unpriced rows unless shown (they skip the profit threshold: they have no profit), suspect rows when hidden.
+ * Filter rows: band, thresholds, search (pet name, id or listing), unpriced rows unless shown (they skip the profit
+ * threshold: they have no profit), suspect rows when hidden. Taming is not a filter here: computeKatFlips applies
+ * settings.taming.
  */
 export function filterKat(rows: readonly KatRow[], o: KatFilters, catalog: AppState['catalog']): { rows: KatRow[]; hidden: number } {
   const out: KatRow[] = [];
@@ -48,7 +46,6 @@ export function filterKat(rows: readonly KatRow[], o: KatFilters, catalog: AppSt
   for (const r of rows) {
     const unpriced = r.unpriced.length > 0;
     if (unpriced && !o.showUnpriced) continue;
-    if (o.taming != null && (KAT.tamingReq[r.to] ?? 0) > o.taming) continue;
     if (o.band !== 'both' && r.band !== o.band) continue;
     if (!unpriced && o.minProfit != null && r.profit < o.minProfit) continue;
     if (o.maxCapital != null && r.capital > o.maxCapital) continue;

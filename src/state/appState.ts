@@ -1,4 +1,4 @@
-import { FILL_MODEL_DEFAULT, NPC_DAILY_LIMIT_DEFAULT, ORDER_SLOTS_DEFAULT, ORDER_SLOTS_MAX } from '../config.ts';
+import { FILL_MODEL_DEFAULT, KAT, NPC_DAILY_LIMIT_DEFAULT, ORDER_SLOTS_DEFAULT, ORDER_SLOTS_MAX } from '../config.ts';
 import { DEFAULT_LANG, isLang } from '../i18n/languages.ts';
 import type { AppState, Settings } from '../types/contracts.ts';
 
@@ -21,6 +21,7 @@ export const defaultSettings: Settings = {
   density: 'comfortable',
   notify: false,
   ahEnabled: true,
+  taming: KAT.maxTaming,
 };
 
 /** Merge persisted (possibly partial/invalid) settings over defaults. */
@@ -39,6 +40,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   num('forgeSlots', 1, 7);
   num('orderSlots', 1, ORDER_SLOTS_MAX);
   num('npcDailyLimit', 1, 1e7);
+  if (Number.isInteger(r.taming)) num('taming', 0, KAT.maxTaming);
   if (r.fillModel === 'sequential' || r.fillModel === 'pipelined') s.fillModel = r.fillModel;
   if (r.density === 'comfortable' || r.density === 'compact') s.density = r.density;
   if (typeof r.notify === 'boolean') s.notify = r.notify;

@@ -17,6 +17,7 @@ This page describes the model behind every number the app shows. Constants are n
 | NPC daily limit (`npcDailyLimit`) | 640 (`NPC_DAILY_LIMIT_DEFAULT`) | 1 – 10,000,000 | NPC purchases |
 | Fill model (`fillModel`) | sequential | sequential / pipelined | throughput |
 | Auction house scan (`ahEnabled`) | on | on / off | off-bazaar craft outputs |
+| Taming level (`taming`) | 60 (`KAT.maxTaming`) | 0 – 60 | Kat upgrades (page, planner, alerts) |
 | Hide suspicious (`hideSuspicious`) | on | on / off | table filters only |
 
 ## Quotes
@@ -179,9 +180,9 @@ Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter
 
 ## Kat upgrades
 
-The **Kat upgrades** page (`#/kat`, `src/domain/kat.ts`) buys a pet at the lowest BIN, takes it up one or more rarities at Kat (consecutive steps of one pet, from catalog.kat), and sells it at the lowest BIN of the new rarity. It needs AH scan v3 (above). Each start is tried in two bands: the cheapest listing of any level (`PET;i`) and the cheapest max-level one (`PET;i@MAX`).
+The **Kat upgrades** page (`#/kat`, `src/domain/kat.ts`) buys a pet at the lowest BIN, takes it up one or more rarities at Kat (consecutive steps of one pet, from catalog.kat), and sells it at the lowest BIN of the new rarity. It needs AH scan v3 (above; `KAT_MIN_SCAN`, also for the planner and alerts). Each start is tried in two bands: the cheapest listing of any level (`PET;i`) and the cheapest max-level one (`PET;i@MAX`).
 
-**Level.** The pet keeps its XP through an upgrade, but higher rarities need more XP per level, so the level is recomputed at each rarity from the leveling table in NEU's `constants/pets.json` (the rarity's offset into the shared table, and per-pet custom tables such as Golden Dragon's levels 101–200). A level 100 Epic comes out a lower-level Legendary. The start level comes from the listing's XP; without it, an any-level listing counts as level 1 (no discount) and a max-band one as max level. Without a leveling table the level is a guess and the row is flagged `AH_VARIANT`.
+**Level.** The pet keeps its XP through an upgrade, but higher rarities need more XP per level, so the level is recomputed at each rarity from the leveling table in NEU's `constants/pets.json` (the rarity's offset into the shared table, and per-pet custom tables such as Golden Dragon's levels 101–200). A level 100 Epic comes out a lower-level Legendary. The start level comes from the listing's XP; without it (or with 0 XP on a max-band listing), an any-level listing counts as level 1 (no discount) and a max-band one as max level. Without the listing's XP or a leveling table the level is a guess and the row is flagged `AH_VARIANT`. The scanner files `@MAX` listings by a hand-kept list of 200-level pets (it has no catalog); a `@MAX` entry whose listing level differs from the catalog's max level is not trusted: as a buy the max band is skipped, as a sale the any-level price is used (flagged `AH_VARIANT`).
 
 **Cost per step.**
 
@@ -204,7 +205,7 @@ profit = ahNet(sell) − capital,  margin = profit / capital,  profit/hour = pro
 
 **Flags.** `AH_THIN` when the buy or the sell key has fewer than `KAT.minCount = 3` listings, `AH_GAP` when the second-cheapest start listing is more than `AH_FLIP.gapRatio = 3` times the cheapest, `AH_VARIANT` as above. Suspect rows are hidden while "Hide suspicious" is on.
 
-**Taming.** Each target rarity needs a Taming level (`KAT.tamingReq`: Uncommon 1, Rare 5, Epic 10, Legendary 20, Mythic 25). The page's Taming filter drops runs whose target needs more; the default (60) drops nothing, and the planner applies no filter.
+**Taming.** Each target rarity needs a Taming level (`KAT.tamingReq`: Uncommon 1, Rare 5, Epic 10, Legendary 20, Mythic 25). Your Taming level is a setting (`taming`, also editable on the Kat page): runs whose target needs more are left out of the Kat page, the planner and market alerts; the default (60) drops nothing.
 
 **Not checked.** Pet skins and held items are not part of the AH key, so check the listing in game; whether a skin carries over is not verified. NEU's Special / Very Special steps (Phoenix) are dropped from the catalog. Throughput is one pet per run (`limitedBy: 'kat'`), and Kat holds one pet at a time, so the planner runs at most one Kat upgrade (see Planner).
 

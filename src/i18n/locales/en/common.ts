@@ -85,6 +85,8 @@ export const common = {
   sellInsta: 'Insta-sell (cheap, fast)',
   forgeSlots: 'Forge slots',
   forgeHelp: 'Slots running forge recipes at the same time.',
+  taming: 'Taming level',
+  tamingHelp: 'Kat upgrades your level does not allow are left out (60 = no limit).',
   hideSuspicious: 'Hide suspicious',
   hideSuspiciousHelp: 'Removes items that look manipulated or dead from the lists.',
   autoRefresh: 'Auto refresh',

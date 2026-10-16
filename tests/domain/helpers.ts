@@ -116,6 +116,7 @@ export const baseSettings: Settings = {
   density: 'comfortable',
   notify: false,
   ahEnabled: true,
+  taming: 60,
 };
 
 export function ctx(over: Partial<Settings> = {}, extra: Partial<CalcCtx> = {}): CalcCtx {

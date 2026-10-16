@@ -239,6 +239,8 @@ export interface Settings {
   notify: boolean;
   /** scan the auction house for lowest BIN prices */
   ahEnabled: boolean;
+  /** your Taming level (0..KAT.maxTaming): Kat upgrades whose target rarity needs more are left out */
+  taming: number;
 }
 
 // ---------------------------------------------------------------- Domain results
@@ -777,7 +779,7 @@ export interface Derived {
   books(): BookRow[];
   shops(): ShopRow[];
   fusion(): FusionRow[];
-  /** Kat upgrade runs with the page defaults (no skip items, no Taming filter); [] without an AH scan */
+  /** Kat upgrade runs without skip items, for settings.taming; [] without a v3+ AH scan */
   kat(): KatRow[];
   opportunities(): Opportunity[];
   marketStats(): ReadonlyMap<string, MarketStat>;

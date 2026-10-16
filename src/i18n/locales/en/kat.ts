@@ -9,7 +9,7 @@ export const kat = {
   maxCapital: 'Max. coins tied up',
   maxHours: 'Max. hours',
   taming: 'Taming level',
-  tamingHelp: 'Hides upgrades Kat will not do at your level',
+  tamingHelp: 'Hides upgrades Kat will not do at your level (a setting: the planner and alerts use it too)',
   band: 'Buy',
   band_both: 'Both',
   band_any: 'Any level',

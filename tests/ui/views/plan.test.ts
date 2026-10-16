@@ -237,9 +237,13 @@ describe('plan view', () => {
     expect(rowKeys()).toContain('kat:ENDERMAN;3>4:max');
     const row = q<HTMLElement>('.plan-view [data-key="kat:ENDERMAN;3>4:max"]');
     expect(row.querySelector('a[href^="#/item/"]')).toBeNull();
+    // no watch star: the watchlist holds item ids, not Kat runs (other rows keep theirs, see the ★ test)
+    expect(row.querySelector('[data-action="watch"]')).toBeNull();
     row.querySelector<HTMLElement>('td')!.click();
     expect(q('[data-testid="plan-source"]').getAttribute('href')).toBe('#/kat?q=Enderman&minProfit=0');
     expect(q('[data-testid="plan-detail"]').querySelector('a[href^="#/item/"]')).toBeNull();
+    // nor a "log trade" link: the journal logs items, not a buy + upgrade + sell run
+    expect(q('[data-testid="plan-detail"]').querySelector('[data-testid="plan-log"]')).toBeNull();
     expect(q('[data-testid="plan-why-long"]').textContent).toContain(t('plan.whyLong_kat'));
     expect(q('[data-testid="plan-detail"] dd[data-k="unitCost"]').textContent).toBe(fmtCoins(1_000_000));
   });
