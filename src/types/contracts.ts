@@ -110,6 +110,14 @@ export interface CatalogFile {
   shops?: CatalogShopOffer[];
   /** v2 */
   books?: Record<string, CatalogBookRule>;
+  /** v2: Kat pet upgrade steps (NEU katgrade recipes); file shape owned by the catalog build */
+  kat?: unknown;
+  /** v2: pet XP table (NEU constants/pets.json) */
+  petLeveling?: unknown;
+  /** v2: pet type -> display name (NEU constants/pets.json id_to_display_name) */
+  petNames?: Record<string, string>;
+  /** v2: item ids that cannot be traded (e.g. bits-shop sacks); hand-kept in scripts/data/bits-rules.json */
+  untradeable?: string[];
 }
 
 export interface ItemInfo {
@@ -130,6 +138,29 @@ export interface ShopOffer {
   costQty: number;
   output: string;
   outQty: number;
+}
+
+/** One Kat upgrade: pet `${pet};${from}` -> `${pet};${to}` (rarity index, COMMON=0 ... MYTHIC=5). */
+export interface KatStep {
+  /** pet type, e.g. OCELOT */
+  pet: string;
+  from: number;
+  to: number;
+  /** base coin cost before the per-level discount */
+  coins: number;
+  /** base wait time in hours */
+  hours: number;
+  items: { id: string; qty: number }[];
+}
+
+/** Pet XP curve: total XP for level L at rarity R = sum of levels[offsets[R] .. offsets[R] + L - 2]. */
+export interface PetLeveling {
+  /** rarity name (COMMON, ..., MYTHIC) -> start index into `levels` */
+  offsets: Record<string, number>;
+  /** XP needed for each next level */
+  levels: number[];
+  /** per-pet overrides (e.g. GOLDEN_DRAGON goes to 200) */
+  custom: Record<string, { levels?: number[]; maxLevel?: number; append?: boolean }>;
 }
 
 export interface BookRule {
@@ -160,6 +191,14 @@ export interface Catalog {
   shops: ShopOffer[];
   /** base = 'ENCHANTMENT_<BASE>' (no level suffix); null when unknown */
   bookRule(base: string): BookRule | null;
+  /** Kat upgrade steps (empty for older catalogs) */
+  kat: KatStep[];
+  /** null for older catalogs */
+  petLeveling: PetLeveling | null;
+  /** pet type -> display name */
+  petNames: Record<string, string>;
+  /** items that can't be sold to other players */
+  untradeable: ReadonlySet<string>;
 }
 
 // ---------------------------------------------------------------- Settings
@@ -221,7 +260,7 @@ export interface Throughput {
   batchQty: number;
   capitalUsed: number;
   fillHours: number;
-  limitedBy: 'volume' | 'capital' | 'depth' | 'forge' | 'npcLimit' | 'slots';
+  limitedBy: 'volume' | 'capital' | 'depth' | 'forge' | 'npcLimit' | 'slots' | 'kat';
   /** hours to buy / sell one batch */
   buyHours?: number;
   sellHours?: number;
@@ -588,6 +627,8 @@ export interface AhPrice {
   uuid?: string;
   /** display name of the cheapest listing (pets: "[Lvl 100] Ender Dragon") */
   name?: string;
+  /** pets (scan v3+): total XP of the cheapest listing */
+  exp?: number;
 }
 
 export interface AhSnapshot {
@@ -680,7 +721,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'sell' | 'trades' | 'watch' | 'item';
+export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'kat' | 'bits' | 'fusion' | 'plan' | 'sell' | 'trades' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;

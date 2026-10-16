@@ -118,6 +118,8 @@ export const common: Messages['common'] = {
   nav_craft: 'Craft',
   nav_forge: 'Forge',
   nav_fusion: 'Fusion',
+  nav_kat: 'Kat yükseltme',
+  nav_bits: 'Bits dükkanı',
   nav_npc: 'NPC & Dükkanlar',
   nav_plan: 'Planlayıcı',
   nav_sell: 'Sat mı, craftla mı?',

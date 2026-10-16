@@ -97,6 +97,10 @@ export function catalogFromFile(f: CatalogFile): Catalog {
     name: (id: string) => items[id]?.name || deriveName(id),
     shops: parseShops(f.shops),
     bookRule: (base: string) => books.get(base) ?? null,
+    kat: [],
+    petLeveling: null,
+    petNames: {},
+    untradeable: new Set<string>(),
   };
 }
 

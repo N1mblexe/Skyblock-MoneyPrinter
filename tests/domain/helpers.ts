@@ -50,6 +50,10 @@ export function buildCatalog(f: CatalogFile): Catalog {
     name: (id) => items[id]?.name || deriveName(id),
     shops: [],
     bookRule: () => null,
+    kat: [],
+    petLeveling: null,
+    petNames: {},
+    untradeable: new Set<string>(),
   };
 }
 

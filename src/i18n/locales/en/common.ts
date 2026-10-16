@@ -109,6 +109,8 @@ export const common = {
   nav_craft: 'Craft',
   nav_forge: 'Forge',
   nav_fusion: 'Fusion',
+  nav_kat: 'Kat upgrades',
+  nav_bits: 'Bits shop',
   nav_npc: 'NPC & Shops',
   nav_plan: 'Planner',
   nav_sell: 'Sell or craft?',

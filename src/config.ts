@@ -137,6 +137,61 @@ export const AH = {
     claimFloor: 1_000_000,
     derpyClaimMul: 4,
   },
+  /** scan v3+: lowestBin also holds `${petKey}${petMaxSuffix}` for max-level listings (e.g. `ENDERMAN;4@MAX`) */
+  petMaxSuffix: '@MAX',
+} as const;
+
+/**
+ * Kat pet upgrades (src/domain/kat.ts). Rules from hypixelskyblock.minecraft.wiki/w/Kat (checked 2026-10): the coin
+ * cost drops 0.3 % per pet level, XP is kept (the level is recomputed at the new rarity), a Kat Flower skips 1 day and
+ * a Kat Bouquet 5 days, and each target rarity needs a Taming level.
+ */
+export const KAT = {
+  levelDiscount: 0.003,
+  flowerId: 'KAT_FLOWER',
+  flowerHours: 24,
+  bouquetId: 'KAT_BOUQUET',
+  bouquetHours: 120,
+  tierBoostId: 'PET_ITEM_TIER_BOOST',
+  /** target rarity index -> Taming level Kat asks for */
+  tamingReq: { 1: 1, 2: 5, 3: 10, 4: 20, 5: 25 } as Readonly<Record<number, number>>,
+  /** fewer BIN listings than this on either side adds a thin-market flag */
+  minCount: 3,
+} as const;
+
+/**
+ * Bits shop (src/domain/bits.ts). A Booster Cookie gives 4,800 bits times the fame-rank multiplier
+ * (hypixelskyblock.minecraft.wiki/w/Fame_Ranks/Table, checked 2026-10): [rank, fame needed, multiplier].
+ */
+export const BITS = {
+  currency: 'SKYBLOCK_BIT',
+  cookieId: 'BOOSTER_COOKIE',
+  perCookie: 4800,
+  fameRanks: [
+    ['New Player', 0, 1],
+    ['Settler', 20_000, 1.1],
+    ['Citizen', 80_000, 1.2],
+    ['Contributor', 200_000, 1.3],
+    ['Philanthropist', 400_000, 1.4],
+    ['Patron', 800_000, 1.6],
+    ['Famous Player', 1_500_000, 1.8],
+    ['Attache', 3_000_000, 1.9],
+    ['Ambassador', 10_000_000, 2],
+    ['Statesperson', 20_000_000, 2.04],
+    ['Senator', 33_000_000, 2.08],
+    ['Dignitary', 50_000_000, 2.12],
+    ['Councilor', 72_000_000, 2.16],
+    ['Minister', 100_000_000, 2.2],
+    ['Premier', 135_000_000, 2.22],
+    ['Chancellor', 178_000_000, 2.24],
+    ['Supreme', 230_000_000, 2.26],
+    ['Overseer', 250_000_000, 2.28],
+    ['Regent', 290_000_000, 2.3],
+    ['Viceroy', 330_000_000, 2.32],
+    ['Sovereign', 370_000_000, 2.34],
+    ['Archon', 410_000_000, 2.36],
+    ['Imperator', 450_000_000, 2.38],
+  ] as readonly (readonly [string, number, number])[],
 } as const;
 
 /** AH flip finder (src/domain/ahFlips.ts): buy the lowest BIN, relist just under the second-lowest. */
@@ -174,7 +229,7 @@ export const HOTKEYS = {
   star: ['s'],
   export: ['e'],
   close: ['Escape'],
-  go: { overview: 'g o', flip: 'g f', ahflip: 'g a', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', fusion: 'g u', plan: 'g p', sell: 'g v', trades: 'g t', watch: 'g w' },
+  go: { overview: 'g o', flip: 'g f', ahflip: 'g a', craft: 'g c', forge: 'g h', books: 'g b', npc: 'g n', kat: 'g k', bits: 'g i', fusion: 'g u', plan: 'g p', sell: 'g v', trades: 'g t', watch: 'g w' },
 } as const;
 
 // ---- localStorage keys
@@ -183,6 +238,7 @@ export const LS_FUSION = 'bazaarMasasi.fusion';
 export const LS_VIEWPREFS = 'bazaarMasasi.view.'; // + view id
 export const LS_WATCH = 'bazaarMasasi.watch';
 export const LS_SELL = 'bazaarMasasi.sell';
+export const LS_BITS = 'bazaarMasasi.bits';
 export const LS_ORDERS = 'bazaarMasasi.orders';
 export const LS_OPP_ALERTS = 'bazaarMasasi.oppAlerts';
 export const LS_JOURNAL = 'bazaarMasasi.journal';
