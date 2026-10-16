@@ -200,7 +200,7 @@ describe('a11y invariants', () => {
     }
     // the checks actually ran against something
     expect(tables).toBeGreaterThanOrEqual(5);
-    expect([...tabbableTables].sort()).toEqual(['craft', 'flip', 'forge', 'npc', 'plan', 'watch']);
+    expect([...tabbableTables].sort()).toEqual(['bits', 'craft', 'flip', 'forge', 'npc', 'plan', 'watch']);
     expect(filterControls).toBeGreaterThan(10);
     expect(problems).toEqual([]);
     expectNoConsoleErrors(b);
