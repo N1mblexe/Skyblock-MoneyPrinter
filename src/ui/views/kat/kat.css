@@ -1,0 +1,77 @@
+/* Kat upgrades (scoped under .kat-view; theme tokens only) */
+.kat-view {
+  gap: var(--s-3);
+  min-width: 0;
+}
+.kat-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.kat-head h1 {
+  margin: 0;
+  font-size: var(--fs-2xl);
+}
+.kat-head h1:focus {
+  outline: none;
+}
+.kat-intro {
+  margin: 0;
+}
+.kat-view .kat-state[hidden],
+.kat-view .tbl[hidden],
+.kat-view .kat-tools[hidden] {
+  display: none;
+}
+.kat-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-3);
+}
+.kat-detail {
+  display: grid;
+  gap: var(--s-3);
+}
+.kat-detail .kat-badges,
+.kat-detail .kat-actions {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.kat-detail .kat-sub,
+.kat-step h3 {
+  margin: 0;
+  font-size: var(--fs-lg);
+}
+.kat-steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--s-2);
+}
+.kat-step {
+  display: grid;
+  gap: var(--s-1);
+  padding: var(--s-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.kat-items {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: var(--s-1);
+}
+.kat-items li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.kat-items .num {
+  margin-left: auto;
+}
