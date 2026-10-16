@@ -2,7 +2,7 @@ import type { Messages } from '../en/index.ts';
 
 export const plan: Messages['plan'] = {
   title: 'Planlayıcı',
-  intro: 'Sermayeni ve sipariş slotlarını flip, craft, zincir, kitap ve NPC fırsatları arasında saatlik kârı en yükseğe çıkaracak şekilde paylaştırır.',
+  intro: 'Sermayeni ve sipariş slotlarını flip, craft, zincir, kitap, NPC ve Kat fırsatları arasında saatlik kârı en yükseğe çıkaracak şekilde paylaştırır.',
 
   // inputs
   capital: 'Sermaye (coin)',
@@ -18,6 +18,7 @@ export const plan: Messages['plan'] = {
   kindChain: 'Zincir',
   kindBook: 'Kitap',
   kindNpc: 'NPC',
+  kindKat: 'Kat',
   fillModel: 'Dolum modeli: {v}',
   openSettings: 'Ayarlarda değiştir',
   inputsAria: 'Plan girdileri',
@@ -64,9 +65,11 @@ export const plan: Messages['plan'] = {
   why_volume: 'hacimle sınırlı',
   why_share: 'sermayenin %{pct} sınırında',
   why_capital: 'kalan sermayeyi kullanıyor',
+  why_kat: 'Kat\'ta tek pet',
   whyLong_volume: 'Pazarın bir döngüde doldurabileceği adedin tamamı ({n}) alındı; daha fazlası dolmaz.',
   whyLong_share: 'Tek bir ürüne sermayenin en fazla %{pct} kadarı ayrılır; bu sınıra ulaştı.',
   whyLong_capital: 'Daha iyi fırsatlardan sonra kalan sermaye buna gitti; sermaye artarsa büyür.',
+  whyLong_kat: 'Kat aynı anda yalnızca bir peti yükseltir; plan en fazla bir Kat yükseltmesi içerir.',
 
   // detail panel
   detailAlloc: 'Dağılım',
@@ -98,6 +101,7 @@ export const plan: Messages['plan'] = {
   tab_chain: 'Craft zincirleri',
   tab_book: 'Kitaplar',
   tab_npc: 'NPC',
+  tab_kat: 'Kat yükseltme',
   watch: 'İzle',
   unwatch: 'İzlemeyi bırak',
 

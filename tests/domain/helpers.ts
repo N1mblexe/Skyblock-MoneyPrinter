@@ -50,6 +50,10 @@ export function buildCatalog(f: CatalogFile): Catalog {
     name: (id) => items[id]?.name || deriveName(id),
     shops: [],
     bookRule: () => null,
+    kat: [],
+    petLeveling: null,
+    petNames: {},
+    untradeable: new Set<string>(),
   };
 }
 
@@ -112,6 +116,7 @@ export const baseSettings: Settings = {
   density: 'comfortable',
   notify: false,
   ahEnabled: true,
+  taming: 60,
 };
 
 export function ctx(over: Partial<Settings> = {}, extra: Partial<CalcCtx> = {}): CalcCtx {

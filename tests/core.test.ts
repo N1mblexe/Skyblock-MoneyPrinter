@@ -25,6 +25,11 @@ describe('settings', () => {
     expect(s.capital).toBe(defaultSettings.capital);
     expect(s.share).toBe(defaultSettings.share);
     expect(s.lang).toBe('en');
+    // Taming: an integer 0..60, default 60 (no limit)
+    expect(defaultSettings.taming).toBe(60);
+    expect(sanitizeSettings({ taming: 0 }).taming).toBe(0);
+    expect(sanitizeSettings({ taming: 25 }).taming).toBe(25);
+    for (const bad of [61, -1, 2.5, '20', NaN, null]) expect(sanitizeSettings({ taming: bad }).taming).toBe(60);
   });
 });
 

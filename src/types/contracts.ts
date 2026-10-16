@@ -110,6 +110,14 @@ export interface CatalogFile {
   shops?: CatalogShopOffer[];
   /** v2 */
   books?: Record<string, CatalogBookRule>;
+  /** v2: Kat pet upgrade steps (NEU katgrade recipes); file shape owned by the catalog build */
+  kat?: unknown;
+  /** v2: pet XP table (NEU constants/pets.json) */
+  petLeveling?: unknown;
+  /** v2: pet type -> display name (NEU constants/pets.json id_to_display_name) */
+  petNames?: Record<string, string>;
+  /** v2: item ids that cannot be traded (e.g. bits-shop sacks); hand-kept in scripts/data/bits-rules.json */
+  untradeable?: string[];
 }
 
 export interface ItemInfo {
@@ -130,6 +138,29 @@ export interface ShopOffer {
   costQty: number;
   output: string;
   outQty: number;
+}
+
+/** One Kat upgrade: pet `${pet};${from}` -> `${pet};${to}` (rarity index, COMMON=0 ... MYTHIC=5). */
+export interface KatStep {
+  /** pet type, e.g. OCELOT */
+  pet: string;
+  from: number;
+  to: number;
+  /** base coin cost before the per-level discount */
+  coins: number;
+  /** base wait time in hours */
+  hours: number;
+  items: { id: string; qty: number }[];
+}
+
+/** Pet XP curve: total XP for level L at rarity R = sum of levels[offsets[R] .. offsets[R] + L - 2]. */
+export interface PetLeveling {
+  /** rarity name (COMMON, ..., MYTHIC) -> start index into `levels` */
+  offsets: Record<string, number>;
+  /** XP needed for each next level */
+  levels: number[];
+  /** per-pet overrides (e.g. GOLDEN_DRAGON goes to 200) */
+  custom: Record<string, { levels?: number[]; maxLevel?: number; append?: boolean }>;
 }
 
 export interface BookRule {
@@ -160,6 +191,14 @@ export interface Catalog {
   shops: ShopOffer[];
   /** base = 'ENCHANTMENT_<BASE>' (no level suffix); null when unknown */
   bookRule(base: string): BookRule | null;
+  /** Kat upgrade steps (empty for older catalogs) */
+  kat: KatStep[];
+  /** null for older catalogs */
+  petLeveling: PetLeveling | null;
+  /** pet type -> display name */
+  petNames: Record<string, string>;
+  /** items that can't be sold to other players */
+  untradeable: ReadonlySet<string>;
 }
 
 // ---------------------------------------------------------------- Settings
@@ -168,6 +207,7 @@ export type SellMode = 'offer' | 'insta';
 export type { Lang } from '../i18n/languages.ts';
 import type { Lang } from '../i18n/languages.ts';
 import type { Msg } from '../i18n/errors.ts';
+import type { KatRow } from '../domain/kat.ts';
 export type Theme = 'auto' | 'light' | 'dark';
 export type TaxRate = 0.0125 | 0.01125 | 0.01;
 /** sequential: buy the batch, then sell it; pipelined: buy and sell overlap (needs 2x capital) */
@@ -199,6 +239,8 @@ export interface Settings {
   notify: boolean;
   /** scan the auction house for lowest BIN prices */
   ahEnabled: boolean;
+  /** your Taming level (0..KAT.maxTaming): Kat upgrades whose target rarity needs more are left out */
+  taming: number;
 }
 
 // ---------------------------------------------------------------- Domain results
@@ -221,7 +263,7 @@ export interface Throughput {
   batchQty: number;
   capitalUsed: number;
   fillHours: number;
-  limitedBy: 'volume' | 'capital' | 'depth' | 'forge' | 'npcLimit' | 'slots';
+  limitedBy: 'volume' | 'capital' | 'depth' | 'forge' | 'npcLimit' | 'slots' | 'kat';
   /** hours to buy / sell one batch */
   buyHours?: number;
   sellHours?: number;
@@ -442,7 +484,7 @@ export interface MarketStat {
   sellVolTrend: number | null;
 }
 
-export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc';
+export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc' | 'kat';
 
 export interface Opportunity {
   kind: OpportunityKind;
@@ -450,6 +492,8 @@ export interface Opportunity {
   key: string;
   /** primary item id (one opportunity per id is allocated) */
   id: string;
+  /** shared by opportunities that can't run side by side (one per group is allocated; default: the id), e.g. 'kat' */
+  group?: string;
   name: string;
   /** coins tied up per unit */
   unitCost: number;
@@ -588,10 +632,12 @@ export interface AhPrice {
   uuid?: string;
   /** display name of the cheapest listing (pets: "[Lvl 100] Ender Dragon") */
   name?: string;
+  /** pets (scan v3+): total XP of the cheapest listing */
+  exp?: number;
 }
 
 export interface AhSnapshot {
-  /** 2 = lowestBin entries carry next / uuid / name; older cached scans have none */
+  /** 2 = lowestBin entries carry next / uuid / name; 3 = pets also carry exp and `@MAX` (max-level) keys */
   v?: number;
   fetchedAt: number;
   /** Hypixel lastUpdated of page 0 */
@@ -680,7 +726,7 @@ export interface Store<S> {
   subscribe(fn: (s: S, prev: S) => void): () => void;
 }
 
-export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'fusion' | 'plan' | 'sell' | 'trades' | 'watch' | 'item';
+export type RouteId = 'overview' | 'flip' | 'ahflip' | 'craft' | 'forge' | 'books' | 'npc' | 'kat' | 'bits' | 'fusion' | 'plan' | 'sell' | 'trades' | 'watch' | 'item';
 
 export interface Route {
   id: RouteId;
@@ -733,6 +779,8 @@ export interface Derived {
   books(): BookRow[];
   shops(): ShopRow[];
   fusion(): FusionRow[];
+  /** Kat upgrade runs without skip items, for settings.taming; [] without a v3+ AH scan */
+  kat(): KatRow[];
   opportunities(): Opportunity[];
   marketStats(): ReadonlyMap<string, MarketStat>;
   calcCtx(): CalcCtx | null;

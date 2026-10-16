@@ -1,12 +1,14 @@
 // View registry + navigation model (owned by the lead; each view lives in its own folder).
 import type { RouteId, View } from '../../types/contracts.ts';
 import { createAhFlipView } from './ahflip/ahflipView.ts';
+import { createBitsView } from './bits/bitsView.ts';
 import { createBooksView } from './books/booksView.ts';
 import { createCraftView } from './craft/craftView.ts';
 import { createFlipView } from './flip/flipView.ts';
 import { createForgeView } from './forge/forgeView.ts';
 import { createFusionView } from './fusion/fusionView.ts';
 import { createItemView } from './item/itemView.ts';
+import { createKatView } from './kat/katView.ts';
 import { createNpcView } from './npc/npcView.ts';
 import { createOverviewView } from './overview/overviewView.ts';
 import { createPlanView } from './plan/planView.ts';
@@ -22,6 +24,8 @@ export const views: Record<RouteId, () => View> = {
   forge: createForgeView,
   books: createBooksView,
   npc: createNpcView,
+  kat: createKatView,
+  bits: createBitsView,
   fusion: createFusionView,
   plan: createPlanView,
   sell: createSellView,
@@ -48,6 +52,8 @@ export const NAV: NavEntry[] = [
   { id: 'forge', group: 'production' },
   { id: 'fusion', group: 'production' },
   { id: 'npc', group: 'trade' },
+  { id: 'kat', group: 'trade' },
+  { id: 'bits', group: 'trade' },
   { id: 'plan', group: 'tools' },
   { id: 'sell', group: 'tools' },
   { id: 'trades', group: 'tools' },

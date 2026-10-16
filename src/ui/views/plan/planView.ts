@@ -28,7 +28,7 @@ export const PLAN_DEBOUNCE_MS = 300;
 /** Window event the shell may listen to for opening the settings drawer. */
 export const OPEN_SETTINGS_EVENT = 'bm:open-settings';
 
-const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', forge: 'kindForge', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc' } as const;
+const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', forge: 'kindForge', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc', kat: 'kindKat' } as const;
 
 interface Memo {
   opps: readonly Opportunity[];
@@ -223,12 +223,15 @@ export function createPlanView(): View {
 
   function whyShort(r: PlanRow, o: AllocateOptions): string {
     const rank = r.rank === 1 ? t('whyBest') : t('whyRank', { n: r.rank });
-    return `${rank} · ${t(`why_${r.bound}`, { pct: pctOf(o) })}`;
+    return `${rank} · ${t(`why_${whyKey(r)}`, { pct: pctOf(o) })}`;
   }
 
   function whyLong(r: PlanRow, o: AllocateOptions): string {
-    return t(`whyLong_${r.bound}`, { pct: pctOf(o), n: fmtInt(Math.floor(r.opp.maxUnits)) });
+    return t(`whyLong_${whyKey(r)}`, { pct: pctOf(o), n: fmtInt(Math.floor(r.opp.maxUnits)) });
   }
+
+  /** A Kat run's volume bound is Kat itself: one pet per upgrade. */
+  const whyKey = (r: PlanRow): string => (r.opp.kind === 'kat' && r.bound === 'volume' ? 'kat' : r.bound);
 
   function kindBadge(k: Opportunity['kind']): string {
     return `<span class="badge plan-kind plan-kind-${k}">${esc(t(KIND_LABEL[k]))}</span>`;
@@ -240,7 +243,9 @@ export function createPlanView(): View {
     const o = r.opp;
     const a = r.alloc;
     const pipelined = st().settings.fillModel === 'pipelined';
-    const buyCost = pipelined ? o.unitCost / 2 : o.unitCost;
+    // Kat runs are never doubled: the AH buy is instant (toOpportunities' capMul)
+    const doubled = pipelined && o.kind !== 'kat';
+    const buyCost = doubled ? o.unitCost / 2 : o.unitCost;
     const flags = o.risk.flags.length
       ? `<ul class="plan-flags">${o.risk.flags.map((f) => `<li><span class="mono small muted">${esc(f)}</span> ${esc(riskFlagText(f))}</li>`).join('')}</ul>`
       : `<p class="note small">${esc(t('dRiskNone'))}</p>`;
@@ -249,9 +254,13 @@ export function createPlanView(): View {
       `<div class="plan-detail" data-testid="plan-detail">` +
       `<p class="plan-detail-badges">${kindBadge(o.kind)} ${riskBadge(o.risk)} <span class="id-sub">${esc(o.id)}</span></p>` +
       `<p class="plan-detail-links"><a class="btn btn-sm" data-testid="plan-source" href="${esc(sourceHref(o))}">${esc(t('openSource', { tab }))} →</a> ` +
-      `<a class="btn btn-sm btn-ghost" href="#/item/${encodeURIComponent(o.id)}">${esc(t('openItem'))} →</a> ` +
-      // sell is the net per unit (after tax and fees), so the journal entry is logged untaxed
-      `<a class="btn btn-sm btn-ghost" data-testid="plan-log" href="#/trades?${new URLSearchParams({ view: 'journal', add: o.id, qty: String(Math.max(1, Math.round(a.units))), buy: String(Math.round(buyCost * 10) / 10), sell: String(Math.round((buyCost + o.profitPerUnit) * 10) / 10), tax: '0', src: 'plan' })}">${esc(t('logTrade'))} →</a></p>` +
+      // a Kat run's id is an AH pet key: no item page, and the journal logs items, not a buy + upgrade + sell run
+      (o.kind === 'kat'
+        ? ''
+        : `<a class="btn btn-sm btn-ghost" href="#/item/${encodeURIComponent(o.id)}">${esc(t('openItem'))} →</a> ` +
+          // sell is the net per unit (after tax and fees), so the journal entry is logged untaxed
+          `<a class="btn btn-sm btn-ghost" data-testid="plan-log" href="#/trades?${new URLSearchParams({ view: 'journal', add: o.id, qty: String(Math.max(1, Math.round(a.units))), buy: String(Math.round(buyCost * 10) / 10), sell: String(Math.round((buyCost + o.profitPerUnit) * 10) / 10), tax: '0', src: 'plan' })}">${esc(t('logTrade'))} →</a>`) +
+      `</p>` +
       `<h3>${esc(t('detailAlloc'))}</h3>` +
       kv([
         [t('dUnits'), esc(fmtInt(a.units)), 'units'],
@@ -273,7 +282,7 @@ export function createPlanView(): View {
         [t('dOppSlots'), esc(fmtInt(o.slots)), 'oppSlots'],
         [t('dOppPph'), esc(fmtCoins(o.profitPerUnit * o.unitsPerHour)), 'oppPph'],
       ]) +
-      (pipelined ? `<p class="note small">${esc(t('dUnitCostPipe'))}</p>` : '') +
+      (doubled ? `<p class="note small">${esc(t('dUnitCostPipe'))}</p>` : '') +
       `<h3>${esc(t('dRiskFlags'))}</h3>${flags}</div>`
     );
   }
@@ -293,7 +302,7 @@ export function createPlanView(): View {
         key: 'item',
         label: () => t('colItem'),
         get: (r) => r.opp.name,
-        html: (r) => itemCell(r.opp.id, r.opp.name, true),
+        html: (r) => itemCell(r.opp.id, r.opp.name, r.opp.kind !== 'kat'),
         csv: (r) => r.opp.id,
         cls: 'name-cell',
         priority: 0,
@@ -333,6 +342,8 @@ export function createPlanView(): View {
   }
 
   function watchBtn(r: PlanRow): string {
+    // the watchlist holds bazaar / AH item ids, not Kat runs
+    if (r.opp.kind === 'kat') return '';
     const on = ctx!.watch.has(r.opp.id);
     const label = on ? t('unwatch') : t('watch');
     return `<button type="button" class="btn btn-ghost btn-sm plan-star" data-action="watch" aria-pressed="${on}" aria-label="${esc(

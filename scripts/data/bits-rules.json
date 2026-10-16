@@ -1,0 +1,35 @@
+{
+  "$source": "Hand-kept Bits Shop (Elizabeth) corrections, read by scripts/build-data.ts. `extraOffers` are added to catalog.shops as Elizabeth offers paid in SKYBLOCK_BIT; `auctionable` ids are kept in the bits shop (and marked `ah`) although the Hypixel items API does not list them; `untradeable` ids stay in the bits shop but go to catalog.untradeable (and lose `ah`), so the Bits page shows them as not sellable.",
+  "$policy": "Add an entry only after checking it in game or on a current wiki page, and put that page in `source`. Extra offers are skipped (with a warning) once NEU sells the same output for bits.",
+  "$checked": [
+    "2026-10-16: the NEU repo has 55 SKYBLOCK_BIT npc_shop offers (all ELIZABETH_NPC). Absorb I is on the Bits Shop page (4,000 bits) but not in NEU.",
+    "2026-10-16: the eight abicases (all ids on the Abicases page) and Pure Black/White Dye are missing from the Hypixel items API; their wiki pages say Tradeable: Yes, Auctionable: Yes.",
+    "2026-10-16: the five sacks below say Tradeable: No, Auctionable: No on their wiki pages. Pocket Sack-in-a-Sack is not listed: its page says Tradeable: Yes, Auctionable: Yes.",
+    "The official wiki (wiki.hypixel.net) closed in July 2026; NEU now links https://hypixelskyblock.minecraft.wiki."
+  ],
+  "$notes": [
+    "Block Zapper: NEU says 5,000 bits; a wiki page was reported at 15,000, but the Bits Shop page (2026-10-16) also says 5,000. NEU is kept."
+  ],
+  "extraOffers": [
+    { "output": "ENCHANTMENT_ABSORB_1", "bits": 4000, "source": "https://hypixelskyblock.minecraft.wiki/w/Bits_Shop/UI" }
+  ],
+  "auctionable": [
+    { "id": "ABICASE_BLUE_AQUA", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "ABICASE_BLUE_BLUE", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "ABICASE_BLUE_GREEN", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "ABICASE_BLUE_RED", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "ABICASE_BLUE_YELLOW", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "ABICASE_REZAR", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "ABICASE_SUMSUNG_1", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "ABICASE_SUMSUNG_2", "source": "https://hypixelskyblock.minecraft.wiki/w/Abicases" },
+    { "id": "DYE_PURE_BLACK", "source": "https://hypixelskyblock.minecraft.wiki/w/Pure_Black_Dye" },
+    { "id": "DYE_PURE_WHITE", "source": "https://hypixelskyblock.minecraft.wiki/w/Pure_White_Dye" }
+  ],
+  "untradeable": [
+    { "id": "CRYSTAL_HOLLOWS_SACK", "source": "https://hypixelskyblock.minecraft.wiki/w/Crystal_Hollows_Sack" },
+    { "id": "DWARVEN_MINES_SACK", "source": "https://hypixelskyblock.minecraft.wiki/w/Dwarven_Sack" },
+    { "id": "FLOWER_SACK", "source": "https://hypixelskyblock.minecraft.wiki/w/Flower_Sack" },
+    { "id": "LARGE_DUNGEON_SACK", "source": "https://hypixelskyblock.minecraft.wiki/w/Dungeon_Sack" },
+    { "id": "RUNE_SACK", "source": "https://hypixelskyblock.minecraft.wiki/w/Rune_Sack" }
+  ]
+}

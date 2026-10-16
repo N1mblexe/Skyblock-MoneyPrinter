@@ -65,6 +65,10 @@ describe('catalogFromFile v1 compatibility', () => {
   it('v1 has no shops, no book rules and no v2 item fields', () => {
     expect(file.v).toBe(1);
     expect(cat.shops).toEqual([]);
+    expect(cat.kat).toEqual([]);
+    expect(cat.petLeveling).toBeNull();
+    expect(cat.petNames).toEqual({});
+    expect(cat.untradeable.size).toBe(0);
     expect(cat.bookRule('ENCHANTMENT_SHARPNESS')).toBeNull();
     for (const info of Object.values(cat.items)) {
       expect(info.category).toBeUndefined();
@@ -121,6 +125,68 @@ describe('catalogFromFile v2', () => {
   });
 });
 
+describe('catalogFromFile Kat / pets / untradeable', () => {
+  const f2 = validateCatalogFile(fixtureV2);
+  const withPets = (x: Partial<CatalogFile>) => catalogFromFile({ ...f2, ...x });
+
+  it('older v2 catalogs without the fields parse to empty values', () => {
+    const c = catalogFromFile(f2);
+    expect(c.kat).toEqual([]);
+    expect(c.petLeveling).toBeNull();
+    expect(c.petNames).toEqual({});
+    expect(c.untradeable.size).toBe(0);
+  });
+
+  it('kat: seconds -> hours, missing items -> [], malformed steps dropped', () => {
+    const c = withPets({
+      kat: [
+        { p: 'OCELOT', f: 1, t: 2, c: 10000, s: 600, i: [['ENCHANTED_JUNGLE_LOG', 8], ['BAD', 0], [3, 1]] },
+        { p: 'TIGER', f: 0, t: 1, c: 15000, s: 86400 },
+        { p: 'ENDERMAN', f: 3, t: 4, c: 0, s: 0, i: [] },
+        { p: '', f: 0, t: 1, c: 1, s: 1 },
+        { p: 'X', f: 2, t: 2, c: 1, s: 1 },
+        { p: 'X', f: 0.5, t: 1, c: 1, s: 1 },
+        { p: 'X', f: 0, t: 1, c: -1, s: 1 },
+        { p: 'X', f: 0, t: 1, c: 1, s: 'x' },
+        { p: 'X', f: 0, t: 1, c: 1, s: 1, i: 'x' },
+        'junk',
+      ],
+    });
+    expect(c.kat).toEqual([
+      { pet: 'OCELOT', from: 1, to: 2, coins: 10000, hours: 600 / 3600, items: [{ id: 'ENCHANTED_JUNGLE_LOG', qty: 8 }] },
+      { pet: 'TIGER', from: 0, to: 1, coins: 15000, hours: 24, items: [] },
+      { pet: 'ENDERMAN', from: 3, to: 4, coins: 0, hours: 0, items: [] },
+    ]);
+    expect(withPets({ kat: { p: 'OCELOT' } }).kat).toEqual([]);
+  });
+
+  it('petLeveling: offsets, levels and custom tables; unusable shapes -> null', () => {
+    const c = withPets({
+      petLeveling: {
+        o: { COMMON: 0, LEGENDARY: 20, BAD: -1, ALSO: 'x' },
+        l: [100, 110],
+        c: { GOLDEN_DRAGON: { l: [5, 6], a: 1, m: 200 }, REPLACED: { l: [7] }, CAPPED: { m: 50 }, BAD: { l: [1, -1], m: 0 }, JUNK: 3 },
+      },
+    });
+    expect(c.petLeveling).toEqual({
+      offsets: { COMMON: 0, LEGENDARY: 20 },
+      levels: [100, 110],
+      custom: { GOLDEN_DRAGON: { levels: [5, 6], append: true, maxLevel: 200 }, REPLACED: { levels: [7] }, CAPPED: { maxLevel: 50 } },
+    });
+    expect(withPets({ petLeveling: { l: [100] } }).petLeveling).toEqual({ offsets: {}, levels: [100], custom: {} });
+    for (const bad of [null, [], { l: [] }, { l: [1, 'x'] }, { o: { COMMON: 0 } }]) expect(withPets({ petLeveling: bad }).petLeveling).toBeNull();
+  });
+
+  it('petNames and untradeable keep only strings', () => {
+    const c = withPets({ petNames: { OCELOT: 'Ocelot', BAD: 3, EMPTY: '' } as any, untradeable: ['RUNE_SACK', 5, ''] as any });
+    expect(c.petNames).toEqual({ OCELOT: 'Ocelot' });
+    expect([...c.untradeable]).toEqual(['RUNE_SACK']);
+    const d = withPets({ petNames: ['x'] as any, untradeable: 'RUNE_SACK' as any });
+    expect(d.petNames).toEqual({});
+    expect(d.untradeable.size).toBe(0);
+  });
+});
+
 describe('loadCatalog', () => {
   it('fetches and builds', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(fixture))));
@@ -170,5 +236,34 @@ describe('generated public/data/catalog.json', () => {
     expect(copper.length).toBeGreaterThanOrEqual(7);
     expect(cat.shops.every((o) => o.currency !== 'SKYBLOCK_COIN')).toBe(true);
     expect(Object.values(cat.items).filter((i) => i.shard).length).toBeGreaterThan(100);
+  });
+
+  it('has Kat steps, the pet XP table and pet names', () => {
+    expect(cat.kat.length).toBeGreaterThanOrEqual(200);
+    const step = (pet: string, from: number) => cat.kat.find((s) => s.pet === pet && s.from === from);
+    expect(step('OCELOT', 1)).toEqual({ pet: 'OCELOT', from: 1, to: 2, coins: 10000, hours: 600 / 3600, items: [{ id: 'ENCHANTED_JUNGLE_LOG', qty: 8 }] });
+    expect(step('ENDERMAN', 3)).toEqual({ pet: 'ENDERMAN', from: 3, to: 4, coins: 40_000_000, hours: 288, items: [{ id: 'ENCHANTED_EYE_OF_ENDER', qty: 8 }] });
+    expect(cat.kat.every((s) => s.to <= 5)).toBe(true);
+    for (const s of cat.kat) {
+      expect(cat.petNames[s.pet]).toBeTruthy();
+      for (const i of s.items) expect(cat.items[i.id]).toBeDefined();
+    }
+    expect(cat.petLeveling!.levels).toHaveLength(119);
+    expect(cat.petLeveling!.offsets).toMatchObject({ COMMON: 0, UNCOMMON: 6, RARE: 11, EPIC: 16, LEGENDARY: 20, MYTHIC: 20 });
+    expect(cat.petLeveling!.custom.GOLDEN_DRAGON).toMatchObject({ append: true, maxLevel: 200 });
+  });
+
+  it('has the whole bits shop, every output named, untradeable sacks without ah', () => {
+    const bits = cat.shops.filter((o) => o.currency === 'SKYBLOCK_BIT');
+    expect(bits.length).toBeGreaterThanOrEqual(50);
+    const price = (id: string) => bits.find((o) => o.output === id)?.costQty;
+    expect(price('GOD_POTION_2')).toBe(1500);
+    expect(price('ENCHANTMENT_ABSORB_1')).toBe(4000);
+    expect(price('ENCHANTMENT_EXPERTISE_1')).toBe(4000);
+    expect(price('SHARD_BITBUG')).toBe(5000);
+    for (const o of bits) expect(cat.items[o.output]?.name).toBeTruthy();
+    expect([...cat.untradeable].sort()).toEqual(['CRYSTAL_HOLLOWS_SACK', 'DWARVEN_MINES_SACK', 'FLOWER_SACK', 'LARGE_DUNGEON_SACK', 'RUNE_SACK']);
+    for (const id of cat.untradeable) expect(cat.items[id]!.auctionable).toBeUndefined();
+    expect(cat.items.ABICASE_REZAR!.auctionable).toBe(true);
   });
 });

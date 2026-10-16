@@ -3,8 +3,9 @@ import { MAX_ORDER_UNITS } from '../../src/config.ts';
 import { computeChains } from '../../src/domain/chains.ts';
 import { computeCrafts } from '../../src/domain/craft.ts';
 import { computeFlips } from '../../src/domain/flip.ts';
+import type { KatRow } from '../../src/domain/kat.ts';
 import { computeNpcFlips } from '../../src/domain/npc.ts';
-import { allocate, toOpportunities, uncappedRate, type AllocateOptions, type OpportunitySources } from '../../src/domain/optimizer.ts';
+import { allocate, KAT_GROUP, toOpportunities, uncappedRate, type AllocateOptions, type OpportunitySources } from '../../src/domain/optimizer.ts';
 import type {
   BookRow,
   CraftRow,
@@ -100,7 +101,7 @@ function bruteForce(opps: Opportunity[], o: AllocateOptions): number {
   let best = 0;
   for (let mask = 0; mask < 1 << el.length; mask++) {
     const sub = el.filter((_, i) => mask & (1 << i));
-    if (new Set(sub.map((x) => x.id)).size !== sub.length) continue;
+    if (new Set(sub.map((x) => x.group ?? x.id)).size !== sub.length) continue;
     if (sub.reduce((s, x) => s + x.slots, 0) > o.slots) continue;
     best = Math.max(best, greedyFill(sub, o));
   }
@@ -112,7 +113,7 @@ function checkFeasible(plan: PlanResult, o: AllocateOptions) {
   const tol = 1e-6 * Math.max(1, Number.isFinite(capital) ? capital : 0);
   expect(plan.capitalUsed).toBeLessThanOrEqual(capital + tol);
   expect(plan.slotsUsed).toBeLessThanOrEqual(o.slots);
-  const ids = plan.allocations.map((a) => a.opp.id);
+  const ids = plan.allocations.map((a) => a.opp.group ?? a.opp.id);
   expect(new Set(ids).size).toBe(ids.length);
   let cap = 0;
   let slots = 0;
@@ -134,13 +135,15 @@ function checkFeasible(plan: PlanResult, o: AllocateOptions) {
   expect(plan.profitPerHour).toBeCloseTo(p, 6);
 }
 
-function randomInstance(r: () => number, distinctIds: boolean, equalCost?: number): Opportunity[] {
+function randomInstance(r: () => number, distinctIds: boolean, equalCost?: number, groups = false): Opportunity[] {
   const n = 1 + Math.floor(r() * 10);
   const ids = ['A', 'B', 'C', 'D', 'E', 'F'];
   return Array.from({ length: n }, (_, i) =>
     opp({
       key: `k${String(i).padStart(2, '0')}`,
       id: distinctIds ? `ID${i}` : ids[Math.floor(r() * ids.length)]!,
+      // Kat-like: a shared group across distinct ids
+      ...(groups && r() < 0.4 ? { group: KAT_GROUP } : {}),
       unitCost: equalCost ?? 1 + Math.floor(r() * 1000),
       profitPerUnit: 0.5 + r() * 200,
       unitsPerHour: 1 + r() * 500,
@@ -308,12 +311,65 @@ describe('toOpportunities: craft chains', () => {
   });
 });
 
+describe('toOpportunities: Kat upgrades', () => {
+  const katRow = (key: string, o: Partial<KatRow> = {}): KatRow =>
+    ({
+      key,
+      id: key.split('>')[0]!,
+      pet: key.split(';')[0]!,
+      name: key.split(';')[0]!,
+      capital: 2_000_000,
+      profit: 400_000,
+      margin: 0.2,
+      hours: 25,
+      profitPerHour: 16_000,
+      tp: { unitsPerHour: 1 / 25, batchQty: 1, capitalUsed: 2_000_000, fillHours: 25, limitedBy: 'kat', buyHours: 0, sellHours: 1, slots: 0 },
+      risk: OK,
+      unpriced: [],
+      ...o,
+    }) as KatRow;
+
+  it('one unit per pet, capital = buy + upgrade, no slots, AH-sold, all in the Kat group', () => {
+    const rows = [katRow('ENDERMAN;3>4:max'), katRow('OCELOT;2>4:any'), katRow('BEE;1>2:any', { unpriced: ['X'] }), katRow('BAT;1>2:any', { profit: -5 })];
+    const out = toOpportunities({ ...EMPTY, kat: rows }, { ...baseSettings, fillModel: 'pipelined', cycleHours: 4 });
+    expect(out.map((o) => o.key)).toEqual(['kat:ENDERMAN;3>4:max', 'kat:OCELOT;2>4:any']);
+    // the AH buy is instant, so pipelined does not double it; the cycle length does not scale a 1-pet batch
+    expect(out[0]).toMatchObject({ kind: 'kat', id: 'ENDERMAN;3', unitCost: 2_000_000, profitPerUnit: 400_000, maxUnits: 1, slots: 0, ahSold: true, group: KAT_GROUP });
+    expect(out[0]!.unitsPerHour).toBeCloseTo(1 / 25, 12);
+    expect(toOpportunities({ ...EMPTY, flips: [flipRow('X')] }, baseSettings)[0]!.group).toBeUndefined();
+  });
+
+  it('the allocator runs one Kat upgrade at most, the best one, beside other picks', () => {
+    const rows = [katRow('A;3>4:any', { profit: 300_000 }), katRow('B;3>4:any', { profit: 500_000 }), katRow('C;3>5:any', { profit: 400_000, capital: 1_000_000 })];
+    const opps = [...toOpportunities({ ...EMPTY, kat: rows }, baseSettings), opp({ key: 'flip:F', id: 'F', unitCost: 10, profitPerUnit: 1, slots: 0 })];
+    const o: AllocateOptions = { capital: 1e9, slots: 10, maxShare: 1, excludeSuspect: false };
+    const plan = allocate(opps, o);
+    checkFeasible(plan, o);
+    expect(plan.allocations.map((a) => a.opp.key).sort()).toEqual(['flip:F', 'kat:B;3>4:any']);
+    // capital too short for B: the next best one that fits
+    const small = allocate(opps, { ...o, capital: 1_500_000 });
+    expect(small.allocations.filter((a) => a.opp.kind === 'kat').map((a) => a.opp.key)).toEqual(['kat:C;3>5:any']);
+  });
+
+  it('grouped picks: exact against brute force on small instances', () => {
+    const r = rng(4242);
+    for (let t = 0; t < 100; t++) {
+      const opps = randomInstance(r, true, undefined, true);
+      const o: AllocateOptions = { capital: 0, slots: Infinity, maxShare: 1, excludeSuspect: false };
+      const plan = allocate(opps, o);
+      checkFeasible(plan, o);
+      // unlimited capital and slots: every ungrouped pick plus the best grouped one
+      expect(plan.profitPerHour).toBeCloseTo(bruteForce(opps, o), 6);
+    }
+  });
+});
+
 describe('allocate', () => {
   it('>= 0.9 x brute-force optimum on 200 seeded random instances, always feasible', () => {
     const r = rng(12345);
     let worst = 1;
     for (let t = 0; t < 200; t++) {
-      const opps = randomInstance(r, false);
+      const opps = randomInstance(r, false, undefined, t % 2 === 1);
       const o: AllocateOptions = {
         capital: 100 + Math.floor(r() * 200_000),
         slots: Math.floor(r() * 9),

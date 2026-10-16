@@ -32,6 +32,9 @@ export interface AhFlipRow {
   risk: RiskReport;
 }
 
+/** Scan v3's max-level pet keys (`ENDERMAN;3@MAX`) repeat listings already counted under the plain pet id. */
+export const isPetMaxKey = (id: string): boolean => id.endsWith(AH.petMaxSuffix);
+
 const RARITIES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Mythic'];
 
 /** "ENDER_DRAGON;4" -> "Ender Dragon (Legendary)" from the listing name, else from the id. */
@@ -47,12 +50,12 @@ export interface AhFlipOptions {
   derpy?: boolean;
 }
 
-/** Profitable lowest → second-lowest BIN flips of a scan (needs scan v2: next prices). */
+/** Profitable lowest → second-lowest BIN flips of a scan (needs scan v2: next prices); `@MAX` keys are skipped. */
 export function computeAhFlips(ah: AhSnapshot, catalog: Catalog, o: AhFlipOptions = {}): AhFlipRow[] {
   const variantCats = new Set<string>(AH_FLIP.variantCategories);
   const rows: AhFlipRow[] = [];
   for (const [id, a] of Object.entries(ah.lowestBin)) {
-    if (a.next == null || a.count < AH_FLIP.minCount || !(a.price > 0)) continue;
+    if (a.next == null || a.count < AH_FLIP.minCount || !(a.price > 0) || isPetMaxKey(id)) continue;
     const sellAt = a.next - AH_FLIP.undercut;
     if (!(sellAt > a.price)) continue;
     const profit = ahNet(sellAt, o.derpy) - a.price;

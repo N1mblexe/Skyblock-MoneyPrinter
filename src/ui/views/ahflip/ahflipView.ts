@@ -20,7 +20,7 @@ import {
   type QueryState,
 } from '../../kit/index.ts';
 import './ahflip.css';
-import { AHFLIP_SCHEMA, filterAhFlips, type AhFlipQuery } from './model.ts';
+import { AHFLIP_SCHEMA, ahListingCount, filterAhFlips, type AhFlipQuery } from './model.ts';
 
 export { AHFLIP_SCHEMA, filterAhFlips };
 
@@ -156,7 +156,7 @@ export function createAhFlipView(): View {
     $('.ahf-count').textContent = t('ahflip.count', { n: res.rows.length, total: all.length, count: all.length });
     $('.ahf-scan').textContent = t('ahflip.scanned', {
       age: fmtAge(Date.now() - s.ah!.fetchedAt),
-      n: fmtInt(Object.values(s.ah!.lowestBin).reduce((n, a) => n + a.count, 0)),
+      n: fmtInt(ahListingCount(s.ah!)),
     });
     if (openKey && panel?.isOpen()) {
       const r = all.find((x) => x.id === openKey);

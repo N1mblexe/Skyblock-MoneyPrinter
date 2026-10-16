@@ -1,6 +1,6 @@
 export const plan = {
   title: 'Planner',
-  intro: 'Splits your capital and order slots across flip, craft, chain, book and NPC opportunities to maximize profit per hour.',
+  intro: 'Splits your capital and order slots across flip, craft, chain, book, NPC and Kat opportunities to maximize profit per hour.',
 
   capital: 'Capital (coins)',
   slots: 'Order slots',
@@ -15,6 +15,7 @@ export const plan = {
   kindChain: 'Chains',
   kindBook: 'Books',
   kindNpc: 'NPC',
+  kindKat: 'Kat',
   fillModel: 'Fill model: {v}',
   openSettings: 'Change in settings',
   inputsAria: 'Plan inputs',
@@ -58,9 +59,11 @@ export const plan = {
   why_volume: 'limited by volume',
   why_share: 'capped at {pct}% of capital',
   why_capital: 'uses the remaining capital',
+  why_kat: 'one pet at Kat',
   whyLong_volume: 'Takes every unit the market fills per cycle ({n}); more would not fill.',
   whyLong_share: 'One item gets at most {pct}% of capital, and this one reached it.',
   whyLong_capital: 'Gets the capital left after better opportunities; it grows with more capital.',
+  whyLong_kat: 'Kat upgrades one pet at a time, so the plan runs one Kat upgrade at most.',
 
   detailAlloc: 'Allocation',
   detailOpp: 'Opportunity (estimate)',
@@ -91,6 +94,7 @@ export const plan = {
   tab_chain: 'Craft chains',
   tab_book: 'Books',
   tab_npc: 'NPC',
+  tab_kat: 'Kat upgrades',
   watch: 'Watch',
   unwatch: 'Unwatch',
 

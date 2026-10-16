@@ -1,5 +1,5 @@
 // Settings form for the drawer: Market / Display / Notifications sections bound to store.settings.
-import { ORDER_SLOTS_MAX } from '../../config.ts';
+import { KAT, ORDER_SLOTS_MAX } from '../../config.ts';
 import { LANGUAGES, onLangChange, t } from '../../i18n/index.ts';
 import type { AppState, Density, Lang, Settings, Store, TaxRate, Theme } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
@@ -17,6 +17,7 @@ type FieldName =
   | 'orderSlots'
   | 'npcDailyLimit'
   | 'forgeSlots'
+  | 'taming'
   | 'hideSuspicious'
   | 'autoRefresh'
   | 'ahEnabled'
@@ -82,6 +83,10 @@ function read(name: FieldName, c: Control): Partial<Settings> | null {
       const v = parseNum(c.value);
       return intIn(v, 1, 7) ? { forgeSlots: v } : null;
     }
+    case 'taming': {
+      const v = parseNum(c.value);
+      return intIn(v, 0, KAT.maxTaming) ? { taming: v } : null;
+    }
     case 'orderSlots': {
       const v = parseNum(c.value);
       return intIn(v, 1, ORDER_SLOTS_MAX) ? { orderSlots: v } : null;
@@ -117,6 +122,7 @@ function values(s: Settings): Record<FieldName, string | boolean> {
     orderSlots: String(s.orderSlots),
     npcDailyLimit: String(s.npcDailyLimit),
     forgeSlots: String(s.forgeSlots),
+    taming: String(s.taming),
     hideSuspicious: s.hideSuspicious,
     autoRefresh: s.autoRefresh,
     ahEnabled: s.ahEnabled,
@@ -232,6 +238,7 @@ export function createSettingsForm(store: Store<AppState>): SettingsForm {
           num('orderSlots', t('common.orderSlots'), `min="1" max="${ORDER_SLOTS_MAX}" step="1"`, t('common.orderSlotsHelp')) +
           num('npcDailyLimit', t('common.npcDailyLimit'), 'min="1" step="1"', t('common.npcDailyLimitHelp')) +
           num('forgeSlots', t('common.forgeSlots'), 'min="1" max="7" step="1"', t('common.forgeHelp')) +
+          num('taming', t('common.taming'), `min="0" max="${KAT.maxTaming}" step="1"`, t('common.tamingHelp')) +
           `</div><div class="settings-checks">` +
           check('hideSuspicious', t('common.hideSuspicious'), t('common.hideSuspiciousHelp')) +
           check('autoRefresh', t('common.autoRefresh'), t('common.autoRefreshHelp')) +

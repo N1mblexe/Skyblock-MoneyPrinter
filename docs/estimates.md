@@ -17,6 +17,7 @@ This page describes the model behind every number the app shows. Constants are n
 | NPC daily limit (`npcDailyLimit`) | 640 (`NPC_DAILY_LIMIT_DEFAULT`) | 1 – 10,000,000 | NPC purchases |
 | Fill model (`fillModel`) | sequential | sequential / pipelined | throughput |
 | Auction house scan (`ahEnabled`) | on | on / off | off-bazaar craft outputs |
+| Taming level (`taming`) | 60 (`KAT.maxTaming`) | 0 – 60 | Kat upgrades (page, planner, alerts) |
 | Hide suspicious (`hideSuspicious`) | on | on / off | table filters only |
 
 ## Quotes
@@ -167,6 +168,8 @@ The id is `ExtraAttributes.id`, with two adjustments: pets become `TYPE;RARITY` 
 
 AH values are used only for craft outputs that aren't bazaar products, and only while the AH scan is on. The item page also shows the lowest BIN.
 
+**Scan v3 (pets).** Each pet's lowest-BIN entry also keeps the cheapest listing's XP (`exp`), and max-level listings are recorded a second time under `TYPE;RARITY@MAX` (`AH.petMaxSuffix`, for example `ENDERMAN;3@MAX`), since the plain key's lowest BIN is almost always a level 1 pet. Pets holding a Tier Boost are left out of the scan: their id has the base rarity, but they sell as the boosted one. An older saved scan still loads; the pages that need v3 (Kat upgrades) ask for a rescan, and AH flips skips the `@MAX` keys.
+
 ## AH flips
 
 The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) uses the AH scan's two lowest BIN prices per id (scan v2; an older cached scan shows a "rescan needed" note until the next scan). A row buys the lowest BIN and relists it at the second-lowest minus `AH_FLIP.undercut = 1` coin:
@@ -174,6 +177,37 @@ The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) uses the AH scan's t
 `profit = ahNet(next − 1) − lowest`, `margin = profit / lowest`, using the AH fees above (×4 claim tax under Derpy).
 
 Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter is 5). Because one id covers every copy of an item, two flags warn about variants: `AH_VARIANT` for pets and for gear and tools (`AH_FLIP.variantCategories`), and `AH_GAP` when the second price is more than `AH_FLIP.gapRatio = 3` times the lowest. Both together make a row suspect, hidden while "Hide suspicious" is on. Prices can change before you reach the listing; the page copies `/viewauction <uuid>` for the cheapest listing.
+
+## Kat upgrades
+
+The **Kat upgrades** page (`#/kat`, `src/domain/kat.ts`) buys a pet at the lowest BIN, takes it up one or more rarities at Kat (consecutive steps of one pet, from catalog.kat), and sells it at the lowest BIN of the new rarity. It needs AH scan v3 (above; `KAT_MIN_SCAN`, also for the planner and alerts). Each start is tried in two bands: the cheapest listing of any level (`PET;i`) and the cheapest max-level one (`PET;i@MAX`).
+
+**Level.** The pet keeps its XP through an upgrade, but higher rarities need more XP per level, so the level is recomputed at each rarity from the leveling table in NEU's `constants/pets.json` (the rarity's offset into the shared table, and per-pet custom tables such as Golden Dragon's levels 101–200). A level 100 Epic comes out a lower-level Legendary. The start level comes from the listing's XP; without it (or with 0 XP on a max-band listing), an any-level listing counts as level 1 (no discount) and a max-band one as max level. Without the listing's XP or a leveling table the level is a guess and the row is flagged `AH_VARIANT`. The scanner files `@MAX` listings by a hand-kept list of 200-level pets (it has no catalog); a `@MAX` entry whose listing level differs from the catalog's max level is not trusted: as a buy the max band is skipped, as a sale the any-level price is used (flagged `AH_VARIANT`).
+
+**Cost per step.**
+
+```
+coins    = Kat's list price × (1 − KAT.levelDiscount × level)    (0.3 % off per level, at the level the pet goes in)
+items    = each upgrade item at its cheapest source (bazaar in your cost mode, NPC or sub-craft, as crafts price inputs), else its AH lowest BIN
+skip     = Kat Flowers / Bouquets (only with the skip option)
+capital  = buy + Σ (coins + items + skip)
+```
+
+A step with an item nobody sells keeps the row, marked unpriced (profit 0).
+
+**Time.** Kat's base wait per step; Kat's wait reduction for higher pet levels is not modelled, so long waits are on the safe side. With the skip option on, each step buys the cheapest mix of Kat Flowers (−24 h, `KAT.flowerHours`) and Kat Bouquets (−120 h, `KAT.bouquetHours`) that skips every full day of its wait; the part under one day stays. Flowers are priced like the step items. `hours = Σ waits after skipping + KAT_TRADE_HOURS` (1 h for the two AH legs: the BIN buy is instant, the sale is an optimistic guess at the lowest BIN). The planner and market alerts use the page defaults: no skip items.
+
+**Sale.** When the pet ends at its max level and a max-level listing of the target rarity exists, it is priced at that `PET;j@MAX` lowest BIN; otherwise at the any-level `PET;j` lowest BIN, which is whatever level is cheapest, so the row is flagged `AH_VARIANT`. The sale pays the AH fees (`ahNet`, ×4 claim tax under Derpy).
+
+```
+profit = ahNet(sell) − capital,  margin = profit / capital,  profit/hour = profit / hours
+```
+
+**Flags.** `AH_THIN` when the buy or the sell key has fewer than `KAT.minCount = 3` listings, `AH_GAP` when the second-cheapest start listing is more than `AH_FLIP.gapRatio = 3` times the cheapest, `AH_VARIANT` as above. Suspect rows are hidden while "Hide suspicious" is on.
+
+**Taming.** Each target rarity needs a Taming level (`KAT.tamingReq`: Uncommon 1, Rare 5, Epic 10, Legendary 20, Mythic 25). Your Taming level is a setting (`taming`, also editable on the Kat page): runs whose target needs more are left out of the Kat page, the planner and market alerts; the default (60) drops nothing.
+
+**Not checked.** Pet skins and held items are not part of the AH key, so check the listing in game; whether a skin carries over is not verified. NEU's Special / Very Special steps (Phoenix) are dropped from the catalog. Throughput is one pet per run (`limitedBy: 'kat'`), and Kat holds one pet at a time, so the planner runs at most one Kat upgrade (see Planner).
 
 ## Sell or craft?
 
@@ -221,6 +255,36 @@ coinsPerCurrency = value / costQty
 
 `coinsPerCurrency` is how many coins one unit of the currency turns into through that offer. Offers with the highest value per currency unit come first. The cost of earning the currency isn't modelled, and there's no throughput: the weekly volume column shows how much the bazaar absorbs.
 
+## Bits shop
+
+The **Bits shop** page (`#/bits`, `src/domain/bits.ts`) ranks Elizabeth's offers paid in bits (`SKYBLOCK_BIT`) and prices a bit through Booster Cookies. It is a ranking only: bits offers are not planner opportunities or market-alert kinds.
+
+**Value.** Each offer's output is sold at the best of three quotes, per item:
+
+| quote | net per item |
+|---|---|
+| bazaar | sell quote in your sell mode, after bazaar tax |
+| AH | lowest BIN after the AH fees (`ahNet`, ×4 claim tax under Derpy), only while the AH scan is on |
+| NPC | NPC sell price |
+
+```
+value       = outQty × best net
+coinsPerBit = value / bits
+```
+
+Ties keep bazaar, then AH, then NPC. The detail panel lists the quotes that lost. Risk comes from the winning quote: the bazaar risk report, or `AH_THIN` (fewer than `AH.minCount = 2` listings), `AH_GAP` and `AH_VARIANT` (gear categories) for the AH.
+
+**Cookies.** A Booster Cookie gives `BITS.perCookie = 4,800` bits × the fame-rank multiplier (`BITS.fameRanks`: New Player ×1 up to Imperator ×2.38; a custom multiplier overrides the rank, saved under `LS_BITS`).
+
+```
+cookieCostPerBit = cookie buy quote (cost mode) / (4,800 × multiplier)
+vsCookie         = coinsPerBit / cookieCostPerBit        (> 1: buying cookies to buy this offer pays)
+coinsPerCookie   = 4,800 × multiplier × best coinsPerBit (best tradeable, non-suspect offer)
+profitPerCookie  = coinsPerCookie − cookie cost
+```
+
+**Hand-kept data** (`scripts/data/bits-rules.json`, each entry with a source): Absorb I (4,000 bits) is added because NEU lacks it; the eight abicases and Pure Black / White Dye are kept as auctionable although the Hypixel items API omits them; five sacks are untradeable (`catalog.untradeable`) and are never valued. Untradeable and unpriced rows are hidden by default.
+
 ## NPC flips
 
 | direction | buy | sell |
@@ -236,12 +300,14 @@ Fusion recipes are entered by the user. Inputs are priced as bazaar buys and the
 
 The planner chooses how many units of each opportunity to run per cycle.
 
-**Inputs.** Profitable flips, priced crafts, craft chain moves, book combines and NPC flips. Fusion and shop rows are not included. For each one:
+**Inputs.** Profitable flips, priced crafts, craft chain moves, book combines, NPC flips and Kat upgrade runs. Fusion, shop and bits rows are not included. For each one:
 
-- `unitCost` = buy cost per unit, doubled under the pipelined fill model;
+- `unitCost` = buy cost per unit, doubled under the pipelined fill model (not when one leg is instant, such as an NPC sale or a Kat run's BIN buy);
 - `maxUnits` = the batch size the market allows, with the capital bound removed. If a row's batch was limited by capital, it is scaled back up to `batchQty / fillHours × cycleHours`;
 - profit per hour per allocated unit = `profitPerUnit × unitsPerHour / maxUnits`, linear up to `maxUnits`;
 - slots = the order slots used at `maxUnits`. This is fixed per pick, even if fewer units are allocated.
+
+A Kat run is one unit: `unitCost` = buy + upgrade cost, `maxUnits = 1`, `unitsPerHour = 1 / hours`, no order slots, and it counts as AH-sold (the planner's AH toggle leaves it out).
 
 **Objective.** Maximize total profit per hour.
 
@@ -250,7 +316,7 @@ The planner chooses how many units of each opportunity to run per cycle.
 - total capital ≤ capital (0 = unlimited);
 - total order slots ≤ order slots;
 - capital in one item id ≤ `maxShare × capital`, where `maxShare` defaults to `OPTIMIZER.maxShareOfCapitalPerItem = 0.5`;
-- at most one opportunity per item id;
+- at most one opportunity per item id, and at most one Kat run in total: Kat holds one pet, so every Kat opportunity shares one group (`Opportunity.group = 'kat'`), which the allocator treats like an id;
 - suspect rows are excluded unless you turn that off (`OPTIMIZER.excludeSuspect = true`).
 
 The planner page can override capital, slots and max share, and choose which kinds to include.
@@ -267,6 +333,7 @@ Each start is then improved by local search: add one or swap one for one, drop o
 
 - On 200 seeded random instances, the plan is always feasible and reaches at least 0.9 × the brute-force optimum.
 - It is exact when slots are unlimited, `maxShare = 1`, ids are distinct and every unit costs the same.
+- Grouped picks (Kat) never break the one-per-group rule, and with unlimited capital and slots the plan matches brute force.
 
 With different unit costs the integer problem is NP-hard, so 0.9 is the bound the tests guarantee there.
 
@@ -308,7 +375,7 @@ An alert rule watches one item: `ask`, `bid`, `spreadPct` (`(ask − bid) / bid`
 - **Alerts only run while a tab with the app is open.** There is no background service.
 
 
-**Market alerts** (`src/domain/oppAlerts.ts`, Watchlist page): rules over every opportunity instead of one item: kinds (flip, craft, forge, chain, book, NPC), a metric (profit/hour, profit per item or margin) above a value, and the highest risk level allowed (clean, or clean and caution). On each new live snapshot the runner checks the rows of every page; a rule fires only for rows that were not meeting it at the previous check (`seen`), so a lasting opportunity is reported once, and again only after it drops out and comes back. One grouped toast (and notification) per rule lists the best three; the latest 10 hits are kept on the rule with links to their page.
+**Market alerts** (`src/domain/oppAlerts.ts`, Watchlist page): rules over every opportunity instead of one item: kinds (flip, craft, forge, chain, book, NPC, Kat), a metric (profit/hour, profit per item or margin) above a value, and the highest risk level allowed (clean, or clean and caution). On each new live snapshot the runner checks the rows of every page; a rule fires only for rows that were not meeting it at the previous check (`seen`), so a lasting opportunity is reported once, and again only after it drops out and comes back. One grouped toast (and notification) per rule lists the best three; the latest 10 hits are kept on the rule with links to their page.
 ## Risk flags
 
 Each product's market is checked against `config.RISK`. Some flags need price history: the baseline is the last 24 h, thinned to one point per 15 minutes, leaving out the last 15 minutes so that a fresh spike doesn't become its own baseline.

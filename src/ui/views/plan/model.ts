@@ -4,7 +4,7 @@ import type { AllocateOptions } from '../../../domain/optimizer.ts';
 import type { Allocation, Opportunity, OpportunityKind, PlanResult, Settings } from '../../../types/contracts.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
 
-export const KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc'];
+export const KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat'];
 
 /** URL state. capital / slots / share default to null = "use settings / OPTIMIZER"; kinds are include toggles. */
 export const PLAN_SCHEMA = {
@@ -20,6 +20,7 @@ export const PLAN_SCHEMA = {
   chain: { kind: 'bool', def: true },
   book: { kind: 'bool', def: true },
   npc: { kind: 'bool', def: true },
+  kat: { kind: 'bool', def: true },
   /** include opportunities whose output is sold on the auction house */
   ah: { kind: 'bool', def: true },
   sort: { kind: 'sort', def: { key: 'pph', dir: 'desc' } },
@@ -99,8 +100,10 @@ export function planRows(res: PlanResult, o: AllocateOptions): PlanRow[] {
   }));
 }
 
-/** Source view row for an opportunity: #/flip?q=ID, #/craft?q=OUTPUT, #/books?q=ID, #/npc?q=ID. */
+/** Source view row for an opportunity: #/flip?q=ID, #/craft?q=OUTPUT, #/books?q=ID, #/npc?q=ID, #/kat?q=PET NAME. */
 export function sourceHref(o: Opportunity): string {
+  // the Kat page searches pet names (its ids are AH keys like ENDERMAN;3@MAX); minProfit=0 keeps small runs listed
+  if (o.kind === 'kat') return `#/kat?q=${encodeURIComponent(o.name)}&minProfit=0`;
   if (o.kind === 'chain') return `#/craft?view=chains&q=${encodeURIComponent(o.id)}`;
   if (o.kind === 'forge') return `#/forge?q=${encodeURIComponent(o.id)}`;
   const route = o.kind === 'book' ? 'books' : o.kind;

@@ -7,6 +7,7 @@ import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AhSnapshot, AppState, Catalog, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { createAhFlipView, filterAhFlips } from '../../../src/ui/views/ahflip/ahflipView.ts';
+import { ahListingCount } from '../../../src/ui/views/ahflip/model.ts';
 import catalogJson from '../../fixtures/catalog.json';
 import { fakeHistory, fakeViewCtx } from '../../helpers/fakes.ts';
 
@@ -108,5 +109,22 @@ describe('AH flips view', () => {
     cb.dispatchEvent(new Event('change', { bubbles: true }));
     await flush();
     expect(keys()).not.toContain('BLACK_CAT;5');
+  });
+
+  it('scan v3: max-level pet keys are not separate rows and their listings are counted once', async () => {
+    const ah: AhSnapshot = {
+      ...AH,
+      v: 3,
+      lowestBin: { ...AH.lowestBin, 'BLACK_CAT;5@MAX': { price: 90_000_000, next: 120_000_000, count: 4, name: '[Lvl 100] Black Cat', exp: 2.6e7 } },
+    };
+    expect(computeAhFlips(ah, catalog).map((r) => r.id)).toEqual(computeAhFlips(AH, catalog).map((r) => r.id));
+    expect(ahListingCount(ah)).toBe(6 + 8 + 9 + 5);
+    store.set({ catalog, ah, settings: { ...store.get().settings, hideSuspicious: false } });
+    mount({ minProfit: '0', minMargin: '0' });
+    await flush();
+    expect(q('.ahf-state').hidden).toBe(true);
+    expect(keys()).toContain('BLACK_CAT;5');
+    expect(keys()).not.toContain('BLACK_CAT;5@MAX');
+    expect(q('.ahf-scan').textContent).toContain(String(6 + 8 + 9 + 5));
   });
 });

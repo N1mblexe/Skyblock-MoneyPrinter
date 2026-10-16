@@ -1,6 +1,7 @@
 // Overview dashboard: compact cards summarising every tool, each linking to its full page.
 import { LS_VIEWPREFS, OPTIMIZER, STATS } from '../../../config.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
+import { isPetMaxKey } from '../../../domain/ahFlips.ts';
 import type { AppState, PlanResult, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
 import { fmtAge, fmtCoins, fmtCompact, fmtInt, fmtPct } from '../../format.ts';
@@ -318,7 +319,7 @@ export function createOverviewView(): View {
           [t('overview.f_source'), esc(snap ? t(`overview.src_${snap.source}`) : '—')],
           [t('overview.f_ah'), esc(ah), 'ah'],
         ];
-        if (s.settings.ahEnabled && s.ah) rows.push([t('overview.f_ahItems'), esc(fmtInt(Object.keys(s.ah.lowestBin).length))]);
+        if (s.settings.ahEnabled && s.ah) rows.push([t('overview.f_ahItems'), esc(fmtInt(Object.keys(s.ah.lowestBin).filter((id) => !isPetMaxKey(id)).length))]);
         rows.push([t('overview.f_history'), esc(fmtInt(info.raw + info.q15))]);
         rows.push([t('overview.f_watch'), esc(`${fmtInt(s.watchlist.length)} / ${fmtInt(s.alerts.length)}`)]);
         return kv(rows);

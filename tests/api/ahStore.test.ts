@@ -30,6 +30,16 @@ describe('ahStore', () => {
     expect(await createAhStore(name).loadAh()).toEqual(snap(2));
   });
 
+  it('loads snapshots of any scan version as stored (pages decide what is too old)', async () => {
+    const name = newName();
+    const v2: AhSnapshot = { ...snap(1), v: 2 };
+    await createAhStore(name).saveAh(v2);
+    expect(await createAhStore(name).loadAh()).toEqual(v2);
+    const v3: AhSnapshot = { ...snap(2), v: 3, lowestBin: { 'ENDERMAN;3@MAX': { price: 9e5, count: 1, exp: 1.9e7 } } };
+    await createAhStore(name).saveAh(v3);
+    expect(await createAhStore(name).loadAh()).toEqual(v3);
+  });
+
   it('ignores a malformed stored value', async () => {
     const name = newName();
     const a = createAhStore(name);

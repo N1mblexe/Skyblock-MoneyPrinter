@@ -49,7 +49,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
     </td>
     <td valign="top">
       <h3>🎯 Capital planner</h3>
-      Splits your coins and order slots across flips, crafts, craft chains, books and NPC trades to maximize profit per hour.
+      Splits your coins and order slots across flips, crafts, craft chains, books, NPC trades and a Kat upgrade to maximize profit per hour.
     </td>
     <td valign="top">
       <h3>⭐ Watchlist &amp; alerts</h3>
@@ -72,7 +72,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
   </tr>
 </table>
 
-Plus AH flips (lowest BIN vs the next, after AH fees), a separate Forge page, market alerts for any opportunity, an installable offline app, NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
+Plus AH flips (lowest BIN vs the next, after AH fees), Kat pet upgrades (buy, upgrade the rarity, sell), the best Bits shop offers and what a bit costs in cookies, a separate Forge page, market alerts for any opportunity, an installable offline app, NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
 
 ## 📸 Screenshots
 
@@ -139,6 +139,8 @@ The app opens in English. Switch to Turkish with the **EN / TR** buttons in the 
 | 🔥 **Forge** | <kbd>g</kbd> <kbd>h</kbd> | Forge recipes, limited by forge time and your forge slots |
 | 🧬 **Fusion** | <kbd>g</kbd> <kbd>u</kbd> | Your own shard-fusion recipes, editable, with import and export |
 | 🏪 **NPC & Shops** | <kbd>g</kbd> <kbd>n</kbd> | Bazaar ↔ NPC flips and currency-shop offers valued in coins |
+| 🐱 **Kat upgrades** | <kbd>g</kbd> <kbd>k</kbd> | Buy a pet at the lowest BIN, take it up rarities at Kat, sell it; level discount, flowers and Taming included |
+| 🪙 **Bits shop** | <kbd>g</kbd> <kbd>i</kbd> | Coins per bit for every Bits shop offer, and what a bit costs as Booster Cookies at your fame rank |
 | 💰 **Sell or craft?** | <kbd>g</kbd> <kbd>v</kbd> | What you own: insta-sell, sell offer, NPC, AH or craft it up first, best first |
 | 📒 **Trades** | <kbd>g</kbd> <kbd>t</kbd> | My orders (outbid/undercut alerts, re-price, fill estimate) and a trade journal with profit per day/week |
 | 🎯 **Planner** | <kbd>g</kbd> <kbd>p</kbd> | Spread capital and order slots over every opportunity |

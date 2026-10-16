@@ -1,13 +1,15 @@
 import { CATALOG_URL } from '../config.ts';
 import { deriveName } from '../domain/ids.ts';
 import { LocalizedError } from '../i18n/errors.ts';
-import type { BookRule, Catalog, CatalogFile, ItemInfo, Recipe, ShopOffer } from '../types/contracts.ts';
+import type { BookRule, Catalog, CatalogFile, ItemInfo, KatStep, PetLeveling, Recipe, ShopOffer } from '../types/contracts.ts';
 
 const isObj = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 const posNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v) && v > 0;
 const finNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
 const str = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
 const posInt = (v: unknown): v is number => posNum(v) && Number.isInteger(v);
+const nonNegInt = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v) && v >= 0;
+const nonNeg = (v: unknown): v is number => finNum(v) && v >= 0;
 
 /** Throw a descriptive Error unless `x` is a v1/v2 catalog file. */
 export function validateCatalogFile(x: unknown): CatalogFile {
@@ -97,6 +99,10 @@ export function catalogFromFile(f: CatalogFile): Catalog {
     name: (id: string) => items[id]?.name || deriveName(id),
     shops: parseShops(f.shops),
     bookRule: (base: string) => books.get(base) ?? null,
+    kat: parseKat(f.kat),
+    petLeveling: parsePetLeveling(f.petLeveling),
+    petNames: parsePetNames(f.petNames),
+    untradeable: new Set(Array.isArray(f.untradeable) ? f.untradeable.filter(str) : []),
   };
 }
 
@@ -128,5 +134,53 @@ function parseBooks(x: unknown): Map<string, BookRule> {
     if (posInt(r.m)) out.set(base, { maxLevel: r.m, verified: true });
     else if (posInt(r.t)) out.set(base, { maxLevel: r.t, verified: false });
   }
+  return out;
+}
+
+/** `[[id, qty], ...]` -> {id, qty}[] (bad pairs dropped). */
+function parsePairs(x: unknown): { id: string; qty: number }[] {
+  if (!Array.isArray(x)) return [];
+  const out: { id: string; qty: number }[] = [];
+  for (const pair of x as unknown[]) if (Array.isArray(pair) && str(pair[0]) && posNum(pair[1])) out.push({ id: pair[0], qty: pair[1] });
+  return out;
+}
+
+/** v2 `kat` ({p, f, t, c, s: seconds, i?: [[id, qty]]}[]) -> KatStep[] (malformed entries dropped; absent -> []). */
+function parseKat(x: unknown): KatStep[] {
+  if (!Array.isArray(x)) return [];
+  const out: KatStep[] = [];
+  for (const e of x as unknown[]) {
+    if (!isObj(e) || !str(e.p) || !nonNegInt(e.f) || !nonNegInt(e.t) || e.t <= e.f || !nonNeg(e.c) || !nonNeg(e.s)) continue;
+    if (e.i !== undefined && !Array.isArray(e.i)) continue;
+    out.push({ pet: e.p, from: e.f, to: e.t, coins: e.c, hours: e.s / 3600, items: parsePairs(e.i) });
+  }
+  return out;
+}
+
+/** v2 `petLeveling` ({o: offsets, l: levels, c: {PET: {l?, a?, m?}}}) -> PetLeveling; null when absent or `l` is unusable. */
+function parsePetLeveling(x: unknown): PetLeveling | null {
+  if (!isObj(x) || !Array.isArray(x.l) || !x.l.length || !x.l.every(posNum)) return null;
+  const offsets: PetLeveling['offsets'] = {};
+  if (isObj(x.o)) for (const [k, v] of Object.entries(x.o)) if (nonNegInt(v)) offsets[k] = v;
+  const custom: PetLeveling['custom'] = {};
+  if (isObj(x.c)) {
+    for (const [pet, v] of Object.entries(x.c)) {
+      if (!isObj(v)) continue;
+      const c: PetLeveling['custom'][string] = {};
+      if (Array.isArray(v.l) && v.l.length && v.l.every(posNum)) {
+        c.levels = v.l as number[];
+        if (v.a === 1) c.append = true;
+      }
+      if (posInt(v.m)) c.maxLevel = v.m;
+      if (c.levels || c.maxLevel) custom[pet] = c;
+    }
+  }
+  return { offsets, levels: x.l as number[], custom };
+}
+
+/** v2 `petNames` -> pet type -> display name (non-string values dropped). */
+function parsePetNames(x: unknown): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (isObj(x)) for (const [k, v] of Object.entries(x)) if (str(v)) out[k] = v;
   return out;
 }

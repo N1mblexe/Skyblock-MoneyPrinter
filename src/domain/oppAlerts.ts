@@ -1,9 +1,10 @@
-// Market alerts: rules over every opportunity (flips, crafts, forges, chains, books, NPC flips) instead of one item.
+// Market alerts: rules over every opportunity (flips, crafts, forges, chains, books, NPC flips, Kat upgrades) instead of one item.
 // A rule fires only for rows that newly meet it (keys not met at the last check), so a steady opportunity does not
 // fire every snapshot; a row that drops out and comes back fires again.
 import type { BookRow, ChainRow, CraftRow, FlipRow, NpcFlipRow, OppAlertRule, OppHit, OpportunityKind, RiskReport } from '../types/contracts.ts';
+import type { KatRow } from './kat.ts';
 
-export const OPP_KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc'];
+export const OPP_KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat'];
 /** hits kept per rule */
 export const OPP_HITS_MAX = 10;
 
@@ -25,6 +26,7 @@ export interface OppSources {
   chains: readonly ChainRow[];
   books: readonly BookRow[];
   npc: readonly NpcFlipRow[];
+  kat: readonly KatRow[];
 }
 
 /** Priced rows of every page, with the keys the planner uses. */
@@ -37,6 +39,7 @@ export function oppCandidates(d: OppSources): OppCandidate[] {
   for (const c of d.chains) if (!c.row.unpriced.length) add('chain', c.key, c.row);
   for (const r of d.books) add('book', r.id, r);
   for (const r of d.npc) add('npc', `${r.id}:${r.direction}`, r);
+  for (const r of d.kat) if (!r.unpriced.length) add('kat', r.key, r);
   return out;
 }
 

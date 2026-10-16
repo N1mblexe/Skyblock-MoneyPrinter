@@ -1,0 +1,115 @@
+/* Bits shop (scoped under .bits-view; theme tokens only) */
+.bits-view {
+  gap: var(--s-3);
+  min-width: 0;
+}
+.bits-head {
+  display: grid;
+  gap: var(--s-1);
+}
+.bits-head h1 {
+  margin: 0;
+  font-size: var(--fs-2xl);
+}
+.bits-head h1:focus {
+  outline: none;
+}
+.bits-intro {
+  margin: 0;
+}
+.bits-view .bits-state[hidden],
+.bits-view .bits-hint[hidden],
+.bits-view .bits-stats[hidden],
+.bits-view .tbl[hidden],
+.bits-view [data-bits-clear][hidden] {
+  display: none;
+}
+.bits-rank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: var(--s-3);
+}
+.bits-rank .field {
+  min-width: 12rem;
+}
+.bits-rank [data-bits-custom] {
+  width: 9rem;
+}
+/* the custom value is in effect: the rank select is only a fallback */
+.bits-rank.bits-custom-on [data-bits-rank] {
+  opacity: 0.6;
+}
+.bits-using {
+  align-self: center;
+  color: var(--muted);
+}
+.bits-rank.bits-custom-on .bits-using {
+  color: var(--accent);
+  font-weight: 600;
+}
+.bits-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: var(--s-3);
+}
+.bits-stat {
+  display: grid;
+  gap: 2px;
+  align-content: start;
+  min-width: 0;
+}
+.bits-stat-l {
+  font-size: var(--fs-xs);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.bits-stat-v {
+  font-size: var(--fs-xl);
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.bits-stat-v .link {
+  font: inherit;
+  text-align: left;
+}
+.bits-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-3);
+}
+.bits-view .src-ah {
+  background: var(--violet-soft);
+  color: var(--violet);
+}
+.bits-detail {
+  display: grid;
+  gap: var(--s-3);
+}
+.bits-detail .bits-badges,
+.bits-detail .bits-actions,
+.bits-detail .bits-d-h {
+  margin: 0;
+}
+.bits-detail .bits-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: center;
+}
+.bits-d-h {
+  font-size: var(--fs-md);
+}
+.bits-quotes {
+  overflow-x: auto;
+}
+.bits-quotes th[scope="row"] {
+  font-weight: 400;
+  text-align: left;
+}
+.bits-quotes tr.bits-win {
+  font-weight: 600;
+}

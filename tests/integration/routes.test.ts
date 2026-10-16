@@ -8,7 +8,7 @@ import { bootApp, expectNoConsoleErrors, go, liveListeners, settle, teardownApp,
 afterEach(teardownApp);
 
 const ITEM = 'ENCHANTED_MELON';
-const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'plan', 'sell', 'trades', 'watch', `item/${ITEM}`] as const;
+const ROUTES = ['overview', 'flip', 'books', 'ahflip', 'craft', 'forge', 'fusion', 'npc', 'kat', 'bits', 'plan', 'sell', 'trades', 'watch', `item/${ITEM}`] as const;
 const hashOf = (r: string) => `#/${r}`;
 
 /** Accessible name of a form control (aria-label, aria-labelledby, wrapping/for label, title). */
@@ -102,6 +102,8 @@ describe('routes', () => {
       forge: 'Forge',
       fusion: expect.any(String),
       npc: expect.any(String),
+      kat: 'Kat upgrades',
+      bits: 'Bits shop',
       plan: expect.any(String),
       sell: 'Sell or craft?',
       trades: 'Trades',
@@ -198,7 +200,7 @@ describe('a11y invariants', () => {
     }
     // the checks actually ran against something
     expect(tables).toBeGreaterThanOrEqual(5);
-    expect([...tabbableTables].sort()).toEqual(['craft', 'flip', 'forge', 'npc', 'plan', 'watch']);
+    expect([...tabbableTables].sort()).toEqual(['bits', 'craft', 'flip', 'forge', 'npc', 'plan', 'watch']);
     expect(filterControls).toBeGreaterThan(10);
     expect(problems).toEqual([]);
     expectNoConsoleErrors(b);

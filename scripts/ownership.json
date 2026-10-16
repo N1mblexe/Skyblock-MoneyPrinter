@@ -45,5 +45,23 @@
     "smoke": ["scripts/smoke.ts", "tests/fixtures/smoke/**"],
     "integration": ["tests/integration/**"],
     "docs": ["README.md", "docs/**"]
+  },
+  "k1": {
+    "catalog": ["scripts/**", "!scripts/smoke.ts", "!scripts/ownership.json", "src/data/catalog.ts", "tests/scripts/**", "tests/data/**", "public/data/catalog.json"],
+    "ahscan": [
+      "src/api/auctions.ts", "src/api/nbt.ts", "src/api/ahStore.ts", "tests/api/**", "tests/fixtures/ah-page.json",
+      "src/ui/views/ahflip/**", "tests/ui/views/ahflip.test.ts", "src/i18n/locales/*/ahflip.ts"
+    ]
+  },
+  "k2": {
+    "kat": ["src/domain/kat.ts", "src/ui/views/kat/**", "src/i18n/locales/*/kat.ts", "tests/domain/kat.test.ts", "tests/ui/views/kat.test.ts"],
+    "bits": ["src/domain/bits.ts", "src/ui/views/bits/**", "src/i18n/locales/*/bits.ts", "tests/domain/bits.test.ts", "tests/ui/views/bits.test.ts"]
+  },
+  "k3": {
+    "integration": [
+      "src/domain/optimizer.ts", "src/domain/oppAlerts.ts", "src/state/**", "src/storage/local.ts", "src/types/contracts.ts",
+      "src/ui/views/plan/**", "src/ui/views/watch/**", "src/i18n/locales/*/plan.ts", "src/i18n/locales/*/watch.ts",
+      "src/i18n/locales/*/alerts.ts", "tests/**", "scripts/smoke.ts", "README.md", "docs/**"
+    ]
   }
 }

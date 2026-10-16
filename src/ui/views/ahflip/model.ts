@@ -1,9 +1,16 @@
 // AH flips page model: URL schema and row filtering (no DOM or CSS, so scripts/smoke.ts can import it).
 import { AH_FLIP } from '../../../config.ts';
-import type { AhFlipRow } from '../../../domain/ahFlips.ts';
+import { isPetMaxKey, type AhFlipRow } from '../../../domain/ahFlips.ts';
 import { matchesQuery } from '../../../domain/search.ts';
-import type { AppState } from '../../../types/contracts.ts';
+import type { AhSnapshot, AppState } from '../../../types/contracts.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
+
+/** BIN listings in a scan, each once (`@MAX` keys repeat max-level pets). */
+export function ahListingCount(ah: AhSnapshot): number {
+  let n = 0;
+  for (const [id, a] of Object.entries(ah.lowestBin)) if (!isPetMaxKey(id)) n += a.count;
+  return n;
+}
 
 const SORT_KEYS = ['name', 'buy', 'next', 'profit', 'margin', 'gap', 'count', 'risk'] as const;
 

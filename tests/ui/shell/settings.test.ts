@@ -97,6 +97,13 @@ describe('settings drawer', () => {
     expect(s().notify).toBe(true);
     change(h, 'hideSuspicious', false);
     expect(s().hideSuspicious).toBe(false);
+    change(h, 'taming', '25');
+    expect(s().taming).toBe(25);
+    expect(change(h, 'taming', '61').getAttribute('aria-invalid')).toBe('true');
+    expect(change(h, 'taming', '2.5').getAttribute('aria-invalid')).toBe('true');
+    expect(s().taming).toBe(25);
+    change(h, 'taming', '0');
+    expect(s().taming).toBe(0);
     // invalid values are flagged and not written
     const bad = change(h, 'orderSlots', '99');
     expect(s().orderSlots).toBe(21);

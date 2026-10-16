@@ -165,7 +165,8 @@ export async function decodeItemBytes(b64: string): Promise<NbtCompound | null> 
 /** Rarity order used by NEU pet ids `TYPE;INDEX` (COMMON=0 ... MYTHIC=5). */
 export const PET_TIERS = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'] as const;
 
-function petId(petInfo: NbtValue | undefined): string | null {
+/** petInfo (a JSON string on live items, a compound in some dumps) as a plain object, or null. */
+function parsePetInfo(petInfo: NbtValue | undefined): Record<string, unknown> | null {
   let info: unknown = petInfo;
   if (typeof info === 'string') {
     try {
@@ -174,11 +175,50 @@ function petId(petInfo: NbtValue | undefined): string | null {
       return null;
     }
   }
-  if (typeof info !== 'object' || info === null) return null;
-  const { type, tier } = info as { type?: unknown; tier?: unknown };
+  return typeof info === 'object' && info !== null ? (info as Record<string, unknown>) : null;
+}
+
+function petId(info: Record<string, unknown> | null): string | null {
+  if (!info) return null;
+  const { type, tier } = info;
   if (typeof type !== 'string' || !type) return null;
   const idx = typeof tier === 'string' ? PET_TIERS.indexOf(tier.toUpperCase() as (typeof PET_TIERS)[number]) : -1;
   return idx < 0 ? type : `${type};${idx}`;
+}
+
+/** The petInfo fields the AH scan reads. */
+export interface PetInfo {
+  /** e.g. ENDER_DRAGON */
+  type: string;
+  /** the pet's own rarity, upper-cased ('' when missing); a Tier Boost does not change it */
+  tier: string;
+  /** total pet XP (0 when missing or not a finite number ≥ 0) */
+  exp: number;
+  /** held item id, e.g. PET_ITEM_TIER_BOOST */
+  heldItem?: string;
+  /** skin id, e.g. BLACK_CAT_PURRANORMAL */
+  skin?: string;
+}
+
+/**
+ * petInfo of a PET item; null for other items and for an unreadable petInfo or one without a type (the cases where
+ * skyblockIdFromNbt falls back to `PET`). Accepts the same inputs as skyblockIdFromNbt.
+ */
+export function petInfoFromNbt(root: NbtCompound | null): PetInfo | null {
+  return itemFromNbt(root).pet;
+}
+
+function petFields(info: Record<string, unknown> | null): PetInfo | null {
+  if (!info) return null;
+  const { type, tier, exp, heldItem, skin } = info;
+  if (typeof type !== 'string' || !type) return null;
+  return {
+    type,
+    tier: typeof tier === 'string' ? tier.toUpperCase() : '',
+    exp: typeof exp === 'number' && Number.isFinite(exp) && exp > 0 ? exp : 0,
+    ...(typeof heldItem === 'string' && heldItem ? { heldItem } : {}),
+    ...(typeof skin === 'string' && skin ? { skin } : {}),
+  };
 }
 
 /**
@@ -191,19 +231,31 @@ function petId(petInfo: NbtValue | undefined): string | null {
  * Accepts either the decoded item_bytes root (`{i:[...]}`) or an ExtraAttributes compound.
  */
 export function skyblockIdFromNbt(root: NbtCompound | null): string | null {
-  if (!root) return null;
+  return itemFromNbt(root).id;
+}
+
+/**
+ * skyblockIdFromNbt and petInfoFromNbt in one pass (one ExtraAttributes lookup, one petInfo parse), for the AH scan.
+ * Same inputs.
+ */
+export function itemFromNbt(root: NbtCompound | null): { id: string | null; pet: PetInfo | null } {
+  const none = { id: null, pet: null };
+  if (!root) return none;
   const ea = 'i' in root ? extraAttributes(root) : root;
-  if (!ea) return null;
+  if (!ea) return none;
   const id = ea.id;
-  if (typeof id !== 'string' || !id) return null;
-  if (id === 'PET') return petId(ea.petInfo) ?? id;
+  if (typeof id !== 'string' || !id) return none;
+  if (id === 'PET') {
+    const info = parsePetInfo(ea.petInfo);
+    return { id: petId(info) ?? id, pet: petFields(info) };
+  }
   if (id === 'ENCHANTED_BOOK') {
     const ench = ea.enchantments;
     if (isCompound(ench)) {
       const keys = Object.keys(ench);
       const lvl = ench[keys[0]!];
-      if (keys.length === 1 && typeof lvl === 'number') return `ENCHANTMENT_${keys[0]!.toUpperCase()}_${lvl}`;
+      if (keys.length === 1 && typeof lvl === 'number') return { id: `ENCHANTMENT_${keys[0]!.toUpperCase()}_${lvl}`, pet: null };
     }
   }
-  return id;
+  return { id, pet: null };
 }

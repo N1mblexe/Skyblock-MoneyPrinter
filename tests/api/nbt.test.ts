@@ -1,102 +1,19 @@
 import { gzipSync } from 'node:zlib';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   base64ToBytes,
   decodeItemBytes,
   decodeItemBytesRoot,
   extraAttributes,
   gunzip,
+  itemFromNbt,
+  petInfoFromNbt,
   readNbt,
   skyblockIdFromNbt,
   type NbtCompound,
 } from '../../src/api/nbt.ts';
 import page from '../fixtures/api/auctions-page.json' with { type: 'json' };
-
-// ---- tiny NBT writer for synthetic items (test-only)
-type W = { t: number; v: unknown };
-const byte = (v: number): W => ({ t: 1, v });
-const short = (v: number): W => ({ t: 2, v });
-const int = (v: number): W => ({ t: 3, v });
-const long = (v: bigint): W => ({ t: 4, v });
-const float = (v: number): W => ({ t: 5, v });
-const double = (v: number): W => ({ t: 6, v });
-const bytes = (v: number[]): W => ({ t: 7, v });
-const str = (v: string): W => ({ t: 8, v });
-const list = (t: number, v: W[]): W => ({ t: 9, v: { t, items: v } });
-const comp = (v: Record<string, W>): W => ({ t: 10, v });
-const ints = (v: number[]): W => ({ t: 11, v });
-const longs = (v: bigint[]): W => ({ t: 12, v });
-
-function enc(w: W, out: number[]): void {
-  const b = (size: number, fn: (dv: DataView) => void) => {
-    const dv = new DataView(new ArrayBuffer(size));
-    fn(dv);
-    out.push(...new Uint8Array(dv.buffer));
-  };
-  const s = (x: string) => {
-    const u = new TextEncoder().encode(x);
-    b(2, (d) => d.setUint16(0, u.length));
-    out.push(...u);
-  };
-  const v = w.v as never;
-  switch (w.t) {
-    case 1: return b(1, (d) => d.setInt8(0, v));
-    case 2: return b(2, (d) => d.setInt16(0, v));
-    case 3: return b(4, (d) => d.setInt32(0, v));
-    case 4: return b(8, (d) => d.setBigInt64(0, v));
-    case 5: return b(4, (d) => d.setFloat32(0, v));
-    case 6: return b(8, (d) => d.setFloat64(0, v));
-    case 7: {
-      const a = v as number[];
-      b(4, (d) => d.setInt32(0, a.length));
-      for (const x of a) b(1, (d) => d.setInt8(0, x));
-      return;
-    }
-    case 8: return s(v);
-    case 9: {
-      const l = v as { t: number; items: W[] };
-      out.push(l.t);
-      b(4, (d) => d.setInt32(0, l.items.length));
-      for (const it of l.items) enc(it, out);
-      return;
-    }
-    case 10: {
-      for (const [k, c] of Object.entries(v as Record<string, W>)) {
-        out.push(c.t);
-        s(k);
-        enc(c, out);
-      }
-      out.push(0);
-      return;
-    }
-    case 11: {
-      const a = v as number[];
-      b(4, (d) => d.setInt32(0, a.length));
-      for (const x of a) b(4, (d) => d.setInt32(0, x));
-      return;
-    }
-    case 12: {
-      const a = v as bigint[];
-      b(4, (d) => d.setInt32(0, a.length));
-      for (const x of a) b(8, (d) => d.setBigInt64(0, x));
-      return;
-    }
-  }
-}
-
-function nbt(root: Record<string, W>, name = ''): Uint8Array {
-  const out = [10];
-  const u = new TextEncoder().encode(name);
-  out.push(u.length >> 8, u.length & 255, ...u);
-  enc(comp(root), out);
-  return Uint8Array.from(out);
-}
-
-/** item_bytes-like base64 for one item with these ExtraAttributes. */
-function itemB64(ea: Record<string, W>): string {
-  const root = nbt({ i: list(10, [comp({ id: short(403), Count: byte(1), tag: comp({ ExtraAttributes: comp(ea) }) })]) });
-  return gzipSync(root).toString('base64');
-}
+import { byte, bytes, comp, double, float, int, itemB64, ints, list, long, longs, nbt, short, str, type W } from './nbtWriter.ts';
 
 const EXPECTED_IDS = [
   'LUMBERJACK_ARTIFACT', 'CROWN_OF_AVARICE', 'CONTRABAND', 'GAUNTLET_OF_CONTAGION', 'CRIMSON_BOOTS', 'RABBIT_THE_FISH',
@@ -254,5 +171,67 @@ describe('skyblockIdFromNbt', () => {
     expect(skyblockIdFromNbt(ea({ i: [{}] }))).toBeNull();
     expect(skyblockIdFromNbt(ea({ i: [] }))).toBeNull();
     expect(skyblockIdFromNbt(ea({ i: 'nope' }))).toBeNull();
+  });
+});
+
+describe('petInfoFromNbt', () => {
+  const ea = (o: Record<string, unknown>) => o as NbtCompound;
+
+  it('real fixture pets: type, base tier, exp, held item', async () => {
+    const cats = page.auctions.filter((a) => a.item_name.includes('Black Cat'));
+    const lvl100 = petInfoFromNbt(await decodeItemBytesRoot(cats.find((a) => a.item_name.startsWith('[Lvl 100]'))!.item_bytes));
+    expect(lvl100).toEqual({ type: 'BLACK_CAT', tier: 'MYTHIC', exp: 2.603692896466553e7, heldItem: 'POIGNANT_LUCKY_CLOVER' });
+    const lvl1 = petInfoFromNbt(await decodeItemBytes(cats.find((a) => a.item_name.startsWith('[Lvl 1]'))!.item_bytes));
+    expect(lvl1).toEqual({ type: 'BLACK_CAT', tier: 'MYTHIC', exp: 0 });
+    const scatha = page.auctions.find((a) => a.item_name.includes('Scatha'))!;
+    expect(petInfoFromNbt(await decodeItemBytes(scatha.item_bytes))).toMatchObject({ tier: 'EPIC', heldItem: 'PET_ITEM_TIER_BOOST' });
+    const hype = page.auctions.find((a) => a.item_name.includes('Hyperion'))!;
+    expect(petInfoFromNbt(await decodeItemBytesRoot(hype.item_bytes))).toBeNull();
+  });
+
+  it('string and object petInfo, skins, synthetic items', async () => {
+    const json = '{"type":"BLACK_CAT","exp":75291418.59,"tier":"MYTHIC","heldItem":"POIGNANT_LUCKY_CLOVER","candyUsed":0,"skin":"BLACK_CAT_PURRANORMAL"}';
+    const want = { type: 'BLACK_CAT', tier: 'MYTHIC', exp: 75291418.59, heldItem: 'POIGNANT_LUCKY_CLOVER', skin: 'BLACK_CAT_PURRANORMAL' };
+    expect(petInfoFromNbt(ea({ id: 'PET', petInfo: json }))).toEqual(want);
+    expect(petInfoFromNbt(ea({ id: 'PET', petInfo: JSON.parse(json) }))).toEqual(want);
+    expect(petInfoFromNbt(await decodeItemBytesRoot(itemB64({ id: str('PET'), petInfo: str(json) })))).toEqual(want);
+    const root = ea({ i: [{ tag: { ExtraAttributes: { id: 'PET', petInfo: { type: 'BEE', tier: 'rare', exp: 12 } } } }] });
+    expect(petInfoFromNbt(root)).toEqual({ type: 'BEE', tier: 'RARE', exp: 12 });
+  });
+
+  it('missing fields and bad input', () => {
+    const pet = (petInfo: unknown) => petInfoFromNbt(ea({ id: 'PET', petInfo }));
+    expect(pet('{"type":"X"}')).toEqual({ type: 'X', tier: '', exp: 0 });
+    expect(pet('{"type":"X","tier":5,"exp":"lots","heldItem":"","skin":null}')).toEqual({ type: 'X', tier: '', exp: 0 });
+    expect(pet('{"type":"X","exp":-3}')!.exp).toBe(0);
+    expect(pet('{"tier":"EPIC"}')).toBeNull();
+    expect(pet('{"type":""}')).toBeNull();
+    expect(pet('{broken')).toBeNull();
+    expect(pet('null')).toBeNull();
+    expect(pet(7)).toBeNull();
+    expect(pet(undefined)).toBeNull();
+    expect(petInfoFromNbt(ea({ id: 'HYPERION', petInfo: '{"type":"X"}' }))).toBeNull();
+    expect(petInfoFromNbt(ea({}))).toBeNull();
+    expect(petInfoFromNbt(ea({ i: [] }))).toBeNull();
+    expect(petInfoFromNbt(null)).toBeNull();
+  });
+});
+
+describe('itemFromNbt', () => {
+  const ea = (o: Record<string, unknown>) => o as NbtCompound;
+
+  it('matches skyblockIdFromNbt and petInfoFromNbt on every fixture auction and the edge cases', async () => {
+    const roots: (NbtCompound | null)[] = [null, ea({}), ea({ id: 5 }), ea({ id: 'PET' }), ea({ id: 'PET', petInfo: '{broken' }), ea({ i: [] })];
+    roots.push(ea({ id: 'PET', petInfo: '{"tier":"EPIC"}' }), ea({ id: 'HYPERION', petInfo: '{"type":"X"}' }), ea({ id: 'ENCHANTED_BOOK', enchantments: { telekinesis: 1 } }));
+    for (const a of page.auctions) roots.push(await decodeItemBytes(a.item_bytes), await decodeItemBytesRoot(a.item_bytes));
+    for (const r of roots) expect(itemFromNbt(r)).toEqual({ id: skyblockIdFromNbt(r), pet: petInfoFromNbt(r) });
+    expect(itemFromNbt(ea({ id: 'PET', petInfo: '{"type":"BEE","tier":"RARE","exp":12}' }))).toEqual({ id: 'BEE;2', pet: { type: 'BEE', tier: 'RARE', exp: 12 } });
+  });
+
+  it('parses petInfo once', () => {
+    const parse = vi.spyOn(JSON, 'parse');
+    itemFromNbt(ea({ id: 'PET', petInfo: '{"type":"BEE","tier":"RARE","exp":12}' }));
+    expect(parse).toHaveBeenCalledTimes(1);
+    parse.mockRestore();
   });
 });
