@@ -165,7 +165,8 @@ export async function decodeItemBytes(b64: string): Promise<NbtCompound | null> 
 /** Rarity order used by NEU pet ids `TYPE;INDEX` (COMMON=0 ... MYTHIC=5). */
 export const PET_TIERS = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'] as const;
 
-function petId(petInfo: NbtValue | undefined): string | null {
+/** petInfo (a JSON string on live items, a compound in some dumps) as a plain object, or null. */
+function parsePetInfo(petInfo: NbtValue | undefined): Record<string, unknown> | null {
   let info: unknown = petInfo;
   if (typeof info === 'string') {
     try {
@@ -174,11 +175,51 @@ function petId(petInfo: NbtValue | undefined): string | null {
       return null;
     }
   }
-  if (typeof info !== 'object' || info === null) return null;
-  const { type, tier } = info as { type?: unknown; tier?: unknown };
+  return typeof info === 'object' && info !== null ? (info as Record<string, unknown>) : null;
+}
+
+function petId(petInfo: NbtValue | undefined): string | null {
+  const info = parsePetInfo(petInfo);
+  if (!info) return null;
+  const { type, tier } = info;
   if (typeof type !== 'string' || !type) return null;
   const idx = typeof tier === 'string' ? PET_TIERS.indexOf(tier.toUpperCase() as (typeof PET_TIERS)[number]) : -1;
   return idx < 0 ? type : `${type};${idx}`;
+}
+
+/** The petInfo fields the AH scan reads. */
+export interface PetInfo {
+  /** e.g. ENDER_DRAGON */
+  type: string;
+  /** the pet's own rarity, upper-cased ('' when missing); a Tier Boost does not change it */
+  tier: string;
+  /** total pet XP (0 when missing or not a finite number ≥ 0) */
+  exp: number;
+  /** held item id, e.g. PET_ITEM_TIER_BOOST */
+  heldItem?: string;
+  /** skin id, e.g. BLACK_CAT_PURRANORMAL */
+  skin?: string;
+}
+
+/**
+ * petInfo of a PET item; null for other items and for an unreadable petInfo or one without a type (the cases where
+ * skyblockIdFromNbt falls back to `PET`). Accepts the same inputs as skyblockIdFromNbt.
+ */
+export function petInfoFromNbt(root: NbtCompound | null): PetInfo | null {
+  if (!root) return null;
+  const ea = 'i' in root ? extraAttributes(root) : root;
+  if (!ea || ea.id !== 'PET') return null;
+  const info = parsePetInfo(ea.petInfo);
+  if (!info) return null;
+  const { type, tier, exp, heldItem, skin } = info;
+  if (typeof type !== 'string' || !type) return null;
+  return {
+    type,
+    tier: typeof tier === 'string' ? tier.toUpperCase() : '',
+    exp: typeof exp === 'number' && Number.isFinite(exp) && exp > 0 ? exp : 0,
+    ...(typeof heldItem === 'string' && heldItem ? { heldItem } : {}),
+    ...(typeof skin === 'string' && skin ? { skin } : {}),
+  };
 }
 
 /**

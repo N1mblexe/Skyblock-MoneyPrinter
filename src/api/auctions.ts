@@ -1,8 +1,8 @@
 // Auction house lowest-BIN scanner. Owner: market-apis package.
-import { AH, API_AUCTIONS, FETCH_TIMEOUT_MS } from '../config.ts';
+import { AH, API_AUCTIONS, FETCH_TIMEOUT_MS, KAT } from '../config.ts';
 import type { AhPrice, AhScanProgress, AhSnapshot } from '../types/contracts.ts';
 import { loadAh, saveAh } from './ahStore.ts';
-import { decodeItemBytes, skyblockIdFromNbt } from './nbt.ts';
+import { decodeItemBytes, petInfoFromNbt, skyblockIdFromNbt, type PetInfo } from './nbt.ts';
 
 export interface AhScannerOptions {
   onSnapshot(s: AhSnapshot): void;
@@ -60,6 +60,8 @@ export interface AhScanResult extends AhSnapshot {
   binCount: number;
   /** unclaimed BIN listings skipped because item_bytes / price were unusable */
   decodeErrors: number;
+  /** valid BIN pet listings left out of pricing because they hold a Tier Boost (scan v3+) */
+  tierBoosted: number;
 }
 
 /** While opts.enabled() is false, scheduled scans re-check this often (so toggling AH on takes effect quickly). */
@@ -87,25 +89,71 @@ export async function fetchAhPage(page: number, signal?: AbortSignal, timeoutMs 
 
 // ---------------------------------------------------------------- scan
 
-/** AhSnapshot.v written by this scanner (2: next / uuid / name per id). */
-export const AH_SCAN_VERSION = 2;
+/**
+ * AhSnapshot.v written by this scanner. 2: next / uuid / name per id. 3: pets carry `exp`, max-level pets also go to
+ * `${id}${AH.petMaxSuffix}`, and pets holding a Tier Boost are left out. Older saved snapshots still load; each page
+ * decides which version it needs.
+ */
+export const AH_SCAN_VERSION = 3;
+
+/**
+ * Pets whose max level is 200 (Golden Dragon and its siblings): their `[Lvl 100]` listings are not max level.
+ * Every other pet maxes at 100. Hand-kept; add a type here when Hypixel adds another 200-level pet.
+ */
+export const PET_MAX_200: ReadonlySet<string> = new Set(['GOLDEN_DRAGON', 'JADE_DRAGON', 'ROSE_DRAGON']);
+
+/** Level from a pet listing name like "[Lvl 84] Owl" or "[Lvl 200] Golden Dragon ✦", else null. */
+export function petLevelFromName(name: string | undefined): number | null {
+  const m = /^\s*\[Lvl (\d+)\]/.exec(name ?? '');
+  return m ? Number(m[1]) : null;
+}
 
 const abortError = (signal: AbortSignal): unknown => signal.reason ?? new DOMException('Aborted', 'AbortError');
 
-/** Fold one page's unclaimed BIN listings into `acc`: per normalized id the count, the two lowest prices and the cheapest listing's uuid and name. */
+/** Count one listing under `key`: the two lowest prices and the cheapest listing's details (`who`). */
+function addListing(acc: Record<string, AhPrice>, key: string, price: number, who: Partial<AhPrice>): void {
+  const cur = acc[key];
+  if (!cur) acc[key] = { price, count: 1, ...who };
+  else {
+    cur.count++;
+    if (price < cur.price) {
+      cur.next = cur.price;
+      cur.price = price;
+      delete cur.uuid;
+      delete cur.name;
+      delete cur.exp;
+      Object.assign(cur, who);
+    } else if (cur.next === undefined || price < cur.next) cur.next = price;
+  }
+}
+
+/**
+ * Fold one page's unclaimed BIN listings into `acc`: per normalized id the count, the two lowest prices and the
+ * cheapest listing's uuid and name (pets: also its exp). Pets:
+ *  - a max-level listing (`[Lvl 100]`, or `[Lvl 200]` for PET_MAX_200 types) is counted under its id and again under
+ *    `${id}${AH.petMaxSuffix}` (e.g. `ENDERMAN;3@MAX`), since the plain id's lowest BIN is almost always a level 1 pet.
+ *    Skinned listings are kept in both: a skin only raises the price, so it rarely sets the lowest BIN.
+ *  - a pet holding a Tier Boost is skipped: its id has the base rarity but it sells as the boosted one, so it would
+ *    distort both rarities' prices (Kat flips compare them). It is a valid listing, so it is neither a bin nor an
+ *    error; it is counted in `tierBoosted`.
+ */
 export async function aggregatePage(
   auctions: readonly RawAuction[],
   acc: Record<string, AhPrice>,
-): Promise<{ bins: number; errors: number }> {
+): Promise<{ bins: number; errors: number; tierBoosted: number }> {
   let bins = 0;
   let errors = 0;
+  let tierBoosted = 0;
   for (const a of auctions) {
     if (a.bin !== true || a.claimed === true) continue;
     const price = a.starting_bid;
     let id: string | null = null;
+    let pet: PetInfo | null = null;
     if (typeof price === 'number' && price > 0 && typeof a.item_bytes === 'string') {
       try {
-        id = skyblockIdFromNbt(await decodeItemBytes(a.item_bytes));
+        const ea = await decodeItemBytes(a.item_bytes);
+        id = skyblockIdFromNbt(ea);
+        pet = petInfoFromNbt(ea);
       } catch {
         id = null;
       }
@@ -114,22 +162,21 @@ export async function aggregatePage(
       errors++;
       continue;
     }
-    bins++;
-    const cur = acc[id];
-    const who = { ...(a.uuid ? { uuid: a.uuid } : {}), ...(a.item_name ? { name: a.item_name } : {}) };
-    if (!cur) acc[id] = { price, count: 1, ...who };
-    else {
-      cur.count++;
-      if (price < cur.price) {
-        cur.next = cur.price;
-        cur.price = price;
-        delete cur.uuid;
-        delete cur.name;
-        Object.assign(cur, who);
-      } else if (cur.next === undefined || price < cur.next) cur.next = price;
+    if (pet?.heldItem === KAT.tierBoostId) {
+      tierBoosted++;
+      continue;
     }
+    bins++;
+    const who: Partial<AhPrice> = {
+      ...(a.uuid ? { uuid: a.uuid } : {}),
+      ...(a.item_name ? { name: a.item_name } : {}),
+      ...(pet ? { exp: pet.exp } : {}),
+    };
+    addListing(acc, id, price, who);
+    const maxLevel = pet && (PET_MAX_200.has(pet.type) ? 200 : 100);
+    if (maxLevel && petLevelFromName(a.item_name) === maxLevel) addListing(acc, id + AH.petMaxSuffix, price, who);
   }
-  return { bins, errors };
+  return { bins, errors, tierBoosted };
 }
 
 /**
@@ -150,6 +197,7 @@ export async function scanAuctions(
   const lowestBin = Object.create(null) as Record<string, AhPrice>;
   let binCount = 0;
   let decodeErrors = 0;
+  let tierBoosted = 0;
 
   async function loadPage(n: number): Promise<RawAhPage> {
     check();
@@ -164,6 +212,7 @@ export async function scanAuctions(
     const r = await aggregatePage(p.auctions, lowestBin);
     binCount += r.bins;
     decodeErrors += r.errors;
+    tierBoosted += r.tierBoosted;
     check();
   }
 
@@ -193,7 +242,7 @@ export async function scanAuctions(
   await Promise.all(Array.from({ length: Math.max(1, Math.min(concurrency, totalPages - 1)) }, worker));
   failedPages.sort((a, b) => a - b);
   // Object.create(null) keeps odd ids like "__proto__" safe while aggregating; hand out a plain object.
-  return { v: AH_SCAN_VERSION, fetchedAt: now(), lastUpdated: first.lastUpdated, lowestBin: { ...lowestBin }, failedPages, binCount, decodeErrors };
+  return { v: AH_SCAN_VERSION, fetchedAt: now(), lastUpdated: first.lastUpdated, lowestBin: { ...lowestBin }, failedPages, binCount, decodeErrors, tierBoosted };
 }
 
 // ---------------------------------------------------------------- worker bridge
