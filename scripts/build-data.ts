@@ -1,6 +1,7 @@
 // npm run data [-- --offline]  ->  public/data/catalog.json (CatalogFile)
 // Sources: Hypixel bazaar (product ids), Hypixel items API (names/tiers/NPC sell/category/auctionable),
-// NEU repo tarball (recipes, NPC shops, SkyMart, enchanting-table levels, attribute shards), scripts/data/book-rules.json.
+// NEU repo tarball (recipes, NPC shops, SkyMart, enchanting-table levels, attribute shards, Kat upgrades, pet XP),
+// scripts/data/{book-rules,extra-recipes,bits-rules}.json.
 // Cache: .cache/ or $BAZAAR_CACHE_DIR. With --offline nothing is fetched and nothing is written to the cache.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
@@ -8,17 +9,24 @@ import type { CatalogFile, CatalogItemEntry, CatalogRecipeEntry } from '../src/t
 import type { RawBazaar, RawItem, RawItems } from '../src/types/api.ts';
 import { deriveName, neuToBazaarId, stripFormatting } from '../src/domain/ids.ts';
 import { readTar } from './lib/untar.ts';
-import { extractNpcOffers, extractRecipes, extractShopOffers, type NeuItem, type ShopOfferRaw } from './lib/neu.ts';
+import { extractKatSteps, extractNpcOffers, extractRecipes, extractShopOffers, type NeuItem, type ShopOfferRaw } from './lib/neu.ts';
 import { CACHE_FILES, cacheDir, cachePath } from './lib/cache.ts';
 import {
+  BITS_CURRENCY,
   buildBookRules,
+  buildKatSteps,
   buildShops,
+  extractPetLeveling,
   extractShardMeta,
   itemApiFlags,
+  mergeBitsOffers,
   mergeExtraRecipes,
+  parseBitsRules,
   parseBookRules,
   parseExtraRecipes,
+  petDisplayNames,
   shopDisplayName,
+  shopKeep,
   skymartOffers,
   tableMaxLevels,
   type ItemsApiFlags,
@@ -39,13 +47,14 @@ const CACHE = {
 const OUT = 'public/data/catalog.json';
 const BOOK_RULES = 'scripts/data/book-rules.json';
 const EXTRA_RECIPES = 'scripts/data/extra-recipes.json';
+const BITS_RULES = 'scripts/data/bits-rules.json';
 const SUBCRAFT_DEPTH = 3;
 const LIMITS = {
   bazaarRecipes: 440, forge: 100, nb: 400, ns: 2000, bytes: 600 * 1024, priceableTarget: 380,
-  copperToBazaar: 7, shards: 100, booksT: 30,
+  copperToBazaar: 7, shards: 100, booksT: 30, kat: 200, bits: 50,
 };
 /** NEU constants read for v2 (path suffix inside the tarball). */
-const NEU_CONSTANTS = ['bazaarstocks', 'attribute_shards', 'enchants', 'skymart'] as const;
+const NEU_CONSTANTS = ['bazaarstocks', 'attribute_shards', 'enchants', 'skymart', 'pets'] as const;
 type NeuConstant = (typeof NEU_CONSTANTS)[number];
 const CONSTANT_RE = new RegExp(`^[^/]+/constants/(${NEU_CONSTANTS.join('|')})\\.json$`);
 
@@ -228,15 +237,34 @@ async function main() {
   nb.set('SKYBLOCK_COIN', 1); // forge recipes may cost coins directly
 
   // ---------------------------------------------------------------- v2: currency shops (single-cost, non-coin) + SkyMart
+  // Offers are kept when the output can be sold (bazaar / NPC); bits offers also when it is auctionable or listed in
+  // scripts/data/bits-rules.json (AH-only Elizabeth items, untradeable sacks), so the Bits page sees the whole shop.
   const sellable = (id: string) => bz.has(id) || (api.get(id)?.npc_sell_price ?? 0) > 0;
+  const bitsRules = parseBitsRules(JSON.parse(readFileSync(BITS_RULES, 'utf8')) as unknown);
   const rawShops: ShopOfferRaw[] = [];
   for (const it of neuItems) rawShops.push(...extractShopOffers(it));
   const skymart = skymartOffers(constants.get('skymart'));
-  const shops = buildShops([...rawShops, ...skymart], {
+  const bitsExtra = mergeBitsOffers(bitsRules.extraOffers, (id) =>
+    [...rawShops, ...skymart].some((r) => norm(r.currency) === BITS_CURRENCY && norm(r.result) === id),
+  );
+  if (bitsExtra.added.length) console.log(`  extra bits offers added: ${bitsExtra.added.map((x) => x.result).join(', ')}`);
+  if (bitsExtra.skipped.length) console.warn(`  extra bits offers skipped (NEU sells it for bits now): ${bitsExtra.skipped.join(', ')}`);
+  const shops = buildShops([...rawShops, ...skymart, ...bitsExtra.added], {
     norm,
-    keep: sellable,
+    keep: shopKeep(sellable, (id) => itemApiFlags(api.get(id)).ah === 1, bitsRules),
     shopName: (neuId) => shopDisplayName(neuId, neuDisplay.get(neuId)),
   });
+  const bitsShop = shops.filter((s) => s.cur === BITS_CURRENCY);
+  const untradeable = new Set(bitsRules.untradeable);
+  const listedAh = new Set(bitsRules.auctionable);
+  for (const id of [...untradeable, ...listedAh]) if (!bitsShop.some((s) => s.o === id)) console.warn(`  bits-rules: ${id} is not a bits-shop output`);
+
+  // ---------------------------------------------------------------- v2: Kat upgrades + pet XP table / names
+  const kat = buildKatSteps(neuItems.flatMap(extractKatSteps), norm);
+  const petLeveling = extractPetLeveling(constants.get('pets'));
+  const petNames = petDisplayNames(neuItems, constants.get('pets'));
+  const katPets = new Set(kat.steps.map((s) => s.p));
+  const katNameless = [...katPets].filter((p) => !petNames[p]);
 
   // ---------------------------------------------------------------- v2: books (table max from NEU, anvil max curated)
   const curated = parseBookRules(JSON.parse(readFileSync(BOOK_RULES, 'utf8')) as unknown);
@@ -308,16 +336,19 @@ async function main() {
   }
   for (const id of nb.keys()) ids.add(id);
   for (const s of shops) ids.add(s.cur).add(s.o);
+  for (const s of kat.steps) for (const [id] of s.i ?? []) ids.add(id);
   for (const it of api.values()) if (typeof it.npc_sell_price === 'number' && it.npc_sell_price > 0) ids.add(it.id);
 
   const items: Record<string, CatalogItemEntry> = {};
   const nameSrc = new Map<string, number>();
+  const derivedNames = new Set<string>();
   for (const id of [...ids].sort()) {
     const a = api.get(id);
     const apiName = a?.name ? cleanName(a.name) : '';
     const neuName = neuNameById.get(id) ?? '';
     const n = id === 'SKYBLOCK_COIN' ? 'Coins' : apiName || neuName || deriveName(id);
     inc(nameSrc, apiName ? 'items API' : neuName ? 'NEU' : 'derived');
+    if (!apiName && !neuName) derivedNames.add(id);
     const e: CatalogItemEntry = { n };
     if (a?.tier) e.t = a.tier;
     if (typeof a?.npc_sell_price === 'number' && a.npc_sell_price > 0) e.ns = round(a.npc_sell_price);
@@ -325,6 +356,8 @@ async function main() {
     if (b !== undefined) e.nb = round(b);
     if (bz.has(id)) e.bz = 1;
     Object.assign(e, itemApiFlags(a));
+    if (listedAh.has(id)) e.ah = 1;
+    if (untradeable.has(id)) delete e.ah;
     const sh = shardMeta.get(id);
     if (sh) e.sh = sh;
     items[id] = e;
@@ -339,6 +372,10 @@ async function main() {
     recipes: recipes.map(({ key: _k, ...r }) => r),
     shops,
     books,
+    kat: kat.steps,
+    ...(petLeveling.leveling ? { petLeveling: petLeveling.leveling } : {}),
+    petNames,
+    untradeable: [...untradeable].sort(),
   };
   const json = JSON.stringify(file);
   mkdirSync(dirname(OUT), { recursive: true });
@@ -368,6 +405,10 @@ async function main() {
     books: Object.keys(books).length,
     booksWithT: Object.values(books).filter((b) => b.t !== undefined).length,
     booksWithM: Object.values(books).filter((b) => b.m !== undefined).length,
+    katSteps: kat.steps.length,
+    katPets: katPets.size,
+    petNames: Object.keys(petNames).length,
+    bitsOffers: bitsShop.length,
     bytes: Buffer.byteLength(json),
   };
   const byCurrency = new Map<string, number>();
@@ -385,6 +426,16 @@ async function main() {
   console.log(`\nShops by currency (${shops.length} offers from ${rawShops.length} npc_shop single-cost + ${skymart.length} SkyMart):`);
   for (const [k, v] of [...byCurrency].sort((a, b) => b[1] - a[1])) console.log(`  ${String(v).padStart(4)}  ${k}`);
   if (curatedMissing.length) console.warn(`  book-rules entries with no bazaar book: ${curatedMissing.join(', ')}`);
+  const bitsDerived = bitsShop.filter((s) => derivedNames.has(s.o) && !s.o.startsWith('ENCHANTMENT_')).map((s) => s.o);
+  if (bitsDerived.length) console.warn(`  bits outputs named by deriveName only: ${bitsDerived.join(', ')}`);
+
+  console.log(`\nKat: ${kat.steps.length} steps over ${katPets.size} pets (${kat.duplicates} duplicates)`);
+  if (kat.dropped.length) console.log(`  dropped (rarity above MYTHIC, not an AH pet tier): ${kat.dropped.join(', ')}`);
+  if (katNameless.length) console.warn(`  Kat pets with no display name: ${katNameless.join(', ')}`);
+  const pl = petLeveling.leveling;
+  console.log(`Pets: ${Object.keys(petNames).length} names, ${pl ? `${pl.l.length} levels, ${Object.keys(pl.o).length} rarity offsets, custom ${Object.keys(pl.c).join(', ') || '-'}` : 'no XP table'}`);
+  if (petLeveling.ignored.length) console.log(`  pet leveling overrides not carried: ${petLeveling.ignored.join(', ')}`);
+  console.log(`Bits shop: ${bitsShop.length} offers (${untradeable.size} untradeable, ${listedAh.size} AH-only by bits-rules)`);
 
   console.log('\nSummary:');
   for (const [k, v] of Object.entries(stats)) console.log(`  ${k.padEnd(18)} ${v}`);
@@ -400,6 +451,9 @@ async function main() {
   if (stats.copperToBazaar < LIMITS.copperToBazaar) fails.push(`copper offers to bazaar ids ${stats.copperToBazaar} < ${LIMITS.copperToBazaar}`);
   if (stats.shards < LIMITS.shards) fails.push(`shards with metadata ${stats.shards} < ${LIMITS.shards}`);
   if (stats.booksWithT < LIMITS.booksT) fails.push(`books with table max ${stats.booksWithT} < ${LIMITS.booksT}`);
+  if (stats.katSteps < LIMITS.kat) fails.push(`kat steps ${stats.katSteps} < ${LIMITS.kat}`);
+  if (stats.bitsOffers < LIMITS.bits) fails.push(`bits offers ${stats.bitsOffers} < ${LIMITS.bits}`);
+  if (!pl) fails.push('no pet leveling table (constants/pets.json)');
   if (books.ENCHANTMENT_SHARPNESS?.m !== 5) fails.push(`books.ENCHANTMENT_SHARPNESS.m = ${books.ENCHANTMENT_SHARPNESS?.m} (expected 5)`);
   if (fullyPriceable < LIMITS.priceableTarget) console.warn(`  note: fully priceable ${fullyPriceable} < target ${LIMITS.priceableTarget} (not fatal)`);
   if (fails.length) {

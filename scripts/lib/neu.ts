@@ -40,6 +40,20 @@ export interface ShopOfferRaw {
   qty: number;
 }
 
+/** A Kat pet upgrade from a NEU `katgrade` recipe (ids still in NEU form). */
+export interface KatStepRaw {
+  /** pet type, e.g. OCELOT */
+  pet: string;
+  /** rarity index of the input pet (NEU `OCELOT;1` -> 1) */
+  from: number;
+  to: number;
+  coins: number;
+  /** wait time in seconds */
+  seconds: number;
+  /** NEU ids */
+  items: { id: string; qty: number }[];
+}
+
 const SLOTS = ['A1', 'A2', 'A3', 'B1', 'B2', 'B3', 'C1', 'C2', 'C3'] as const;
 
 function stack(v: unknown): { id: string; qty: number } | null {
@@ -129,6 +143,29 @@ export function extractShopOffers(item: NeuItem): ShopOfferRaw[] {
     const cost = stack(r.cost[0]);
     if (!res || !cost) continue;
     out.push({ shop: item.internalname, currency: cost.id, costQty: cost.qty, result: res.id, qty: res.qty });
+  }
+  return out;
+}
+
+const PET_ID = /^([A-Z0-9_]+);(\d+)$/;
+
+/**
+ * Kat upgrades (`katgrade` recipes, kept in the output pet's file): pay `coins` + `items`, wait `time` seconds, get
+ * `input` pet one rarity up. A bare id in `items` means qty 1. Input and output must be the same pet type, one
+ * rarity apart or more; everything else is skipped.
+ */
+export function extractKatSteps(item: NeuItem): KatStepRaw[] {
+  const out: KatStepRaw[] = [];
+  for (const r of item.recipes ?? []) {
+    if (!r || r.type !== 'katgrade' || typeof r.input !== 'string' || typeof r.output !== 'string') continue;
+    const a = PET_ID.exec(r.input);
+    const b = PET_ID.exec(r.output);
+    if (!a || !b || a[1] !== b[1] || !(Number(b[2]) > Number(a[2]))) continue;
+    const coins = typeof r.coins === 'number' && Number.isFinite(r.coins) && r.coins >= 0 ? r.coins : undefined;
+    const seconds = typeof r.time === 'number' && Number.isFinite(r.time) && r.time >= 0 ? r.time : undefined;
+    if (coins === undefined || seconds === undefined) continue;
+    const items = (Array.isArray(r.items) ? r.items : []).map(stack).filter((s): s is { id: string; qty: number } => !!s);
+    out.push({ pet: a[1]!, from: Number(a[2]), to: Number(b[2]), coins, seconds, items });
   }
   return out;
 }
