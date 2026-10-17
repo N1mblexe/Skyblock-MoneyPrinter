@@ -19,6 +19,7 @@ export const plan: Messages['plan'] = {
   kindBook: 'Kitap',
   kindNpc: 'NPC',
   kindKat: 'Kat',
+  kindAhflip: 'AH flip',
   fillModel: 'Dolum modeli: {v}',
   openSettings: 'Ayarlarda değiştir',
   inputsAria: 'Plan girdileri',
@@ -102,6 +103,9 @@ export const plan: Messages['plan'] = {
   tab_book: 'Kitaplar',
   tab_npc: 'NPC',
   tab_kat: 'Kat yükseltme',
+  tab_ahflip: 'AH flipleri',
+  attention: 'Pozisyon başına maliyet (coin/sa)',
+  attentionHelp: 'Planın açtığı her pozisyon için düşülür: yüksek değerler daha az ama daha büyük pozisyon verir.',
   watch: 'İzle',
   unwatch: 'İzlemeyi bırak',
 

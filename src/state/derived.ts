@@ -1,5 +1,6 @@
 // Memoized domain results shared by all views. Owner: history package.
 import { catalogFromFile } from '../data/catalog.ts';
+import { computeAhFlips } from '../domain/ahFlips.ts';
 import { computeBookCombines } from '../domain/books.ts';
 import { computeChains } from '../domain/chains.ts';
 import { computeCrafts } from '../domain/craft.ts';
@@ -24,6 +25,8 @@ export const CALC_SETTINGS = [
   'npcDailyLimit',
   'fillModel',
   'ahEnabled',
+  'conservative',
+  'bitsMultiplier',
 ] as const satisfies readonly (keyof Settings)[];
 
 /** Memo key of the calc-relevant settings. */
@@ -93,6 +96,11 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     // Kat results and the opportunities built from them are memoized per Taming level
     kat: () =>
       cached(`kat:${taming()}`, [], (c) => (katScanReady(store.get().ah) ? computeKatFlips(c, { skip: 'none', taming: taming() }) : []))(),
+    // not in the memo key: the AH snapshot already is, and AH flips read nothing else from the context
+    ahFlips: cached('ahFlips', [], (c) => {
+      const ah = store.get().ah;
+      return ah && store.get().settings.ahEnabled ? computeAhFlips(ah, c.catalog) : [];
+    }),
     fusion: () => {
       const c = current();
       if (!c) return [];

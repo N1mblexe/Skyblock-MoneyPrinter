@@ -217,7 +217,7 @@ describe('plan view', () => {
       { ...base, kind: 'forge' as const, key: 'forge:C' },
       { ...base, kind: 'flip' as const, key: 'flip:D' },
     ];
-    const v = { flip: true, craft: true, forge: true, chain: true, book: true, npc: true, kat: true, ah: true };
+    const v = { flip: true, craft: true, forge: true, chain: true, book: true, npc: true, kat: true, ahflip: true, ah: true };
     expect(filterKinds(opps, v)).toBe(opps);
     expect(filterKinds(opps, { ...v, forge: false }).map((o) => o.key)).toEqual(['craft:A', 'flip:D']);
     expect(filterKinds(opps, { ...v, ah: false }).map((o) => o.key)).toEqual(['craft:A', 'forge:C', 'flip:D']);

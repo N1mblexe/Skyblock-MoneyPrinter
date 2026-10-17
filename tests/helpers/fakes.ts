@@ -6,8 +6,9 @@ import type { AppState, HistoryRepo, Store, ViewContext } from '../../src/types/
 type BaseHistory = Pick<HistoryRepo, 'init' | 'record' | 'series' | 'recent' | 'stats' | 'saveLatest' | 'loadLatest'>;
 
 /** HistoryRepo members beyond the per-item basics; spread into hand-written fakes. */
-export const historyExtras: Pick<HistoryRepo, 'marketStats' | 'info' | 'clear'> = {
+export const historyExtras: Pick<HistoryRepo, 'marketStats' | 'statsAll' | 'info' | 'clear'> = {
   marketStats: () => new Map(),
+  statsAll: () => ({ price: new Map(), market: new Map() }),
   info: () => ({ raw: 0, q15: 0, oldest: null, persistent: false }),
   clear: async () => {},
 };

@@ -71,6 +71,7 @@ export const npc: Messages['npc'] = {
   lim_depth: 'emir defteri derinliği',
   lim_forge: 'forge slotu',
   lim_npcLimit: 'NPC günlük limiti',
+  lim_ahSales: 'AH satışları',
   lim_slots: 'sipariş slotu',
 
   coin: 'Coin',
@@ -101,6 +102,7 @@ export const npc: Messages['npc'] = {
   d_buyHours: 'Alış süresi',
   d_sellHours: 'Satış süresi',
   d_npcLimit: 'NPC günlük limit',
+  d_ahSales: 'AH satışları',
   d_valueSource: 'Değer kaynağı',
   d_unpriced: 'Bu teklifin çıktısı için fiyat yok (bazaar’da değil, NPC satış fiyatı da yok).',
   d_curOnBazaar: '{cur} bazaar’da ≈ {ask} coin (insta-buy). Para birimini bazaar’dan alıp bu teklife harcarsan 1 coin ≈ {ratio} coin olur.',

@@ -28,7 +28,7 @@ export const PLAN_DEBOUNCE_MS = 300;
 /** Window event the shell may listen to for opening the settings drawer. */
 export const OPEN_SETTINGS_EVENT = 'bm:open-settings';
 
-const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', forge: 'kindForge', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc', kat: 'kindKat' } as const;
+const KIND_LABEL = { flip: 'kindFlip', craft: 'kindCraft', forge: 'kindForge', chain: 'kindChain', book: 'kindBook', npc: 'kindNpc', kat: 'kindKat', ahflip: 'kindAhflip' } as const;
 
 interface Memo {
   opps: readonly Opportunity[];

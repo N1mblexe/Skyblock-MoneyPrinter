@@ -92,7 +92,10 @@ export interface CatalogRecipeEntry {
   c: number;
   /** inputs [id, qty] (bazaar-normalized, qty merged per id) */
   i: [string, number][];
-  k: 'craft' | 'forge';
+  /** shop: an NPC offer that costs items (and maybe coins, as the input SKYBLOCK_COIN), or a NEU `trade` recipe */
+  k: 'craft' | 'forge' | 'shop';
+  /** shop recipes: the NEU shop id, or 'trade' */
+  s?: string;
   /** forge duration in seconds */
   d?: number;
   /** requirement text */
@@ -118,6 +121,8 @@ export interface CatalogFile {
   petNames?: Record<string, string>;
   /** v2: item ids that cannot be traded (e.g. bits-shop sacks); hand-kept in scripts/data/bits-rules.json */
   untradeable?: string[];
+  /** v2: what George pays for a pet, keyed `TYPE;IDX` (NEU constants/george.json) */
+  george?: Record<string, number>;
 }
 
 export interface ItemInfo {
@@ -175,7 +180,9 @@ export interface Recipe {
   output: string;
   outCount: number;
   inputs: { id: string; qty: number }[];
-  kind: 'craft' | 'forge';
+  kind: 'craft' | 'forge' | 'shop';
+  /** shop recipes: the NEU shop id, or 'trade' */
+  shop?: string;
   durationSec?: number;
   req?: string;
 }
@@ -199,6 +206,8 @@ export interface Catalog {
   petNames: Record<string, string>;
   /** items that can't be sold to other players */
   untradeable: ReadonlySet<string>;
+  /** what George pays for a pet, keyed `TYPE;IDX` (empty for older catalogs) */
+  george: Readonly<Record<string, number>>;
 }
 
 // ---------------------------------------------------------------- Settings
@@ -208,6 +217,8 @@ export type { Lang } from '../i18n/languages.ts';
 import type { Lang } from '../i18n/languages.ts';
 import type { Msg } from '../i18n/errors.ts';
 import type { KatRow } from '../domain/kat.ts';
+import type { AhFlipRow } from '../domain/ahFlips.ts';
+import type { MarketCore } from '../domain/market.ts';
 export type Theme = 'auto' | 'light' | 'dark';
 export type TaxRate = 0.0125 | 0.01125 | 0.01;
 /** sequential: buy the batch, then sell it; pipelined: buy and sell overlap (needs 2x capital) */
@@ -241,10 +252,19 @@ export interface Settings {
   ahEnabled: boolean;
   /** your Taming level (0..KAT.maxTaming): Kat upgrades whose target rarity needs more are left out */
   taming: number;
+  /**
+   * History-based conservatism (on by default): sell legs priced at no more than the recent median, buy legs at no
+   * less, fill rates scaled by the recent volume trend, a churn cost for being outbid / undercut, and AH sales at the
+   * median sold price. Off: the raw snapshot numbers.
+   */
+  conservative: boolean;
+  /** bits per Booster Cookie multiplier (fame rank or custom), 1..5; set on the Bits page */
+  bitsMultiplier: number;
 }
 
 // ---------------------------------------------------------------- Domain results
-export type QuoteSource = 'order' | 'insta' | 'npc' | 'craft';
+/** ah: bought at the AH lowest BIN; mix: an NPC shop up to its limit, the rest from the bazaar */
+export type QuoteSource = 'order' | 'insta' | 'npc' | 'craft' | 'ah' | 'mix';
 
 export interface Quote {
   /** per-unit price (before tax) */
@@ -254,7 +274,10 @@ export interface Quote {
   /** (price - top of book) / top of book, 0 for order modes */
   slippage: number;
   source: QuoteSource;
-  /** order price was clamped: raised to the NPC floor, or capped at the ask */
+  /**
+   * order price was clamped: raised to the NPC floor, or capped at the ask. A buy order capped at the ask fills
+   * against the sell offers at once, so it comes back as source 'insta' (walk-book VWAP, depth-bound, no slot).
+   */
   clamped?: 'npcFloor' | 'ask';
 }
 
@@ -263,7 +286,8 @@ export interface Throughput {
   batchQty: number;
   capitalUsed: number;
   fillHours: number;
-  limitedBy: 'volume' | 'capital' | 'depth' | 'forge' | 'npcLimit' | 'slots' | 'kat';
+  /** ahSales: the AH sells this many per hour (measured from auctions_ended, else AH_SALES.defaultPerHour) */
+  limitedBy: 'volume' | 'capital' | 'depth' | 'forge' | 'npcLimit' | 'slots' | 'kat' | 'ahSales';
   /** hours to buy / sell one batch */
   buyHours?: number;
   sellHours?: number;
@@ -308,6 +332,55 @@ export interface PriceStats {
   change24h: number | null;
 }
 
+/** What history-based conservatism changed on a row (settings.conservative); absent when nothing changed. */
+export interface ConsInfo {
+  /** buy price before the adjustment (snapshot quote) */
+  buyRef?: number;
+  /** sell price before the adjustment */
+  sellRef?: number;
+  /** fill-rate multiplier from the recent volume trend (<= 1) */
+  rateMul?: number;
+  /** expected coins lost per unit to re-listing after being outbid / undercut */
+  churn?: number;
+}
+
+/**
+ * A market the planner shares between positions. X:bid = X's insta-sell flow (fills your buy orders on X and your
+ * insta-sells of X); X:ask = X's insta-buy flow (your sell offers, your insta-buys); X:npc = X's NPC daily limit;
+ * forge = your forge slots (per unit: slot-hours).
+ */
+export type ResourceKey = `${string}:bid` | `${string}:ask` | `${string}:npc` | 'forge';
+
+export interface ResourceUse {
+  key: ResourceKey;
+  /** resource units drawn per unit of the opportunity (e.g. 9 Wheat per Enchanted Wheat) */
+  perUnit: number;
+}
+
+/** One piece of a concave profit curve: units up to `upTo` earn `profitPerUnit` each (insta slippage). */
+export interface ProfitSegment {
+  upTo: number;
+  profitPerUnit: number;
+}
+
+/** Planner inputs of one row, priced with unlimited capital and order slots (the planner applies both). */
+export interface PlanInputs {
+  /** coins tied up per unit (pipelined overlap applied) */
+  unitCost: number;
+  /** buy cost per unit, before the overlap */
+  buyCost: number;
+  profitPerUnit: number;
+  /** units/hour at maxUnits */
+  unitsPerHour: number;
+  /** max units per cycle with capital and slots unbounded */
+  maxUnits: number;
+  /** units per order for each order / offer leg, per unit (slots = sum ceil(u * k / MAX_ORDER_UNITS)) */
+  orderUnits: number[];
+  uses: ResourceUse[];
+  /** non-increasing profit per unit along the size (absent: flat) */
+  segments?: ProfitSegment[];
+}
+
 export interface FlipRow {
   id: string;
   name: string;
@@ -330,6 +403,8 @@ export interface FlipRow {
   risk: RiskReport;
   /** buy order price was clamped (NPC floor raised it / ask capped it) */
   buyClamped?: 'npcFloor' | 'ask';
+  cons?: ConsInfo;
+  plan?: PlanInputs;
 }
 
 export interface IngredientLine {
@@ -344,6 +419,19 @@ export interface IngredientLine {
   bottleneck: boolean;
   /** recipe key used when source === 'craft' */
   viaRecipe?: string;
+  /** what is actually bought for this line (sub-crafts flattened), per craft of the parent recipe */
+  leaves?: LeafLine[];
+}
+
+/** A bought input under an ingredient line (itself, or the leaves of its sub-craft). */
+export interface LeafLine {
+  id: string;
+  /** units per craft of the top recipe */
+  qty: number;
+  unit: number;
+  source: QuoteSource;
+  /** the market it draws on (absent for unlimited sources) */
+  res?: ResourceKey;
 }
 
 export interface CraftRow {
@@ -367,6 +455,8 @@ export interface CraftRow {
   risk: RiskReport;
   /** ids that could not be priced; non-empty => row is "unpriced" */
   unpriced: string[];
+  cons?: ConsInfo;
+  plan?: PlanInputs;
 }
 
 export interface NpcFlipRow {
@@ -380,6 +470,8 @@ export interface NpcFlipRow {
   tp: Throughput;
   profitPerHour: number;
   risk: RiskReport;
+  cons?: ConsInfo;
+  plan?: PlanInputs;
 }
 
 export interface FusionRecipe {
@@ -447,6 +539,8 @@ export interface BookRow {
   profitPerHour: number;
   risk: RiskReport;
   verified: boolean;
+  cons?: ConsInfo;
+  plan?: PlanInputs;
 }
 
 export interface ShopRow {
@@ -460,7 +554,7 @@ export interface ShopRow {
   outQty: number;
   /** coins per offer when sold (after tax if bazaar) */
   value: number | null;
-  valueSource: 'bazaar' | 'npc' | null;
+  valueSource: 'bazaar' | 'npc' | 'ah' | null;
   /** value / costQty */
   coinsPerCurrency: number | null;
   weekVol: number;
@@ -482,9 +576,12 @@ export interface MarketStat {
   /** estimated recent insta-buy / insta-sell volume relative to the weekly average (1 = normal) */
   buyVolTrend: number | null;
   sellVolTrend: number | null;
+  /** times per hour the best bid / best ask changed over the raw (3 h) history: how often a top order gets outbid */
+  bidMovesPerHour?: number | null;
+  askMovesPerHour?: number | null;
 }
 
-export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc' | 'kat';
+export type OpportunityKind = 'flip' | 'craft' | 'forge' | 'chain' | 'book' | 'npc' | 'kat' | 'ahflip';
 
 export interface Opportunity {
   kind: OpportunityKind;
@@ -497,13 +594,20 @@ export interface Opportunity {
   name: string;
   /** coins tied up per unit */
   unitCost: number;
+  /** buy cost per unit before the pipelined overlap (unitCost > buyCost when doubled) */
+  buyCost?: number;
   profitPerUnit: number;
   /** units/hour ignoring capital */
   unitsPerHour: number;
   /** max units per cycle (volume/depth bound) */
   maxUnits: number;
-  /** order slots used */
+  /** order slots used at maxUnits */
   slots: number;
+  /** units per order for each order / offer leg, per unit (slots at u units = sum ceil(u * k / MAX_ORDER_UNITS)) */
+  orderUnits?: number[];
+  /** shared markets this opportunity draws on */
+  uses?: ResourceUse[];
+  segments?: ProfitSegment[];
   risk: RiskReport;
   /** the output is valued at the AH lowest BIN (planner can leave these out) */
   ahSold?: boolean;
@@ -513,6 +617,7 @@ export interface Allocation {
   opp: Opportunity;
   units: number;
   capital: number;
+  /** order slots at the allocated units */
   slots: number;
   profitPerHour: number;
 }
@@ -522,6 +627,8 @@ export interface PlanResult {
   capitalUsed: number;
   slotsUsed: number;
   profitPerHour: number;
+  /** the objective the planner maximized (profit/hour weighted by risk, minus the attention cost) */
+  score?: number;
 }
 
 // ---------------------------------------------------------------- Market (opportunity) alerts
@@ -634,10 +741,17 @@ export interface AhPrice {
   name?: string;
   /** pets (scan v3+): total XP of the cheapest listing */
   exp?: number;
+  /** scan v4: the lowest AH.keepPrices per-item prices, ascending (price = prices[0]) */
+  prices?: number[];
+  /** scan v4: stack size of the cheapest listing when > 1 (prices are per item) */
+  stack?: number;
 }
 
 export interface AhSnapshot {
-  /** 2 = lowestBin entries carry next / uuid / name; 3 = pets also carry exp and `@MAX` (max-level) keys */
+  /**
+   * 2 = lowestBin entries carry next / uuid / name; 3 = pets also carry exp and `@MAX` (max-level) keys; 4 = per-item
+   * prices (stacks divided), `prices`, deduped by uuid, pet level-band keys
+   */
   v?: number;
   fetchedAt: number;
   /** Hypixel lastUpdated of page 0 */
@@ -645,6 +759,32 @@ export interface AhSnapshot {
   lowestBin: Record<string, AhPrice>;
   /** pages skipped after a retry (partial scan) */
   failedPages?: number[];
+  /** scan v4: pages whose lastUpdated still differed from page 0 after a retry (the AH moved mid-scan) */
+  mixedPages?: number;
+}
+
+/** Realized AH sales of one id (BIN only, per item), from /v2/skyblock/auctions_ended. */
+export interface AhSalesStat {
+  /** sales recorded */
+  n: number;
+  /** items sold (stacks counted by size) */
+  items: number;
+  /** median price per item */
+  median: number;
+  /** items sold per hour over the covered time; null while coverage < AH_SALES.minCoverageHours */
+  perHour: number | null;
+  /** hours of the sales feed actually seen */
+  coverageHours: number;
+  /** ms epoch of the newest sale */
+  last: number;
+}
+
+export interface AhSalesSnapshot {
+  v: 1;
+  updatedAt: number;
+  /** hours of the sales feed seen in the window (shared by every id) */
+  coverageHours: number;
+  byId: Record<string, AhSalesStat>;
 }
 
 export interface AhScanProgress {
@@ -675,6 +815,12 @@ export interface CalcCtx {
   ah?: (id: string) => AhPrice | null;
   /** mayor Derpy is in office (AH claim tax ×4) */
   derpy?: boolean;
+  /** cross-item market stats (volatility, trends, moves per hour) from history */
+  market?: (id: string) => MarketStat | null;
+  /** realized AH sales, if the sales feed is on */
+  ahSales?: (id: string) => AhSalesStat | null;
+  /** shared quotes, risk and pricer memo for this context (domain/market.ts) */
+  core?: MarketCore;
 }
 
 // ---------------------------------------------------------------- Storage
@@ -703,6 +849,8 @@ export interface HistoryRepo {
   loadLatest(): Promise<Snapshot | null>;
   /** Sync, cross-item stats from in-memory data; memoized per record, minute (sliding 24h window) and taxRate. */
   marketStats(taxRate: number): ReadonlyMap<string, MarketStat>;
+  /** Sync, every item's PriceStats and MarketStat at once (one pass; memoized per record and taxRate). */
+  statsAll(taxRate: number): { price: ReadonlyMap<string, PriceStats>; market: ReadonlyMap<string, MarketStat> };
   info(): { raw: number; q15: number; oldest: number | null; persistent: boolean };
   /** Drop all stored history (keeps nothing). */
   clear(): Promise<void>;
@@ -762,6 +910,8 @@ export interface AppState {
   /** newest first, capped at ALERTS.logMax */
   alertLog: AlertEvent[];
   ah: AhSnapshot | null;
+  /** realized AH sales (auctions_ended feed), null until loaded or with the AH off */
+  ahSales: AhSalesSnapshot | null;
   /** non-null while an AH scan is running */
   ahProgress: AhScanProgress | null;
   election: ElectionInfo | null;
@@ -781,6 +931,8 @@ export interface Derived {
   fusion(): FusionRow[];
   /** Kat upgrade runs without skip items, for settings.taming; [] without a v3+ AH scan */
   kat(): KatRow[];
+  /** AH flips on the current scan ([] without one) */
+  ahFlips(): AhFlipRow[];
   opportunities(): Opportunity[];
   marketStats(): ReadonlyMap<string, MarketStat>;
   calcCtx(): CalcCtx | null;

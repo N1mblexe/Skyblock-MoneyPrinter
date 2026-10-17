@@ -69,6 +69,7 @@ export const npc = {
   lim_depth: 'order book depth',
   lim_forge: 'forge slots',
   lim_npcLimit: 'NPC daily limit',
+  lim_ahSales: 'AH sales',
   lim_slots: 'order slots',
 
   coin: 'Coin',
@@ -99,6 +100,7 @@ export const npc = {
   d_buyHours: 'Buy time',
   d_sellHours: 'Sell time',
   d_npcLimit: 'NPC daily limit',
+  d_ahSales: 'AH sales',
   d_valueSource: 'Value source',
   d_unpriced: 'No price for this offer’s output (not on the bazaar and no NPC sell price).',
   d_curOnBazaar: '{cur} costs ≈ {ask} coins on the bazaar (insta-buy). Buying the currency there and spending it on this offer turns 1 coin into ≈ {ratio} coins.',

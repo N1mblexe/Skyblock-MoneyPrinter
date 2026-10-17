@@ -6,6 +6,7 @@
 //   bazaar   -> tests/fixtures/smoke/bazaar.json.gz (lastUpdated = now on every request)
 //   auctions -> tests/fixtures/ah-page.json (page 0, totalPages 1; the app scans it as AH scan v3, so Kat runs)
 //   election -> tests/fixtures/election.json
+//   auctions_ended -> tests/fixtures/ah-ended.json (lastUpdated = now)
 //   Google Fonts CSS -> empty stylesheet; anything else external -> aborted and reported.
 // Suites: desktop 1280x800 (everything), mobile 390x844 (shell + routes + cards), error path (API down, manual load).
 // --live: no stubbing, reduced checks (status, routes, flip rows, palette, language, mobile shell).
@@ -73,6 +74,7 @@ const FIXTURES = LIVE ? null : loadSmokeFixtures();
 const BAZAAR_TEXT = FIXTURES?.bazaar ?? '';
 const AH_PAGE: RawAhPage | null = FIXTURES?.ahPage ?? null;
 const ELECTION_TEXT = FIXTURES?.election ?? '';
+const AH_ENDED_TEXT = FIXTURES?.ahEnded ?? '';
 
 /** Schema defaults as the view's query state decodes them with an empty URL and no stored prefs. */
 function defaults<V>(schema: Record<string, { def: unknown }>): V {
@@ -228,7 +230,7 @@ interface Env {
   aborted: Set<string>;
   unexpected: string[];
   bazaar: { mode: 'serve' | 'abort'; text: string };
-  hits: Record<'bazaar' | 'auctions' | 'election', number>;
+  hits: Record<'bazaar' | 'auctions' | 'auctionsEnded' | 'election', number>;
 }
 
 let BASE = '';
@@ -243,7 +245,7 @@ async function openEnv(browser: Browser, label: string, viewport: { width: numbe
     aborted: new Set(),
     unexpected: [],
     bazaar: { mode: bazaarMode, text: BAZAAR_TEXT },
-    hits: { bazaar: 0, auctions: 0, election: 0 },
+    hits: { bazaar: 0, auctions: 0, auctionsEnded: 0, election: 0 },
   };
   if (!LIVE) await context.route('**/*', (route) => handleRoute(env, route));
   const page = await context.newPage();
@@ -286,6 +288,10 @@ async function handleRoute(env: Env, route: PwRoute): Promise<void> {
       const page = Number(u.searchParams.get('page') ?? 0);
       if (page !== 0) return route.fulfill({ status: 404, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: '{"success":false}' });
       return json(JSON.stringify(AH_PAGE));
+    }
+    if (u.pathname === '/v2/skyblock/auctions_ended') {
+      env.hits.auctionsEnded++;
+      return json(withNow(AH_ENDED_TEXT));
     }
     if (u.pathname === '/v2/resources/skyblock/election') {
       env.hits.election++;

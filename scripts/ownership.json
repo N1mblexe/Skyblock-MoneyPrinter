@@ -1,67 +1,283 @@
 {
-  "$comment": "Wave -> agent -> globs it may touch. Checked by scripts/check-ownership.ts against `git diff round2...<branch>`.",
+  "$comment": "Wave -> agent -> globs it may touch ({a,b} braces expand, ! denies). Checked by scripts/check-ownership.ts against `git diff <base>...<branch>`.",
   "w1": {
     "estimates": [
-      "src/domain/pricing.ts", "src/domain/flip.ts", "src/domain/craft.ts", "src/domain/npc.ts", "src/domain/fusion.ts",
-      "src/domain/risk.ts", "src/domain/book.ts", "src/domain/stats.ts",
-      "tests/domain/pricing.test.ts", "tests/domain/flip.test.ts", "tests/domain/craft.test.ts", "tests/domain/npc.test.ts",
-      "tests/domain/fusion.test.ts", "tests/domain/risk.test.ts", "tests/domain/book.test.ts", "tests/domain/stats.test.ts"
+      "src/domain/pricing.ts",
+      "src/domain/flip.ts",
+      "src/domain/craft.ts",
+      "src/domain/npc.ts",
+      "src/domain/fusion.ts",
+      "src/domain/risk.ts",
+      "src/domain/book.ts",
+      "src/domain/stats.ts",
+      "tests/domain/pricing.test.ts",
+      "tests/domain/flip.test.ts",
+      "tests/domain/craft.test.ts",
+      "tests/domain/npc.test.ts",
+      "tests/domain/fusion.test.ts",
+      "tests/domain/risk.test.ts",
+      "tests/domain/book.test.ts",
+      "tests/domain/stats.test.ts"
     ],
     "catalog": [
-      "scripts/**", "!scripts/smoke.ts", "!scripts/ownership.json", "!scripts/check-ownership.ts",
-      "public/data/catalog.json", "src/data/catalog.ts", "src/domain/ids.ts",
-      "tests/data/**", "tests/scripts/**", "tests/fixtures/catalog-v2.json", "tests/fixtures/smoke/**", "tests/fixtures/ah-page.json", "tests/fixtures/election.json"
+      "scripts/**",
+      "!scripts/smoke.ts",
+      "!scripts/ownership.json",
+      "!scripts/check-ownership.ts",
+      "public/data/catalog.json",
+      "src/data/catalog.ts",
+      "src/domain/ids.ts",
+      "tests/data/**",
+      "tests/scripts/**",
+      "tests/fixtures/catalog-v2.json",
+      "tests/fixtures/smoke/**",
+      "tests/fixtures/ah-page.json",
+      "tests/fixtures/election.json"
     ],
     "opportunities": [
-      "src/domain/books.ts", "src/domain/shops.ts", "src/domain/optimizer.ts",
-      "tests/domain/books.test.ts", "tests/domain/shops.test.ts", "tests/domain/optimizer.test.ts"
+      "src/domain/books.ts",
+      "src/domain/shops.ts",
+      "src/domain/optimizer.ts",
+      "tests/domain/books.test.ts",
+      "tests/domain/shops.test.ts",
+      "tests/domain/optimizer.test.ts"
     ],
     "history": [
-      "src/storage/**", "src/domain/marketStats.ts", "src/domain/alerts.ts", "src/state/derived.ts", "src/state/alertsRunner.ts", "src/state/alertsI18n.ts",
-      "tests/storage/**", "tests/state/**", "tests/domain/marketStats.test.ts", "tests/domain/alerts.test.ts"
+      "src/storage/**",
+      "src/domain/marketStats.ts",
+      "src/domain/alerts.ts",
+      "src/state/derived.ts",
+      "src/state/alertsRunner.ts",
+      "src/state/alertsI18n.ts",
+      "tests/storage/**",
+      "tests/state/**",
+      "tests/domain/marketStats.test.ts",
+      "tests/domain/alerts.test.ts"
     ],
     "market-apis": [
-      "src/api/auctions.ts", "src/api/nbt.ts", "src/api/election.ts", "src/api/ahWorker.ts", "src/api/ahStore.ts",
-      "tests/api/auctions.test.ts", "tests/api/nbt.test.ts", "tests/api/election.test.ts", "tests/api/ahStore.test.ts", "tests/fixtures/api/**"
+      "src/api/auctions.ts",
+      "src/api/nbt.ts",
+      "src/api/election.ts",
+      "src/api/ahWorker.ts",
+      "src/api/ahStore.ts",
+      "tests/api/auctions.test.ts",
+      "tests/api/nbt.test.ts",
+      "tests/api/election.test.ts",
+      "tests/api/ahStore.test.ts",
+      "tests/fixtures/api/**"
     ],
     "kit": [
-      "src/ui/table.ts", "src/ui/kit/**", "src/ui/dom.ts", "src/ui/format.ts", "src/ui/cells.ts", "src/ui/sparkline.ts",
+      "src/ui/table.ts",
+      "src/ui/kit/**",
+      "src/ui/dom.ts",
+      "src/ui/format.ts",
+      "src/ui/cells.ts",
+      "src/ui/sparkline.ts",
       "src/styles/components.css",
-      "tests/ui/table.test.ts", "tests/ui/format.test.ts", "tests/ui/sparkline.test.ts", "tests/ui/kit/**"
+      "tests/ui/table.test.ts",
+      "tests/ui/format.test.ts",
+      "tests/ui/sparkline.test.ts",
+      "tests/ui/kit/**"
     ]
   },
   "w2": {
     "shell": [
-      "src/ui/shell.ts", "src/ui/shell/**", "src/ui/statusPill.ts", "src/ui/settingsPanel.ts", "src/ui/manualLoad.ts",
-      "src/styles/base.css", "tests/ui/shell.test.ts", "tests/ui/shell/**"
+      "src/ui/shell.ts",
+      "src/ui/shell/**",
+      "src/ui/statusPill.ts",
+      "src/ui/settingsPanel.ts",
+      "src/ui/manualLoad.ts",
+      "src/styles/base.css",
+      "tests/ui/shell.test.ts",
+      "tests/ui/shell/**"
     ],
-    "overview-watch": ["src/ui/views/overview/**", "src/ui/views/watch/**", "tests/ui/views/overview.test.ts", "tests/ui/views/watch.test.ts"],
-    "flip-books": ["src/ui/views/flip/**", "src/ui/views/books/**", "tests/ui/views/flip.test.ts", "tests/ui/views/books.test.ts"],
-    "craft": ["src/ui/views/craft/**", "tests/ui/views/craft.test.ts"],
-    "npc-fusion": ["src/ui/views/npc/**", "src/ui/views/fusion/**", "tests/ui/views/npc.test.ts", "tests/ui/views/fusion.test.ts"],
-    "item-plan": ["src/ui/views/item/**", "src/ui/views/plan/**", "tests/ui/views/item.test.ts", "tests/ui/views/plan.test.ts"]
+    "overview-watch": [
+      "src/ui/views/overview/**",
+      "src/ui/views/watch/**",
+      "tests/ui/views/overview.test.ts",
+      "tests/ui/views/watch.test.ts"
+    ],
+    "flip-books": [
+      "src/ui/views/flip/**",
+      "src/ui/views/books/**",
+      "tests/ui/views/flip.test.ts",
+      "tests/ui/views/books.test.ts"
+    ],
+    "craft": [
+      "src/ui/views/craft/**",
+      "tests/ui/views/craft.test.ts"
+    ],
+    "npc-fusion": [
+      "src/ui/views/npc/**",
+      "src/ui/views/fusion/**",
+      "tests/ui/views/npc.test.ts",
+      "tests/ui/views/fusion.test.ts"
+    ],
+    "item-plan": [
+      "src/ui/views/item/**",
+      "src/ui/views/plan/**",
+      "tests/ui/views/item.test.ts",
+      "tests/ui/views/plan.test.ts"
+    ]
   },
   "w3": {
-    "smoke": ["scripts/smoke.ts", "tests/fixtures/smoke/**"],
-    "integration": ["tests/integration/**"],
-    "docs": ["README.md", "docs/**"]
+    "smoke": [
+      "scripts/smoke.ts",
+      "tests/fixtures/smoke/**"
+    ],
+    "integration": [
+      "tests/integration/**"
+    ],
+    "docs": [
+      "README.md",
+      "docs/**"
+    ]
   },
   "k1": {
-    "catalog": ["scripts/**", "!scripts/smoke.ts", "!scripts/ownership.json", "src/data/catalog.ts", "tests/scripts/**", "tests/data/**", "public/data/catalog.json"],
+    "catalog": [
+      "scripts/**",
+      "!scripts/smoke.ts",
+      "!scripts/ownership.json",
+      "src/data/catalog.ts",
+      "tests/scripts/**",
+      "tests/data/**",
+      "public/data/catalog.json"
+    ],
     "ahscan": [
-      "src/api/auctions.ts", "src/api/nbt.ts", "src/api/ahStore.ts", "tests/api/**", "tests/fixtures/ah-page.json",
-      "src/ui/views/ahflip/**", "tests/ui/views/ahflip.test.ts", "src/i18n/locales/*/ahflip.ts"
+      "src/api/auctions.ts",
+      "src/api/nbt.ts",
+      "src/api/ahStore.ts",
+      "tests/api/**",
+      "tests/fixtures/ah-page.json",
+      "src/ui/views/ahflip/**",
+      "tests/ui/views/ahflip.test.ts",
+      "src/i18n/locales/*/ahflip.ts"
     ]
   },
   "k2": {
-    "kat": ["src/domain/kat.ts", "src/ui/views/kat/**", "src/i18n/locales/*/kat.ts", "tests/domain/kat.test.ts", "tests/ui/views/kat.test.ts"],
-    "bits": ["src/domain/bits.ts", "src/ui/views/bits/**", "src/i18n/locales/*/bits.ts", "tests/domain/bits.test.ts", "tests/ui/views/bits.test.ts"]
+    "kat": [
+      "src/domain/kat.ts",
+      "src/ui/views/kat/**",
+      "src/i18n/locales/*/kat.ts",
+      "tests/domain/kat.test.ts",
+      "tests/ui/views/kat.test.ts"
+    ],
+    "bits": [
+      "src/domain/bits.ts",
+      "src/ui/views/bits/**",
+      "src/i18n/locales/*/bits.ts",
+      "tests/domain/bits.test.ts",
+      "tests/ui/views/bits.test.ts"
+    ]
   },
   "k3": {
     "integration": [
-      "src/domain/optimizer.ts", "src/domain/oppAlerts.ts", "src/state/**", "src/storage/local.ts", "src/types/contracts.ts",
-      "src/ui/views/plan/**", "src/ui/views/watch/**", "src/i18n/locales/*/plan.ts", "src/i18n/locales/*/watch.ts",
-      "src/i18n/locales/*/alerts.ts", "tests/**", "scripts/smoke.ts", "README.md", "docs/**"
+      "src/domain/optimizer.ts",
+      "src/domain/oppAlerts.ts",
+      "src/state/**",
+      "src/storage/local.ts",
+      "src/types/contracts.ts",
+      "src/ui/views/plan/**",
+      "src/ui/views/watch/**",
+      "src/i18n/locales/*/plan.ts",
+      "src/i18n/locales/*/watch.ts",
+      "src/i18n/locales/*/alerts.ts",
+      "tests/**",
+      "scripts/smoke.ts",
+      "README.md",
+      "docs/**"
+    ]
+  },
+  "s1": {
+    "core": [
+      "src/domain/{pricing,risk,book,flip,npc,books,fusion,market,sale,conservative}.ts",
+      "tests/domain/{pricing,risk,book,flip,npc,books,fusion,market,sale,conservative,helpers}.test.ts",
+      "tests/domain/helpers.ts",
+      "tests/domain/{craft,chains,sell,kat,bits,shops,ahFlips,optimizer,oppAlerts}.test.ts"
+    ],
+    "state": [
+      "src/state/{derived,alertsRunner}.ts",
+      "src/app.ts",
+      "src/storage/history.ts",
+      "src/domain/{marketStats,stats}.ts",
+      "tests/state/**",
+      "tests/storage/**",
+      "tests/helpers/**",
+      "tests/domain/{marketStats,stats}.test.ts",
+      "tests/integration/boot.test.ts"
+    ],
+    "catalog": [
+      "scripts/**",
+      "!scripts/{smoke,sanity,bench,check-ownership}.ts",
+      "!scripts/ownership.json",
+      "!scripts/lib/browser.ts",
+      "public/data/catalog.json",
+      "src/data/catalog.ts",
+      "src/domain/ids.ts",
+      "tests/scripts/**",
+      "!tests/scripts/checkOwnership.test.ts",
+      "tests/data/**",
+      "tests/domain/ids.test.ts",
+      "tests/fixtures/catalog-v2.json"
+    ],
+    "ahdata": [
+      "src/api/{auctions,nbt,ahWorker,ahStore,ahSales,ahSalesStore}.ts",
+      "tests/api/**",
+      "tests/fixtures/{ah-page,ah-ended}.json",
+      "tests/fixtures/api/**"
+    ]
+  },
+  "s2": {
+    "craft": [
+      "src/domain/{craft,chains,sell}.ts",
+      "src/ui/views/{craft,forge,sell}/**",
+      "src/i18n/locales/*/{craft,sell}.ts",
+      "tests/domain/{craft,chains,sell}.test.ts",
+      "tests/ui/views/{craft,forge,sell}.test.ts"
+    ],
+    "ahdomain": [
+      "src/domain/{kat,bits,shops,ahFlips}.ts",
+      "src/ui/views/{kat,bits,ahflip}/**",
+      "src/i18n/locales/*/{kat,bits,ahflip}.ts",
+      "tests/domain/{kat,bits,shops,ahFlips}.test.ts",
+      "tests/ui/views/{kat,bits,ahflip}.test.ts"
+    ],
+    "views": [
+      "src/ui/views/{flip,books,npc,fusion,item,overview}/**",
+      "src/ui/shell/{dataPanel,marketChips,statusPill}.ts",
+      "src/ui/cells.ts",
+      "src/i18n/locales/*/{flip,books,npc,fusion,item,overview,shell,risk}.ts",
+      "tests/ui/views/{flip,books,npc,fusion,item,overview}.test.ts",
+      "tests/ui/shell/{data,dataPanel,statusPill,marketChips}.test.ts",
+      "tests/ui/cells.test.ts"
+    ]
+  },
+  "s3": {
+    "planner": [
+      "src/domain/{optimizer,oppAlerts}.ts",
+      "src/state/**",
+      "src/storage/local.ts",
+      "src/ui/views/{plan,watch}/**",
+      "src/ui/views/overview/{select,overviewView}.ts",
+      "src/i18n/locales/*/{plan,watch,alerts}.ts",
+      "tests/domain/{optimizer,oppAlerts}.test.ts",
+      "tests/state/**",
+      "tests/storage/local.test.ts",
+      "tests/ui/views/{plan,watch,overview}.test.ts"
+    ],
+    "docs": [
+      "README.md",
+      "docs/**"
+    ]
+  },
+  "s4": {
+    "integration": [
+      "scripts/{smoke,sanity,bench}.ts",
+      "scripts/lib/browser.ts",
+      "tests/fixtures/smoke/**",
+      "tests/integration/**",
+      "README.md",
+      "docs/**"
     ]
   }
 }

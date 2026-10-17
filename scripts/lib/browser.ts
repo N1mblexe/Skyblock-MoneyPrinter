@@ -80,6 +80,8 @@ export interface SmokeFixtures {
   ahPage: RawAhPage;
   /** raw /v2/resources/skyblock/election body */
   election: string;
+  /** raw /v2/skyblock/auctions_ended body (serve with withNow: the poller skips a lastUpdated it has seen) */
+  ahEnded: string;
 }
 
 export function loadSmokeFixtures(): SmokeFixtures {
@@ -88,6 +90,7 @@ export function loadSmokeFixtures(): SmokeFixtures {
     bazaar: gunzipSync(readFileSync(fx('tests/fixtures/smoke/bazaar.json.gz'))).toString('utf8'),
     ahPage: { ...(JSON.parse(readFileSync(fx('tests/fixtures/ah-page.json'), 'utf8')) as RawAhPage), page: 0, totalPages: 1 },
     election: readFileSync(fx('tests/fixtures/election.json'), 'utf8'),
+    ahEnded: readFileSync(fx('tests/fixtures/ah-ended.json'), 'utf8'),
   };
 }
 

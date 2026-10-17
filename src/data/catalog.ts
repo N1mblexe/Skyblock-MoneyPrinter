@@ -75,8 +75,9 @@ export function catalogFromFile(f: CatalogFile): Catalog {
       output: e.o,
       outCount: posNum(e.c) ? e.c : 1,
       inputs,
-      kind: e.k === 'forge' ? 'forge' : 'craft',
+      kind: e.k === 'forge' ? 'forge' : e.k === 'shop' ? 'shop' : 'craft',
     };
+    if (r.kind === 'shop' && typeof e.s === 'string' && e.s) r.shop = e.s;
     if (posNum(e.d)) r.durationSec = e.d;
     if (typeof e.r === 'string' && e.r) r.req = e.r;
     recipes.push(r);
@@ -103,7 +104,16 @@ export function catalogFromFile(f: CatalogFile): Catalog {
     petLeveling: parsePetLeveling(f.petLeveling),
     petNames: parsePetNames(f.petNames),
     untradeable: new Set(Array.isArray(f.untradeable) ? f.untradeable.filter(str) : []),
+    george: parseGeorge(f.george),
   };
+}
+
+/** George's pet prices: `TYPE;IDX` -> coins, positive numbers only. */
+function parseGeorge(x: unknown): Record<string, number> {
+  const out: Record<string, number> = {};
+  if (!isObj(x)) return out;
+  for (const [k, v] of Object.entries(x)) if (posNum(v)) out[k] = v;
+  return out;
 }
 
 function parseShard(x: unknown): ItemInfo['shard'] | undefined {

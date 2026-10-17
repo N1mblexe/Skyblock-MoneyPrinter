@@ -16,6 +16,7 @@ export const plan = {
   kindBook: 'Books',
   kindNpc: 'NPC',
   kindKat: 'Kat',
+  kindAhflip: 'AH flip',
   fillModel: 'Fill model: {v}',
   openSettings: 'Change in settings',
   inputsAria: 'Plan inputs',
@@ -95,6 +96,9 @@ export const plan = {
   tab_book: 'Books',
   tab_npc: 'NPC',
   tab_kat: 'Kat upgrades',
+  tab_ahflip: 'AH flips',
+  attention: 'Cost per position (coins/h)',
+  attentionHelp: 'Charged for each position the plan opens: higher values give fewer, bigger positions.',
   watch: 'Watch',
   unwatch: 'Unwatch',
 

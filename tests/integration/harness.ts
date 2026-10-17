@@ -22,6 +22,7 @@ export const BAZAAR_FIXTURE = readJson('tests/fixtures/bazaar.json') as {
 const CATALOG = readJson('public/data/catalog.json');
 const AH_PAGE = readJson('tests/fixtures/ah-page.json');
 const ELECTION = readJson('tests/fixtures/election.json');
+const AH_ENDED = readJson('tests/fixtures/ah-ended.json') as { lastUpdated: number };
 
 export const clone = <T>(x: T): T => structuredClone(x);
 
@@ -51,13 +52,15 @@ export function freshBazaar(at = Date.now() - 5_000): BazaarPayload {
   return b;
 }
 
-/** Stub fetch per URL: bazaar, catalog, AH, election. Anything else -> 404 (and recorded). */
+/** Stub fetch per URL: bazaar, catalog, AH sales, AH, election. Anything else -> 404 (and recorded). */
 export function stubNetwork(): NetStub {
   let bazaar: BazaarPayload | null = freshBazaar();
   const fn = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (url.includes('/skyblock/bazaar')) return bazaar ? jsonResponse(bazaar) : jsonResponse({ success: false }, 503);
     if (url.includes('data/catalog.json')) return jsonResponse(CATALOG);
+    // before the /skyblock/auctions match, which would catch it
+    if (url.includes('/skyblock/auctions_ended')) return jsonResponse({ ...AH_ENDED, lastUpdated: Date.now() });
     if (url.includes('/skyblock/auctions')) return jsonResponse(AH_PAGE);
     if (url.includes('/skyblock/election')) return jsonResponse(ELECTION);
     return jsonResponse({ success: false }, 404);

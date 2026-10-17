@@ -27,7 +27,7 @@ export function itemCell(id: string, name: string, link = false): string {
   return `${label}<span class="id-sub">${esc(id)}</span>`;
 }
 
-const SRC_KEY: Record<QuoteSource, string> = { order: 'srcOrder', insta: 'srcInsta', npc: 'srcNpc', craft: 'srcCraft' };
+const SRC_KEY: Record<QuoteSource, string> = { order: 'srcOrder', insta: 'srcInsta', npc: 'srcNpc', craft: 'srcCraft', ah: 'srcAh', mix: 'srcMix' };
 
 /** Price source badge (buy order / insta / NPC / craft). */
 export function sourceBadge(s: QuoteSource): string {

@@ -71,6 +71,8 @@ describe('createDerived', () => {
       npcDailyLimit: 10,
       fillModel: 'pipelined',
       ahEnabled: false,
+      conservative: true,
+      bitsMultiplier: 2,
     };
     expect(Object.keys(alt).sort()).toEqual([...CALC_SETTINGS].sort());
     for (const k of CALC_SETTINGS) {

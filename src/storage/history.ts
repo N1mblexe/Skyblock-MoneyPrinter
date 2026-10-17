@@ -538,7 +538,7 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     }
   }
 
-  return {
+  const repo: HistoryRepo = {
     init: ensureInit,
 
     record(s: Snapshot): Promise<void> {
@@ -625,5 +625,17 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       queue = p.catch(() => undefined);
       return p;
     },
+
+    // Wave 0: built from stats() / marketStats(); s1/state computes both in one columnar sweep
+    statsAll(taxRate: number) {
+      const market = repo.marketStats(taxRate);
+      const price = new Map<string, PriceStats>();
+      for (const id of market.keys()) {
+        const s = repo.stats(id);
+        if (s) price.set(id, s);
+      }
+      return { price, market };
+    },
   };
+  return repo;
 }

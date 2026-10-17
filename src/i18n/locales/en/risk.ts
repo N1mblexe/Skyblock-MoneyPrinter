@@ -20,4 +20,6 @@ export const risk = {
   srcInsta: 'Insta',
   srcNpc: 'NPC',
   srcCraft: 'Craft',
+  srcAh: 'AH',
+  srcMix: 'NPC + bazaar',
 };

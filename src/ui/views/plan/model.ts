@@ -1,10 +1,10 @@
 // Planner model: URL schema, allocate() options from URL + settings, kind filter, and the per-row "why".
-import { OPTIMIZER, ORDER_SLOTS_MAX } from '../../../config.ts';
+import { AH_FLIP, OPTIMIZER, ORDER_SLOTS_MAX } from '../../../config.ts';
 import type { AllocateOptions } from '../../../domain/optimizer.ts';
 import type { Allocation, Opportunity, OpportunityKind, PlanResult, Settings } from '../../../types/contracts.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
 
-export const KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat'];
+export const KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat', 'ahflip'];
 
 /** URL state. capital / slots / share default to null = "use settings / OPTIMIZER"; kinds are include toggles. */
 export const PLAN_SCHEMA = {
@@ -21,6 +21,7 @@ export const PLAN_SCHEMA = {
   book: { kind: 'bool', def: true },
   npc: { kind: 'bool', def: true },
   kat: { kind: 'bool', def: true },
+  ahflip: { kind: 'bool', def: AH_FLIP.plannerDefault },
   /** include opportunities whose output is sold on the auction house */
   ah: { kind: 'bool', def: true },
   sort: { kind: 'sort', def: { key: 'pph', dir: 'desc' } },

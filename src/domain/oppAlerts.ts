@@ -4,7 +4,7 @@
 import type { BookRow, ChainRow, CraftRow, FlipRow, NpcFlipRow, OppAlertRule, OppHit, OpportunityKind, RiskReport } from '../types/contracts.ts';
 import type { KatRow } from './kat.ts';
 
-export const OPP_KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat'];
+export const OPP_KINDS: readonly OpportunityKind[] = ['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat', 'ahflip'];
 /** hits kept per rule */
 export const OPP_HITS_MAX = 10;
 

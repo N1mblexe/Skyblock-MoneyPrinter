@@ -81,6 +81,7 @@ export const fusion: Messages['fusion'] = {
   lim_depth: 'emir defteri derinliği',
   lim_forge: 'forge slotu',
   lim_npcLimit: 'NPC günlük limiti',
+  lim_ahSales: 'AH satışları',
   lim_slots: 'sipariş slotu',
   rarity: 'Nadirlik',
   family: 'Aile',

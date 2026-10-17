@@ -154,6 +154,7 @@ export const item: Messages['item'] = {
   lim_depth: 'Tahta derinliği',
   lim_forge: 'Forge',
   lim_npcLimit: 'NPC limiti',
+  lim_ahSales: 'AH satışları',
   lim_slots: 'Slot',
   notOnFlipTab: 'Şu anki fiyatlarla kârlı değil, bu yüzden Flip sekmesinde görünmez.',
   askCapped: 'Buy order fiyatı en iyi sell offer {ask} ile sınırlandı; anında dolar (insta-buy gibi).',

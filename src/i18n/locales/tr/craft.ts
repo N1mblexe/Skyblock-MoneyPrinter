@@ -66,12 +66,14 @@ export const craft: Messages['craft'] = {
   why_depth: 'derinlik',
   why_forge: 'forge',
   why_npcLimit: 'NPC limiti',
+  why_ahSales: 'AH satışları',
   why_slots: 'slot',
   whyLong_volume: 'Darboğaz taraftaki pazar hacminden senin payın partiyi sınırlıyor.',
   whyLong_capital: 'Sermayen partiyi sınırlıyor: {capital} ÷ craft başı maliyet.',
   whyLong_depth: 'Emir defterinin derinliği (insta modda) partiyi sınırlıyor; başka sınır yoksa bir siparişlik parti varsayılır.',
   whyLong_forge: 'Forge slotların ({slots}) ve forge süresi partiyi sınırlıyor.',
   whyLong_npcLimit: 'Bir NPC dükkânının günlük alım limiti (ayarlarda ürün başına günde {limit}) malzemeyi sınırlıyor.',
+  whyLong_ahSales: 'Müzayede evi saatte ancak belli sayıda satar: son satışlardan ölçülür, yeterli satış görülene kadar temkinli bir tahmin kullanılır.',
   whyLong_slots: 'Bazaar sipariş slotların (ayarlarda {slots}) bir partinin açabileceği sipariş sayısını sınırlıyor.',
 
   // detail: summary

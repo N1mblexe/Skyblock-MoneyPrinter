@@ -42,6 +42,15 @@ export interface CraftPricer {
   price(recipe: Recipe, opts?: PriceOptions): CraftRow;
 }
 
+const pricers = new WeakMap<CalcCtx, CraftPricer>();
+
+/** One pricer per context, shared by crafts, chains, Kat and Sell or craft? (its memos don't depend on PriceOptions). */
+export function getPricer(ctx: CalcCtx): CraftPricer {
+  let p = pricers.get(ctx);
+  if (!p) pricers.set(ctx, (p = createCraftPricer(ctx)));
+  return p;
+}
+
 export function createCraftPricer(ctx: CalcCtx): CraftPricer {
   const { snap, catalog, settings } = ctx;
   const { costMode, sellMode, share, taxRate } = settings;

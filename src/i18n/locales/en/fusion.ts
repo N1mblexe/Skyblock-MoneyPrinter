@@ -79,6 +79,7 @@ export const fusion = {
   lim_depth: 'order book depth',
   lim_forge: 'forge slots',
   lim_npcLimit: 'NPC daily limit',
+  lim_ahSales: 'AH sales',
   lim_slots: 'order slots',
   rarity: 'Rarity',
   family: 'Family',

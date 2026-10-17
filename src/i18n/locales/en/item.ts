@@ -148,6 +148,7 @@ export const item = {
   lim_depth: 'Book depth',
   lim_forge: 'Forge',
   lim_npcLimit: 'NPC limit',
+  lim_ahSales: 'AH sales',
   lim_slots: 'Slots',
   notOnFlipTab: 'Not profitable at current prices, so it is not on the Flips tab.',
   askCapped: 'The buy order price was capped at the best sell offer {ask}; it fills instantly (like an insta-buy).',
