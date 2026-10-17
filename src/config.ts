@@ -131,6 +131,8 @@ export const CONSERVATIVE = {
   minPoints: 12,
   trendClamp: [0.5, 1] as const,
   maxRelists: 6,
+  /** price move per re-list after being outbid / undercut, as a share of the price (at least PRICE_TICK) */
+  relistStep: 0.002,
 } as const;
 
 export const ALERTS = {
