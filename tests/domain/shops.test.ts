@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeShopRows } from '../../src/domain/shops.ts';
+import { ahNet } from '../../src/domain/pricing.ts';
 import { assessRisk } from '../../src/domain/risk.ts';
 import type { CalcCtx, Catalog, ItemInfo, ShopOffer, Snapshot } from '../../src/types/contracts.ts';
 import { baseSettings, catalog, ctx, makeProduct, stats } from './helpers.ts';
@@ -103,6 +104,20 @@ describe('computeShopRows', () => {
     expect(r.risk!.flags).not.toContain('NO_HISTORY');
     // NO_ASK has bids, so insta mode can value it on the bazaar
     expect(computeShopRows(sctx({ sellMode: 'insta' }))[5]!.valueSource).toBe('bazaar');
+  });
+
+  it('auctionable outputs can be valued on the AH (sale.ts), with measured sales as the weekly volume', () => {
+    const c: Catalog = { ...cat, items: { ...cat.items, RELIC: { ...item('RELIC', 5, false), auctionable: true } }, shops: [{ shop: 'X', currency: 'SKYBLOCK_MOTE', costQty: 10, output: 'RELIC', outQty: 2 }] };
+    const ah = () => ({ price: 1_000, next: 1_200, count: 9 });
+    const r = computeShopRows(sctx({}, { catalog: c, ah }))[0]!;
+    expect(r.valueSource).toBe('ah');
+    expect(r.value).toBeCloseTo(2 * ahNet(999), 9);
+    expect(r.weekVol).toBe(0);
+    expect(r.risk).toEqual({ level: 'ok', score: 0, flags: [] });
+    const sales = () => ({ n: 5, items: 5, median: 1_000, perHour: 0.5, coverageHours: 4, last: 0 });
+    expect(computeShopRows(sctx({}, { catalog: c, ah, ahSales: sales }))[0]!.weekVol).toBe(84);
+    // without the scan: the NPC
+    expect(computeShopRows(sctx({}, { catalog: c }))[0]!.valueSource).toBe('npc');
   });
 
   it('empty catalog shops (runtime stub) yields no rows', () => {

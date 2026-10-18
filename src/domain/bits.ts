@@ -1,28 +1,14 @@
-// Bits shop (Elizabeth's Community Shop): which offer turns bits into the most coins, and what a bit costs when
-// bought as Booster Cookies at the user's fame rank. A ranking, not a planner opportunity.
-import { AH, AH_FLIP, BITS } from '../config.ts';
-import type { CalcCtx, RiskFlag, RiskReport } from '../types/contracts.ts';
-import { afterTax, ahNet, buyQuote, sellQuote } from './pricing.ts';
-import { assessRisk, reportFromFlags } from './risk.ts';
+// Bits shop (Elizabeth's Community Shop): which offer turns bits into the most coins, what a bit costs when bought as
+// Booster Cookies at the user's fame rank, and the basket one cookie's bits buy. A ranking, not a planner opportunity.
+import { BITS } from '../config.ts';
+import type { CalcCtx, RiskReport } from '../types/contracts.ts';
+import { coreOf } from './market.ts';
+import { saleQuotes, type SaleQuote, type SaleVenue } from './sale.ts';
 
-export type BitsSource = 'bazaar' | 'ah' | 'npc';
+export type BitsSource = SaleVenue;
 
-/** One way to sell an offer's output, per item. */
-export interface BitsQuote {
-  source: BitsSource;
-  /** per item before fees: bazaar sell quote, lowest BIN, or NPC price */
-  gross: number;
-  /** per item: bazaar tax, or AH listing fee + claim tax (0 for NPC) */
-  fees: number;
-  /** gross − fees */
-  net: number;
-  /** bazaar: weekly volume that absorbs your sale in sellMode; AH: BIN listings; NPC: null (unlimited) */
-  liquidity: number | null;
-  /** null for NPC sales */
-  risk: RiskReport | null;
-  /** AH only: second-lowest BIN */
-  next?: number;
-}
+/** One way to sell an offer's output, per item (sale.ts saleQuotes). */
+export type BitsQuote = SaleQuote;
 
 export interface BitsRow {
   /** `${id}|${bits}` (unique per offer) */
@@ -39,14 +25,38 @@ export interface BitsRow {
   coinsPerBit: number | null;
   /** coinsPerBit / summary.cookieCostPerBit: > 1 means buying cookies to buy this item pays */
   vsCookie: number | null;
-  /** the winning quote's liquidity */
+  /** the winning quote's liquidity (bazaar: weekly volume on the used side; AH: BIN listings; NPC: null) */
   liquidity: number | null;
+  /** the winning quote's sale rate, items/hour (Infinity for NPC); null when unvalued */
+  rate: number | null;
   /** can't be sold to other players (catalog.untradeable): never valued */
   untradeable: boolean;
   /** the winning quote's risk */
   risk: RiskReport | null;
   /** every quote found, best first (the detail panel shows the ones that lost) */
   quotes: BitsQuote[];
+}
+
+/** One offer in the cookie basket. */
+export interface BasketLine {
+  row: BitsRow;
+  /** offers bought */
+  offers: number;
+  bits: number;
+  coins: number;
+}
+
+/**
+ * What one cookie's bits buy: the offers by coins per bit, each up to what its market absorbs in BITS.basketHours
+ * (sale rate × hours / outQty offers), until the bits run out.
+ */
+export interface BitsBasket {
+  lines: BasketLine[];
+  /** bits spent */
+  bits: number;
+  coins: number;
+  /** bits no offer could take (thin markets): kept for later, not valued */
+  leftBits: number;
 }
 
 export interface BitsSummary {
@@ -58,7 +68,9 @@ export interface BitsSummary {
   cookieCostPerBit: number | null;
   /** highest coinsPerBit among tradeable, valued, non-suspect rows */
   best: BitsRow | null;
-  /** bitsPerCookie × best.coinsPerBit */
+  /** one cookie's bits in tradeable, valued, non-suspect offers */
+  basket: BitsBasket;
+  /** basket.coins; null when the basket is empty */
   coinsPerCookie: number | null;
   /** coinsPerCookie − cookieCost */
   profitPerCookie: number | null;
@@ -70,11 +82,10 @@ export interface BitsResult {
 }
 
 export interface BitsOptions {
-  /** fame-rank (or custom) bits multiplier; invalid values fall back to 1 */
-  multiplier: number;
+  /** fame-rank (or custom) bits multiplier; default settings.bitsMultiplier, invalid values fall back to 1 */
+  multiplier?: number;
 }
 
-const SOURCE_ORDER: Record<BitsSource, number> = { bazaar: 0, ah: 1, npc: 2 };
 const pos = (x: number | null | undefined): x is number => x != null && Number.isFinite(x) && x > 0;
 
 /** Multiplier of a fame rank by name (New Player's 1 when unknown). */
@@ -87,45 +98,37 @@ export function bitsMultiplier(rank: string, custom: number | null): number {
   return pos(custom) ? custom : fameMultiplier(rank);
 }
 
-/** Every quote for selling one unit of `id` (bazaar, AH when scanned, NPC), best net first. */
-export function bitsQuotes(ctx: CalcCtx, id: string): BitsQuote[] {
-  const { snap, catalog, settings } = ctx;
-  const out: BitsQuote[] = [];
-  const p = snap.products[id];
-  const sq = p ? sellQuote(p, settings.sellMode) : null;
-  if (p && sq && pos(sq.price)) {
-    const net = afterTax(sq.price, settings.taxRate);
-    out.push({
-      source: 'bazaar',
-      gross: sq.price,
-      fees: sq.price - net,
-      net,
-      // the volume that absorbs your sales: sell offers fill from insta-buys, insta-selling hits buy orders
-      liquidity: (settings.sellMode === 'offer' ? p.instaBuysWeek : p.instaSellsWeek) || 0,
-      risk: assessRisk(p, ctx.stats?.(id) ?? null),
-    });
+/** What a bit costs through Booster Cookies (cookie buy side in costMode / bits per cookie). */
+export interface CookieCost {
+  multiplier: number;
+  bitsPerCookie: number;
+  cookieCost: number | null;
+  perBit: number | null;
+}
+
+export function cookieCost(ctx: CalcCtx, multiplier: number = ctx.settings.bitsMultiplier): CookieCost {
+  const m = pos(multiplier) ? multiplier : 1;
+  const bitsPerCookie = BITS.perCookie * m;
+  const price = coreOf(ctx).buy(BITS.cookieId)?.quote.price;
+  const cost = pos(price) ? price : null;
+  return { multiplier: m, bitsPerCookie, cookieCost: cost, perBit: cost != null ? cost / bitsPerCookie : null };
+}
+
+/**
+ * Coins per item of every bits-shop item bought with bits from cookies: its cheapest offer's bits per item × the
+ * cookie cost per bit. Empty without a cookie price.
+ */
+export function bitsItemCosts(ctx: CalcCtx, multiplier: number = ctx.settings.bitsMultiplier): Map<string, number> {
+  const out = new Map<string, number>();
+  const { perBit } = cookieCost(ctx, multiplier);
+  if (perBit == null) return out;
+  for (const off of ctx.catalog.shops) {
+    if (off.currency !== BITS.currency || !(off.costQty > 0) || !(off.outQty > 0)) continue;
+    const unit = (off.costQty / off.outQty) * perBit;
+    const cur = out.get(off.output);
+    if (cur == null || unit < cur) out.set(off.output, unit);
   }
-  const a = ctx.ah?.(id);
-  if (a && pos(a.price)) {
-    const net = ahNet(a.price, ctx.derpy);
-    const flags: RiskFlag[] = [];
-    if (a.count < AH.minCount) flags.push('AH_THIN');
-    if (a.next != null && a.next / a.price > AH_FLIP.gapRatio) flags.push('AH_GAP');
-    if ((AH_FLIP.variantCategories as readonly string[]).includes(catalog.items[id]?.category ?? '')) flags.push('AH_VARIANT');
-    out.push({
-      source: 'ah',
-      gross: a.price,
-      fees: a.price - net,
-      net,
-      liquidity: a.count,
-      risk: reportFromFlags(flags),
-      ...(a.next != null ? { next: a.next } : {}),
-    });
-  }
-  const ns = catalog.items[id]?.npcSell;
-  if (pos(ns)) out.push({ source: 'npc', gross: ns, fees: 0, net: ns, liquidity: null, risk: null });
-  // ties keep bazaar > AH > NPC
-  return out.sort((x, y) => y.net - x.net || SOURCE_ORDER[x.source] - SOURCE_ORDER[y.source]);
+  return out;
 }
 
 /** Valued rows by coinsPerBit (desc), then unvalued tradeable rows, then untradeable ones; ties by id, then bits. */
@@ -139,25 +142,42 @@ function compareRows(a: BitsRow, b: BitsRow): number {
   );
 }
 
+const usable = (r: BitsRow) => !r.untradeable && r.coinsPerBit != null && r.risk?.level !== 'suspect';
+
+/** Fill `bits` with the usable rows (already sorted best first), each capped by its sales over BITS.basketHours. */
+export function fillBasket(rows: readonly BitsRow[], bits: number): BitsBasket {
+  const lines: BasketLine[] = [];
+  let left = bits;
+  let coins = 0;
+  const taken = new Map<string, number>();
+  for (const r of rows) {
+    if (!usable(r) || r.bits > left) continue;
+    // offers of one item share its market
+    const cap = Math.floor((r.rate! * BITS.basketHours) / r.outQty - (taken.get(r.id) ?? 0) + 1e-9);
+    const n = Math.min(cap, Math.floor(left / r.bits));
+    if (!(n > 0)) continue;
+    taken.set(r.id, (taken.get(r.id) ?? 0) + n * r.outQty);
+    lines.push({ row: r, offers: n, bits: n * r.bits, coins: n * r.value! });
+    left -= n * r.bits;
+    coins += n * r.value!;
+  }
+  return { lines, bits: bits - left, coins, leftBits: left };
+}
+
 /**
- * One row per bits offer (catalog shops paid in BITS.currency), valued at the best of the bazaar sell quote after
- * tax, the lowest BIN after AH fees (only when ctx.ah is set) and the NPC price, times outQty. The summary prices a
- * bit through Booster Cookies: cookie buy quote (costMode) / (BITS.perCookie × multiplier).
+ * One row per bits offer (catalog shops paid in BITS.currency), valued at its best sale (sale.ts: the bazaar after tax,
+ * the AH after fees when scanned and auctionable, the NPC) times outQty. The summary prices a bit through Booster
+ * Cookies (cookieCost) and fills one cookie's bits into a basket (fillBasket).
  */
-export function computeBitsRows(ctx: CalcCtx, o: BitsOptions): BitsResult {
-  const { snap, catalog, settings } = ctx;
-  const multiplier = pos(o.multiplier) ? o.multiplier : 1;
-  const bitsPerCookie = BITS.perCookie * multiplier;
-  const cp = snap.products[BITS.cookieId];
-  const cq = cp ? buyQuote(cp, settings.costMode, 1, catalog.items[BITS.cookieId]?.npcSell) : null;
-  const cookieCost = cq && pos(cq.price) ? cq.price : null;
-  const cookieCostPerBit = cookieCost != null ? cookieCost / bitsPerCookie : null;
+export function computeBitsRows(ctx: CalcCtx, o: BitsOptions = {}): BitsResult {
+  const { catalog } = ctx;
+  const cc = cookieCost(ctx, o.multiplier ?? ctx.settings.bitsMultiplier);
 
   const rows: BitsRow[] = [];
   for (const off of catalog.shops) {
     if (off.currency !== BITS.currency || !(off.costQty > 0)) continue;
     const untradeable = catalog.untradeable.has(off.output);
-    const quotes = untradeable ? [] : bitsQuotes(ctx, off.output);
+    const quotes = untradeable ? [] : saleQuotes(ctx, off.output);
     const top = off.outQty > 0 ? quotes[0] : undefined;
     const value = top ? top.net * off.outQty : null;
     const coinsPerBit = value != null ? value / off.costQty : null;
@@ -168,10 +188,11 @@ export function computeBitsRows(ctx: CalcCtx, o: BitsOptions): BitsResult {
       bits: off.costQty,
       outQty: off.outQty,
       value,
-      valueSource: top?.source ?? null,
+      valueSource: top?.venue ?? null,
       coinsPerBit,
-      vsCookie: coinsPerBit != null && cookieCostPerBit != null ? coinsPerBit / cookieCostPerBit : null,
+      vsCookie: coinsPerBit != null && cc.perBit != null ? coinsPerBit / cc.perBit : null,
       liquidity: top?.liquidity ?? null,
+      rate: top?.rate ?? null,
       untradeable,
       risk: top?.risk ?? null,
       quotes,
@@ -179,18 +200,20 @@ export function computeBitsRows(ctx: CalcCtx, o: BitsOptions): BitsResult {
   }
   rows.sort(compareRows);
 
-  const best = rows.find((r) => !r.untradeable && r.coinsPerBit != null && r.risk?.level !== 'suspect') ?? null;
-  const coinsPerCookie = best ? bitsPerCookie * best.coinsPerBit! : null;
+  const best = rows.find(usable) ?? null;
+  const basket = fillBasket(rows, cc.bitsPerCookie);
+  const coinsPerCookie = basket.lines.length > 0 ? basket.coins : null;
   return {
     rows,
     summary: {
-      multiplier,
-      bitsPerCookie,
-      cookieCost,
-      cookieCostPerBit,
+      multiplier: cc.multiplier,
+      bitsPerCookie: cc.bitsPerCookie,
+      cookieCost: cc.cookieCost,
+      cookieCostPerBit: cc.perBit,
       best,
+      basket,
       coinsPerCookie,
-      profitPerCookie: coinsPerCookie != null && cookieCost != null ? coinsPerCookie - cookieCost : null,
+      profitPerCookie: coinsPerCookie != null && cc.cookieCost != null ? coinsPerCookie - cc.cookieCost : null,
     },
   };
 }

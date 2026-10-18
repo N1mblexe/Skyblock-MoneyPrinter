@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { KAT } from '../../src/config.ts';
+import { AH_FLIP, KAT } from '../../src/config.ts';
 import {
   computeKatFlips,
   expForLevel,
@@ -10,11 +10,12 @@ import {
   levelFromExp,
   petCurve,
   planSkip,
+  bandKey,
   type KatOptions,
   type KatRow,
 } from '../../src/domain/kat.ts';
 import { ahNet } from '../../src/domain/pricing.ts';
-import type { AhPrice, CalcCtx, Catalog, KatStep, PetLeveling, Product } from '../../src/types/contracts.ts';
+import type { AhPrice, AhSalesStat, CalcCtx, Catalog, KatStep, PetLeveling, Product, Settings, ShopOffer } from '../../src/types/contracts.ts';
 import { baseSettings, buildCatalog, catalogFile, makeProduct, snap } from './helpers.ts';
 
 // XP to the next level grows by 100 per level, so higher rarities (later offsets) need more XP per level.
@@ -51,6 +52,10 @@ interface Setup {
   leveling?: PetLeveling | null;
   petNames?: Record<string, string>;
   derpy?: boolean;
+  george?: Record<string, number>;
+  shops?: ShopOffer[];
+  sales?: Record<string, AhSalesStat>;
+  settings?: Partial<Settings>;
 }
 
 function setup(s: Setup): CalcCtx {
@@ -59,14 +64,17 @@ function setup(s: Setup): CalcCtx {
     kat: s.kat,
     petLeveling: s.leveling === undefined ? LEVELING : s.leveling,
     petNames: s.petNames ?? {},
+    george: s.george ?? {},
+    shops: s.shops ?? [],
   };
   const products: Record<string, Product> = {};
   for (const p of s.products ?? []) products[p.id] = p;
   return {
     snap: { ...snap, products },
     catalog,
-    settings: { ...baseSettings, costMode: 'insta' },
+    settings: { ...baseSettings, costMode: 'insta', ...s.settings },
     ah: (id) => s.ah[id] ?? null,
+    ...(s.sales ? { ahSales: (id: string) => s.sales![id] ?? null } : {}),
     ...(s.derpy ? { derpy: true } : {}),
   };
 }
@@ -218,10 +226,12 @@ describe('computeKatFlips', () => {
     expect(r.steps[0]).toMatchObject({ levelBefore: 100, levelAfter: 96, baseCoins: 1_000_000 });
     expect(r.coins).toBeCloseTo(700_000, 6);
     expect(r.sellKey).toBe('OCELOT;4');
-    expect(r.sell).toBe(6_000_000);
-    expect(r.sellNet).toBe(ahNet(6_000_000));
+    // listed one coin under the lowest BIN
+    expect(r.sell).toBe(6_000_000 - AH_FLIP.undercut);
+    expect(r.sellNet).toBe(ahNet(5_999_999));
+    expect(r).toMatchObject({ sellVenue: 'ah', george: null, sellHours: KAT.defaultSellHours, salesPerHour: null });
     expect(r.risk.flags).toContain('AH_VARIANT');
-    expect(r.profit).toBeCloseTo(ahNet(6_000_000) - 3_000_000 - 700_000, 6);
+    expect(r.profit).toBeCloseTo(ahNet(5_999_999) - 3_000_000 - 700_000, 6);
     expect(r.margin).toBeCloseTo(r.profit / r.capital, 9);
     expect(r.capital).toBeCloseTo(3_700_000, 6);
   });
@@ -232,7 +242,7 @@ describe('computeKatFlips', () => {
     expect(r.levelEnd).toBe(100);
     expect(r.coins).toBeCloseTo(1_400_000, 6);
     expect(r.sellKey).toBe('OCELOT;5@MAX');
-    expect(r.sell).toBe(20_000_000);
+    expect(r.sell).toBe(19_999_999);
     expect(r.risk.flags).not.toContain('AH_VARIANT');
     // the 96 Legendary from the Epic chain goes on at that level
     const chain = byKey(run(base), 'OCELOT;3>5:max');
@@ -378,8 +388,8 @@ describe('computeKatFlips', () => {
 
   it('Derpy quadruples the claim tax on the sale', () => {
     const r = byKey(run({ ...base, derpy: true }), 'OCELOT;4>5:max');
-    expect(r.sellNet).toBe(ahNet(20_000_000, true));
-    expect(r.sellNet).toBeLessThan(ahNet(20_000_000));
+    expect(r.sellNet).toBe(ahNet(19_999_999, true));
+    expect(r.sellNet).toBeLessThan(ahNet(19_999_999));
   });
 
   it('names come from the catalog, else from the listing', () => {
@@ -407,5 +417,113 @@ describe('computeKatFlips', () => {
 
   it('is deterministic', () => {
     expect(run(base)).toEqual(run(base));
+  });
+
+  it('a known level below max sells at its scan v4 level band when listed', () => {
+    const ah = { ...AH_ROWS, 'OCELOT;4@L99': { price: 7_000_000, count: 4 } };
+    const r = byKey(run({ ...base, ah }), 'OCELOT;3>4:max');
+    expect(r.levelEnd).toBe(96);
+    expect(r).toMatchObject({ sellKey: 'OCELOT;4@L99', sell: 6_999_999, sellCount: 4 });
+    // the band still holds levels 90-99
+    expect(r.risk.flags).toContain('AH_VARIANT');
+    // a guessed level stays on the plain key; v3 scans have no bands
+    const guess = byKey(run({ ...base, ah: { ...ah, 'OCELOT;4': { price: 6_000_000, count: 10 } } }), 'OCELOT;4>5:any');
+    expect(guess.sellKey).toBe('OCELOT;5');
+    expect(byKey(run(base), 'OCELOT;3>4:max').sellKey).toBe('OCELOT;4');
+    expect(bandKey('X;1', 1)).toBe('X;1@L49');
+    expect(bandKey('X;1', 50)).toBe('X;1@L89');
+    expect(bandKey('X;1', 99)).toBe('X;1@L99');
+    expect(bandKey('X;1', 150)).toBeNull();
+  });
+
+  it('measured AH sales set the sell hours; conservatism lists at no more than the median sold', () => {
+    const stat = (o: Partial<AhSalesStat> = {}): AhSalesStat => ({ n: 5, items: 5, median: 5_000_000, perHour: 0.5, coverageHours: 3, last: 0, ...o });
+    const cons = { conservative: true };
+    const r = byKey(run({ ...base, sales: { 'OCELOT;4': stat() }, settings: cons }), 'OCELOT;3>4:max');
+    expect(r).toMatchObject({ sellHours: 2, salesPerHour: 0.5, sell: 5_000_000, sellRef: 5_999_999, hours: 132 });
+    expect(r.sellNet).toBe(ahNet(5_000_000));
+    // raw numbers without conservatism
+    const raw = byKey(run({ ...base, sales: { 'OCELOT;4': stat() } }), 'OCELOT;3>4:max');
+    expect(raw).toMatchObject({ sell: 5_999_999, sellHours: 2 });
+    expect(raw.sellRef).toBeUndefined();
+    // too few sales for the median, a median above the listing, no rate yet, too little coverage
+    expect(byKey(run({ ...base, sales: { 'OCELOT;4': stat({ n: 2 }) } , settings: cons }), 'OCELOT;3>4:max').sell).toBe(5_999_999);
+    expect(byKey(run({ ...base, sales: { 'OCELOT;4': stat({ median: 8e6 }) } , settings: cons }), 'OCELOT;3>4:max').sell).toBe(5_999_999);
+    expect(byKey(run({ ...base, sales: { 'OCELOT;4': stat({ perHour: null }) } }), 'OCELOT;3>4:max').sellHours).toBe(KAT.defaultSellHours);
+    const thin = byKey(run({ ...base, sales: { 'OCELOT;4': stat({ coverageHours: 1 }) } , settings: cons }), 'OCELOT;3>4:max');
+    expect(thin).toMatchObject({ sell: 5_999_999, sellHours: KAT.defaultSellHours, salesPerHour: null });
+  });
+
+  it("George's price floors the sale: sold to him at once, any level", () => {
+    const r = byKey(run({ ...base, george: { 'OCELOT;2': 900_000 } }), 'OCELOT;1>2:any');
+    expect(r).toMatchObject({ sellVenue: 'george', sell: 900_000, sellNet: 900_000, sellHours: 0, george: 900_000, hours: 24 });
+    expect(r.risk.flags).not.toContain('AH_VARIANT');
+    expect(r.tp.sellHours).toBe(0);
+    // below the AH net: the AH sale stays, George is shown
+    const low = byKey(run({ ...base, george: { 'OCELOT;2': 100 } }), 'OCELOT;1>2:any');
+    expect(low).toMatchObject({ sellVenue: 'ah', george: 100 });
+    // no AH listing: George prices the row
+    const ah = { ...AH_ROWS };
+    delete ah['OCELOT;2'];
+    const only = byKey(run({ ...base, ah, george: { 'OCELOT;2': 900_000 } }), 'OCELOT;1>2:any');
+    expect(only.unpriced).toEqual([]);
+    expect(only.profit).toBeGreaterThan(0);
+  });
+
+  it('a fully skipped upgrade sold to George is instant: one per minute keeps the rate finite', () => {
+    const products = [bz(KAT.flowerId, 1_000)];
+    const kat = [step('OCELOT', 1, 10_000, 24)];
+    const r = byKey(run({ ...base, kat, products, george: { 'OCELOT;2': 900_000 } }, { skip: 'flowers' }), 'OCELOT;1>2:any');
+    expect(r.hours).toBe(0);
+    expect(r.tp.unitsPerHour).toBe(60);
+    expect(r.profitPerHour).toBeCloseTo(r.profit * 60, 6);
+  });
+
+  it('bits-shop items cost no more than their bits through Booster Cookies', () => {
+    const cookie = makeProduct({ id: 'BOOSTER_COOKIE', asks: [{ price: 4_800_000, amount: 1000, orders: 5 }], bids: [{ price: 4_000_000, amount: 1000, orders: 5 }] });
+    // a bit costs 1,000 coins (insta cost mode); the flower 1,500 bits
+    const shops: ShopOffer[] = [
+      { shop: 'Elizabeth', currency: 'SKYBLOCK_BIT', costQty: 1_500, output: KAT.flowerId, outQty: 1 },
+      { shop: 'Elizabeth', currency: 'SKYBLOCK_BIT', costQty: 2_000, output: KAT.flowerId, outQty: 1 },
+      { shop: 'Elizabeth', currency: 'SKYBLOCK_BIT', costQty: 0, output: 'PET_ITEM_X', outQty: 1 },
+    ];
+    const flower = (products: Product[], ah = AH_ROWS) =>
+      byKey(run({ ...base, ah, products: [bz('FISH', 50), cookie, ...products], shops }, { skip: 'flowers' }), 'OCELOT;1>2:any').steps[0]!.skip[0];
+    expect(flower([])).toMatchObject({ id: KAT.flowerId, unit: 1_500_000, source: 'bits' });
+    expect(flower([bz(KAT.flowerId, 2_000_000)])).toMatchObject({ unit: 1_500_000, source: 'bits' });
+    expect(flower([bz(KAT.flowerId, 1_000_000)])).toMatchObject({ unit: 1_000_000, source: 'insta' });
+    expect(flower([], { ...AH_ROWS, [KAT.flowerId]: { price: 900_000, count: 5 } })).toMatchObject({ unit: 900_000, source: 'ah' });
+    // the multiplier makes bits cheaper
+    const r = byKey(run({ ...base, products: [cookie], shops, settings: { bitsMultiplier: 2 } }, { skip: 'flowers' }), 'OCELOT;1>2:any');
+    expect(r.steps[0]!.skip[0]).toMatchObject({ unit: 750_000, source: 'bits' });
+    // no cookie price: no bits price
+    expect(byKey(run({ ...base, shops }, { skip: 'flowers' }), 'OCELOT;1>2:any').steps[0]!.skip).toEqual([]);
+  });
+
+  it("'best' skips only the steps whose skip raises the profit per hour", () => {
+    // the 24h step of 0>2 is worth skipping with a cheap flower; with dear flowers it is not
+    const cheap = byKey(run({ ...base, products: [bz('FISH', 50), bz(KAT.flowerId, 1)] }, { skip: 'best' }), 'OCELOT;0>2:any');
+    expect(cheap.steps.map((s) => s.skip.length)).toEqual([0, 1]);
+    expect(cheap.katHours).toBe(1);
+    const dear = byKey(run({ ...base, products: [bz('FISH', 50), bz(KAT.flowerId, 425_000)] }, { skip: 'best' }), 'OCELOT;0>2:any');
+    expect(dear.steps.every((s) => s.skip.length === 0)).toBe(true);
+    expect(dear.profitPerHour).toBeGreaterThan(byKey(run({ ...base, products: [bz('FISH', 50), bz(KAT.flowerId, 425_000)] }, { skip: 'flowers' }), 'OCELOT;0>2:any').profitPerHour);
+    // of two skips, the cheaper per saved hour goes first: 3>5 skips the 130h step (a bouquet) and maybe the 10h one
+    const two = byKey(run({ ...base, products: [bz('FISH', 50), bz(KAT.flowerId, 5_000), bz(KAT.bouquetId, 10_000)] }, { skip: 'best' }), 'OCELOT;3>5:max');
+    expect(two.steps[0]!.skip.map((l) => l.id)).toEqual([KAT.bouquetId]);
+    expect(two.steps[1]!.skip).toEqual([]);
+    // unpriced rows keep their waits
+    const ah = { ...AH_ROWS };
+    delete ah['OCELOT;2'];
+    expect(byKey(run({ ...base, ah, products: [bz('FISH', 50), bz(KAT.flowerId, 1)] }, { skip: 'best' }), 'OCELOT;0>2:any').katHours).toBe(25);
+    // a losing row: no skip makes it lose faster
+    const loss = byKey(run({ ...base, ah: { ...AH_ROWS, 'OCELOT;2': { price: 10, count: 10 } }, products: [bz('FISH', 50), bz(KAT.flowerId, 1)] }, { skip: 'best' }), 'OCELOT;0>2:any');
+    expect(loss.profit).toBeLessThan(0);
+    expect(loss.katHours).toBe(25);
+  });
+
+  it('planner inputs: one pet per run, no slots or shared markets', () => {
+    const r = byKey(run(base), 'OCELOT;3>4:max');
+    expect(r.plan).toEqual({ unitCost: r.capital, buyCost: r.capital, profitPerUnit: r.profit, unitsPerHour: 1 / r.hours, maxUnits: 1, orderUnits: [], uses: [] });
   });
 });
