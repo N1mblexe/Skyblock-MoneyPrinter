@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { computeFlips } from '../../src/domain/flip.ts';
-import { ctx, P, stats } from './helpers.ts';
+import { computeFlips, planFlip } from '../../src/domain/flip.ts';
+import type { CalcCtx } from '../../src/types/contracts.ts';
+import { ctx, makeProduct, P, stats } from './helpers.ts';
 
 describe('computeFlips', () => {
   const rows = computeFlips(ctx());
@@ -78,6 +79,47 @@ describe('computeFlips', () => {
     const r = computeFlips(ctx({ orderSlots: 1, capital: 0 })).find((x) => x.id === 'ENCHANTED_MELON')!;
     expect(r.tp.limitedBy).toBe('slots');
     expect(r.profitPerHour).toBe(0);
+  });
+
+  it('every row carries planner inputs on its two markets', () => {
+    const r = byId.get('ENCHANTED_MELON')!;
+    expect(r.plan!.uses).toEqual([
+      { key: 'ENCHANTED_MELON:bid', perUnit: 1 },
+      { key: 'ENCHANTED_MELON:ask', perUnit: 1 },
+    ]);
+    expect(r.plan!.orderUnits).toEqual([1, 1]);
+    expect(r.plan!.profitPerUnit).toBeCloseTo(r.profit, 9);
+    for (const x of rows) expect(x.plan).toBeDefined();
+  });
+
+  it('a buy order capped at the ask is an insta-buy: depth-bound, VWAP, no slot (and never a profitable flip)', () => {
+    // a one-tick spread: bid + tick is the ask
+    const tight = makeProduct({
+      id: 'TIGHT',
+      bids: [{ price: 104.9, amount: 5000, orders: 10 }],
+      asks: [
+        { price: 105, amount: 100, orders: 1 },
+        { price: 106, amount: 100_000, orders: 10 },
+      ],
+      quick: { buyPrice: 105, sellPrice: 104.9 },
+    });
+    const c: CalcCtx = { ...ctx({ capital: 0 }), snap: { ...ctx().snap, products: { TIGHT: tight } } };
+    const plan = planFlip('TIGHT', tight, c)!;
+    expect(plan.buy.clamped).toBe('ask');
+    expect(plan.buy.order).toBe(false);
+    expect(plan.buy.depth).toBe(100_100);
+    expect(plan.tp.slots).toBe(1); // only the sell offer
+    expect(plan.buy.price).toBe(105); // the insta VWAP of one unit (a losing trade is not re-quoted)
+    expect(plan.profit).toBeLessThan(0);
+    expect(computeFlips(c)).toEqual([]);
+  });
+
+  it('conservatism: the legs\' adjustments merged into cons', () => {
+    const on = computeFlips(ctx({ conservative: true }, { stats: () => stats({ n: 50, medianAsk: 320, medianBid: 303, madAsk: 2 }) }));
+    const r = on.find((x) => x.id === 'ENCHANTED_MELON')!;
+    expect(r.cons!.buyRef).toBe(302.1);
+    expect(r.buyAt).toBe(303.1);
+    expect(byId.get('ENCHANTED_MELON')!.cons).toBeUndefined();
   });
 
   it('uses stats for risk when provided', () => {

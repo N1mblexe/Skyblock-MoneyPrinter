@@ -1,10 +1,10 @@
 // The best net sale of an item across the bazaar, NPCs and the AH, with the AH risk flags: one rule for crafts,
-// chains, bits, shops and Sell or craft?. Owner: s1/core. Wave 0 stub: today's bitsQuotes logic (one unit, no AH
-// undercut, no rate).
-import { AH, AH_FLIP } from '../config.ts';
-import type { AhPrice, CalcCtx, Catalog, RiskFlag, RiskReport, Throughput } from '../types/contracts.ts';
-import { afterTax, ahNet, sellQuote } from './pricing.ts';
-import { assessRisk, reportFromFlags } from './risk.ts';
+// chains, bits, shops and Sell or craft?. Owner: s1/core.
+import { AH, AH_FLIP, AH_SALES } from '../config.ts';
+import type { AhPrice, CalcCtx, Catalog, ConsInfo, RiskFlag, RiskReport, Throughput } from '../types/contracts.ts';
+import { coreOf, salesOf } from './market.ts';
+import { afterTax, ahNet } from './pricing.ts';
+import { reportFromFlags } from './risk.ts';
 
 export type SaleVenue = 'bazaar' | 'ah' | 'npc';
 
@@ -25,10 +25,14 @@ export interface SaleQuote {
   risk: RiskReport | null;
   /** AH: second-lowest BIN */
   next?: number;
+  /** bazaar insta-sell: units on the bids */
+  depth?: number;
+  /** bazaar: what conservatism changed on the quote */
+  cons?: ConsInfo;
 }
 
 export interface SaleOptions {
-  /** units to sell (insta re-quote, AH VWAP); default 1 */
+  /** units to sell (bazaar insta-sells are re-quoted at that size); default 1 */
   qty?: number;
   /** venues to consider; default all */
   venues?: readonly SaleVenue[];
@@ -46,39 +50,64 @@ export function ahFlags(a: AhPrice, catalog: Catalog, id: string): RiskFlag[] {
   return flags;
 }
 
-/** Every way to sell `id`, best net first (ties keep bazaar > AH > NPC). */
+/** The item can be listed on the AH: the catalog says so, or (unknown to the catalog) it is not a bazaar product. */
+export function isAuctionable(ctx: CalcCtx, id: string): boolean {
+  const info = ctx.catalog.items[id];
+  return info ? info.auctionable === true : !ctx.snap.products[id];
+}
+
+/**
+ * Every way to sell `id`, best net first (ties keep bazaar > AH > NPC).
+ *  bazaar  the core's sell side (conservatism applied), after tax, your sell rate, sell-side risk
+ *  AH      auctionable items only: listed at min(lowest, next) - AH_FLIP.undercut, and with conservatism on at no
+ *          more than the median sold price (once AH_SALES.minSales sales are seen); net of the AH fees; rate = sales
+ *          per hour x share, else AH_SALES.defaultPerHour ('ahSales'); flags from ahFlags. Sales seen over less than
+ *          AH_SALES.minCoverageHours are ignored (salesOf)
+ *  NPC     the NPC sell price, unlimited
+ */
 export function saleQuotes(ctx: CalcCtx, id: string, o: SaleOptions = {}): SaleQuote[] {
   const { snap, catalog, settings } = ctx;
+  const core = coreOf(ctx);
   const venues = new Set(o.venues ?? (['bazaar', 'ah', 'npc'] as const));
   const out: SaleQuote[] = [];
   const p = snap.products[id];
-  const sq = p && venues.has('bazaar') ? sellQuote(p, settings.sellMode) : null;
-  if (p && sq && pos(sq.price)) {
-    const net = afterTax(sq.price, settings.taxRate);
-    out.push({
+  const side = p && venues.has('bazaar') ? core.sell(id, o.qty) : null;
+  if (p && side && pos(side.quote.price)) {
+    const gross = side.quote.price;
+    const net = afterTax(gross, settings.taxRate);
+    const q: SaleQuote = {
       venue: 'bazaar',
-      gross: sq.price,
-      fees: sq.price - net,
+      gross,
+      fees: gross - net,
       net,
-      rate: ((settings.sellMode === 'offer' ? p.instaBuysWeek : p.instaSellsWeek) || 0) / 168,
+      rate: side.rate,
       limitedBy: 'volume',
       liquidity: (settings.sellMode === 'offer' ? p.instaBuysWeek : p.instaSellsWeek) || 0,
-      risk: assessRisk(p, ctx.stats?.(id) ?? null),
-    });
+      risk: core.risk(id, { sell: settings.sellMode }),
+    };
+    if (side.depth != null) q.depth = side.depth;
+    if (side.cons) q.cons = side.cons;
+    out.push(q);
   }
-  const a = venues.has('ah') ? ctx.ah?.(id) : null;
+  const a = venues.has('ah') && isAuctionable(ctx, id) ? ctx.ah?.(id) : null;
   if (a && pos(a.price)) {
-    const net = ahNet(a.price, ctx.derpy);
-    out.push({
-      venue: 'ah',
-      gross: a.price,
-      fees: a.price - net,
-      net,
-      rate: Infinity,
-      liquidity: a.count,
-      risk: reportFromFlags(ahFlags(a, catalog, id)),
-      ...(a.next != null ? { next: a.next } : {}),
-    });
+    let list = Math.min(a.price, a.next ?? a.price) - AH_FLIP.undercut;
+    const sales = salesOf(ctx, id);
+    if (settings.conservative && sales && sales.n >= AH_SALES.minSales && pos(sales.median)) list = Math.min(list, sales.median);
+    if (pos(list)) {
+      const net = ahNet(list, ctx.derpy);
+      out.push({
+        venue: 'ah',
+        gross: list,
+        fees: list - net,
+        net,
+        rate: sales?.perHour != null ? sales.perHour * settings.share : AH_SALES.defaultPerHour,
+        limitedBy: 'ahSales',
+        liquidity: a.count,
+        risk: reportFromFlags(ahFlags(a, catalog, id)),
+        ...(a.next != null ? { next: a.next } : {}),
+      });
+    }
   }
   const ns = catalog.items[id]?.npcSell;
   if (venues.has('npc') && pos(ns)) out.push({ venue: 'npc', gross: ns, fees: 0, net: ns, rate: Infinity, liquidity: null, risk: null });

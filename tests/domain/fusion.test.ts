@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { FUSION_FEE_COINS } from '../../src/config.ts';
 import { computeFusion } from '../../src/domain/fusion.ts';
 import { buySide, sellSide } from '../../src/domain/pricing.ts';
 import { assessRisk, combineRisk } from '../../src/domain/risk.ts';
@@ -59,7 +60,7 @@ describe('computeFusion', () => {
 describe('computeFusion throughput and risk', () => {
   const recipe = { a: 'SHARD_SALMON', qa: 2, b: 'Wiki Tiki Shard', qb: 1, out: 'shard_beeheemoth', qo: 1 };
 
-  it('tp from input buy sides and output sell side, risk of all three products', () => {
+  it('tp from input buy sides and output sell side, side-aware risk of all three products', () => {
     const [r] = computeFusion(ctx({ fillModel: 'pipelined', capital: 0 }), [recipe]);
     const rA = buySide(P('SHARD_SALMON'), 'order', 0.05)!.rate / 2;
     const rB = buySide(P('SHARD_WIKI_TIKI'), 'order', 0.05)!.rate;
@@ -69,7 +70,48 @@ describe('computeFusion throughput and risk', () => {
     expect(r!.tp!.unitsPerHour).toBeCloseTo(r1, 9);
     expect(r!.tp!.slots).toBe(3); // two buy orders + one sell offer
     expect(r!.profitPerHour).toBeCloseTo(r1 * r!.profit!, 6);
-    expect(r!.risk).toEqual(combineRisk(['SHARD_SALMON', 'SHARD_WIKI_TIKI', 'SHARD_BEEHEEMOTH'].map((id) => assessRisk(P(id)))));
+    // inputs: the buy side only; output: the sell side only
+    expect(r!.risk).toEqual(
+      combineRisk([
+        assessRisk(P('SHARD_SALMON'), null, { buy: 'order' }),
+        assessRisk(P('SHARD_WIKI_TIKI'), null, { buy: 'order' }),
+        assessRisk(P('SHARD_BEEHEEMOTH'), null, { sell: 'offer' }),
+      ]),
+    );
+  });
+
+  it('an NPC-only input is bought instantly, capped at npcDailyLimit / 24 per hour', () => {
+    const rec = { a: 'STICK', qa: 2, b: 'SHARD_SALMON', qb: 1, out: 'SHARD_BEEHEEMOTH', qo: 1 };
+    const [r] = computeFusion(ctx({ capital: 0, cycleHours: 10 }), [rec]);
+    expect(r!.missing).toEqual([]);
+    expect(r!.cost).toBeCloseTo(2 * 1 + 1440.3 + FUSION_FEE_COINS, 6);
+    expect(r!.tp!.limitedBy).toBe('volume'); // 13.3 fusions/h of sticks: the output's offer binds
+    expect(r!.tp!.slots).toBe(2); // the NPC leg takes no slot
+    // 24 sticks a day = 0.5 fusions/h: the shop binds, with no fill time
+    const [low] = computeFusion(ctx({ capital: 0, cycleHours: 10, npcDailyLimit: 24 }), [rec]);
+    expect(low!.tp!.limitedBy).toBe('npcLimit');
+    expect(low!.tp!.batchQty).toBeCloseTo(5, 9);
+  });
+
+  it('a bazaar product is bought at the cheaper of the bazaar and an NPC shop', () => {
+    // MELON: buy order at 0.9 x NPC sell = 1.8 < NPC 2.5; insta ask 4.9 > NPC 2.5
+    const rec = { a: 'MELON', qa: 1, b: 'MELON', qb: 1, out: 'SHARD_SALMON', qo: 1 };
+    const [o] = computeFusion(ctx(), [rec]);
+    expect(o!.cost).toBeCloseTo(2 * 1.8 + FUSION_FEE_COINS, 6);
+    const [i] = computeFusion(ctx({ costMode: 'insta', capital: 0 }), [rec]);
+    expect(i!.cost).toBeCloseTo(2 * 2.5 + FUSION_FEE_COINS, 6);
+    expect(i!.tp!.limitedBy).toBe('npcLimit');
+    // the NPC-bought input is not part of the risk: only the output's sell side
+    expect(i!.risk).toEqual(combineRisk([assessRisk(P('SHARD_SALMON'), null, { sell: 'offer' })]));
+  });
+
+  it('insta legs are re-quoted at the batch size', () => {
+    const [r] = computeFusion(ctx({ costMode: 'insta', sellMode: 'insta', capital: 0, share: 1, cycleHours: 24 }), [recipe]);
+    const n = Math.ceil(r!.tp!.batchQty);
+    expect(n).toBeGreaterThan(1);
+    const a = buySide(P('SHARD_SALMON'), 'insta', 1, 2 * n)!.quote.price;
+    const b = buySide(P('SHARD_WIKI_TIKI'), 'insta', 1, n)!.quote.price;
+    expect(r!.cost).toBeCloseTo(2 * a + b + FUSION_FEE_COINS, 6);
   });
 
   it('same input twice merges quantities; stats feed risk; insta modes are depth-capped', () => {

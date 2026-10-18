@@ -1,37 +1,49 @@
 import type { CalcCtx, FlipRow, Product } from '../types/contracts.ts';
-import { afterTax, buySide, planTrade, sellSide, type Leg, type TradePlan } from './pricing.ts';
-import { assessRisk } from './risk.ts';
+import { coreOf, mergeCons, sideLeg } from './market.ts';
+import { planTrade, tradePlanInputs, type Leg, type TradePlan } from './pricing.ts';
 
-/** Plan the bazaar flip of one product with the current settings (no profit filter). null if a side can't be quoted. */
-export function planFlip(id: string, p: Product, ctx: CalcCtx): TradePlan | null {
-  const { catalog, settings } = ctx;
-  const { costMode, sellMode, share, taxRate } = settings;
+/**
+ * The buy and sell legs of a bazaar flip, through the context's market core, for the item `at()` names. One pair of
+ * functions serves a whole scan (the item changes between rows), so no closures are built per product.
+ */
+function flipLegs(ctx: CalcCtx, at: () => string) {
+  const core = coreOf(ctx);
+  const { taxRate } = ctx.settings;
   const buy = (q: number): Leg | null => {
-    const s = buySide(p, costMode, share, q, catalog.items[id]?.npcSell);
-    return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, comp: s.comp, order: costMode === 'order', clamped: s.quote.clamped };
+    const id = at();
+    const s = core.buy(id, q);
+    return s && sideLeg(id, 'buy', s, taxRate);
   };
   const sell = (q: number): Leg | null => {
-    const s = sellSide(p, sellMode, share, q);
-    return s && {
-      price: s.quote.price,
-      net: afterTax(s.quote.price, taxRate),
-      rate: s.rate,
-      depth: s.depth,
-      comp: s.comp,
-      order: sellMode === 'offer',
-    };
+    const id = at();
+    const s = core.sell(id, q);
+    return s && sideLeg(id, 'sell', s, taxRate);
   };
-  return planTrade(buy, sell, settings, costMode === 'insta' || sellMode === 'insta');
+  return { buy, sell };
+}
+
+/**
+ * Plan the bazaar flip of one product with the current settings (no profit filter). null if a side can't be quoted.
+ * `_p` is kept for older callers: the product is read from ctx.snap.
+ */
+export function planFlip(id: string, _p: Product, ctx: CalcCtx): TradePlan | null {
+  const { buy, sell } = flipLegs(ctx, () => id);
+  return planTrade(buy, sell, ctx.settings);
 }
 
 /** All bazaar flips with profit > 0 (suspect rows included; views filter). */
 export function computeFlips(ctx: CalcCtx): FlipRow[] {
-  const { snap, catalog } = ctx;
+  const { snap, catalog, settings } = ctx;
+  const core = coreOf(ctx);
   const rows: FlipRow[] = [];
-  for (const [id, p] of Object.entries(snap.products)) {
-    const plan = planFlip(id, p, ctx);
+  const use = { buy: settings.costMode, sell: settings.sellMode };
+  let id = '';
+  const { buy, sell } = flipLegs(ctx, () => id);
+  for (const [pid, p] of Object.entries(snap.products)) {
+    id = pid;
+    const plan = planTrade(buy, sell, settings);
     if (!plan || !(plan.profit > 0) || !(plan.buy.price > 0)) continue;
-    rows.push({
+    const row: FlipRow = {
       id,
       name: catalog.name(id),
       buyAt: plan.buy.price,
@@ -46,9 +58,14 @@ export function computeFlips(ctx: CalcCtx): FlipRow[] {
       weekVol: Math.min(p.instaBuysWeek, p.instaSellsWeek),
       tp: plan.tp,
       profitPerHour: plan.tp.unitsPerHour * plan.profit,
-      risk: assessRisk(p, ctx.stats?.(id) ?? null),
-      ...(plan.buy.clamped ? { buyClamped: plan.buy.clamped } : {}),
-    });
+      risk: core.risk(id, use)!,
+    };
+    if (plan.buy.clamped) row.buyClamped = plan.buy.clamped;
+    const cons = mergeCons(plan.buy.cons, plan.sell.cons);
+    if (cons) row.cons = cons;
+    const pi = tradePlanInputs(buy, sell, settings);
+    if (pi) row.plan = pi;
+    rows.push(row);
   }
   return rows;
 }
