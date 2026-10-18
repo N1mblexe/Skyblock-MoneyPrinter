@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { BOOK } from '../../src/config.ts';
+import { BOOK, MAX_ORDER_UNITS } from '../../src/config.ts';
 import { computeBookCombines, parseBookId } from '../../src/domain/books.ts';
 import { effShare } from '../../src/domain/pricing.ts';
-import { assessRisk, combineRisk } from '../../src/domain/risk.ts';
+import { assessRisk, combineRisk, INGREDIENT_FLAGS, reportFromFlags } from '../../src/domain/risk.ts';
 import type { BookRule, CalcCtx, Catalog, Product, Snapshot } from '../../src/types/contracts.ts';
 import { baseSettings, catalog, ctx, makeProduct, stats, type ProductOverrides } from './helpers.ts';
 
@@ -127,14 +127,23 @@ describe('computeBookCombines', () => {
     expect(byId.get('ENCHANTMENT_NORULE_2')!.verified).toBe(false); // no rule
   });
 
-  it('a chain picks the cheapest input level', () => {
+  it('a chain picks the input level with the highest profit per hour, not the cheapest', () => {
+    // 16 x 10.1 = 161.6 from level 1 is the cheapest, but level 1 trades 16,800 a week: 2 x 120.1 from level 4 fills
+    // ~47x faster and earns more per hour
     const r5 = byId.get(`${T}_5`)!;
-    expect(r5.fromLevel).toBe(1); // 16 x 10.1 = 161.6 < 4 x 50.1 < 2 x 120.1
-    expect(r5.count).toBe(16);
+    expect(r5.fromLevel).toBe(4);
+    expect(r5.count).toBe(2);
+    expect(r5.cost).toBeCloseTo(240.2, 9);
+    expect(byId.get(`${T}_4`)!.fromLevel).toBe(3); // 2 x 50.1 at level 3's volume beats 8 x 10.1
+    expect(byId.get(`${T}_3`)!.fromLevel).toBe(1); // the only input level
+  });
+
+  it('the cheapest input level wins when its volume keeps up', () => {
+    // 16 x the volume of level 4 per output book: 1.6M a week / 16 vs 100k / 2
+    const eq = { ...snap, products: { ...snap.products, [`${T}_1`]: book(`${T}_1`, 10, 12, { instaSellsWeek: 1_600_000 }) } };
+    const r5 = computeBookCombines({ ...bctx(), snap: eq }).find((r) => r.id === `${T}_5`)!;
+    expect(r5.fromLevel).toBe(1);
     expect(r5.cost).toBeCloseTo(161.6, 9);
-    const r4 = byId.get(`${T}_4`)!;
-    expect(r4.fromLevel).toBe(1); // 8 x 10.1 = 80.8 < 2 x 50.1 = 100.2
-    expect(byId.get(`${T}_3`)!.fromLevel).toBe(1);
   });
 
   it('respects BOOK.maxChainLevels (level 6 would only profit from level 1 = 32 books)', () => {
@@ -144,22 +153,43 @@ describe('computeBookCombines', () => {
 
   it('divides the input fill rate by the book count', () => {
     const r = byId.get(`${T}_5`)!;
-    const input = snap.products[`${T}_1`]!;
+    const input = snap.products[`${T}_4`]!;
     const rBuy = (input.instaSellsWeek / 168) * effShare(baseSettings.share, 20);
-    expect(r.tp.unitsPerHour).toBeGreaterThan(rBuy / 32);
-    expect(r.tp.unitsPerHour).toBeLessThanOrEqual((rBuy / 16) * (1 + 1e-9));
+    expect(r.tp.unitsPerHour).toBeGreaterThan(rBuy / (2 * r.count));
+    expect(r.tp.unitsPerHour).toBeLessThanOrEqual((rBuy / r.count) * (1 + 1e-9));
+  });
+
+  it('both legs are orders: the input order holds `count` books per output book', () => {
+    const r = byId.get(`${T}_5`)!;
+    expect(r.tp.slots).toBe(2);
+    expect(r.plan!.orderUnits).toEqual([r.count, 1]);
+    expect(r.plan!.uses).toEqual([
+      { key: `${T}_4:bid`, perUnit: r.count },
+      { key: `${T}_5:ask`, perUnit: 1 },
+    ]);
+    // 71,680 / 2 = 35,840 output books fill one input order
+    const big = computeBookCombines(bctx({ cycleHours: 1e6, orderSlots: 3 })).find((x) => x.id === `${T}_5`)!;
+    expect(big.tp.limitedBy).toBe('slots');
+    expect(big.tp.slots).toBeLessThanOrEqual(3);
+    expect(big.tp.batchQty * big.count).toBeLessThanOrEqual(2 * MAX_ORDER_UNITS + 1e-6);
   });
 
   it('skips inputs that cannot be priced', () => {
     expect(byId.has('ENCHANTMENT_DEAD_2')).toBe(false);
   });
 
-  it('combines input and output risk (stats feed in)', () => {
+  it('risk: the output sell side plus only the INGREDIENT_FLAGS of the input (stats feed in)', () => {
     const r = byId.get(`${UW}_5`)!;
-    const inRisk = assessRisk(snap.products[`${UW}_4`]!, null);
-    const outRisk = assessRisk(snap.products[`${UW}_5`]!, null);
-    expect(inRisk.flags).toContain('FEW_ORDERS');
-    expect(r.risk).toEqual(combineRisk([inRisk, outRisk]));
+    const inRisk = assessRisk(snap.products[`${UW}_4`]!, null, { buy: 'order' });
+    const outRisk = assessRisk(snap.products[`${UW}_5`]!, null, { sell: 'offer' });
+    expect(assessRisk(snap.products[`${UW}_4`]!, null).flags).toContain('FEW_ORDERS'); // side-blind: few sell offers
+    expect(inRisk.flags).toContain('QUICK_DIVERGENCE');
+    expect(r.risk).toEqual(combineRisk([outRisk, reportFromFlags(inRisk.flags.filter((f) => INGREDIENT_FLAGS.has(f)))]));
+    expect(r.risk.flags).toContain('QUICK_DIVERGENCE');
+    expect(r.risk.flags).not.toContain('FEW_ORDERS');
+    // an input price spike is carried over
+    const spiked = computeBookCombines(bctx({}, { stats: (id) => (id === `${UW}_4` ? stats({ medianAsk: 500, medianBid: 480 }) : stats()) }));
+    expect(spiked.find((x) => x.id === `${UW}_5`)!.risk.flags).toContain('PRICE_SPIKE');
     const withStats = computeBookCombines(bctx({}, { stats: () => stats() }));
     expect(withStats.find((x) => x.id === `${UW}_5`)!.risk.flags).not.toContain('NO_HISTORY');
     expect(r.risk.flags).toContain('NO_HISTORY');
