@@ -80,8 +80,22 @@ export function nbt(root: Record<string, W>, name = ''): Uint8Array {
   return Uint8Array.from(out);
 }
 
+/** Extra item fields for itemB64: stack size, display name (with § codes) and lore. */
+export interface ItemOpts {
+  count?: number;
+  name?: string;
+  lore?: string[];
+}
+
 /** item_bytes-like base64 for one item with these ExtraAttributes. */
-export function itemB64(ea: Record<string, W>): string {
-  const root = nbt({ i: list(10, [comp({ id: short(403), Count: byte(1), tag: comp({ ExtraAttributes: comp(ea) }) })]) });
+export function itemB64(ea: Record<string, W>, o: ItemOpts = {}): string {
+  const display: Record<string, W> = {};
+  if (o.name !== undefined) display.Name = str(o.name);
+  if (o.lore) display.Lore = list(8, o.lore.map(str));
+  const tag: Record<string, W> = { ...(o.name !== undefined || o.lore ? { display: comp(display) } : {}), ExtraAttributes: comp(ea) };
+  const root = nbt({ i: list(10, [comp({ id: short(403), Count: byte(o.count ?? 1), tag: comp(tag) })]) });
   return gzipSync(root).toString('base64');
 }
+
+/** A pet's ExtraAttributes (petInfo as the JSON string live items carry). */
+export const petEa = (info: Record<string, unknown>): Record<string, W> => ({ id: str('PET'), petInfo: str(JSON.stringify(info)) });

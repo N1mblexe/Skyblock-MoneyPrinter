@@ -4,15 +4,24 @@ import {
   base64ToBytes,
   decodeItemBytes,
   decodeItemBytesRoot,
+  decodeRoot,
   extraAttributes,
   gunzip,
+  gunzipBytes,
+  itemCount,
   itemFromNbt,
+  itemName,
+  neuItemIdForScan,
   petInfoFromNbt,
   readNbt,
+  SALES_SKIP,
+  SCAN_SKIP,
   skyblockIdFromNbt,
   type NbtCompound,
 } from '../../src/api/nbt.ts';
 import page from '../fixtures/api/auctions-page.json' with { type: 'json' };
+import ended from '../fixtures/ah-ended.json' with { type: 'json' };
+import ahPage from '../fixtures/ah-page.json' with { type: 'json' };
 import { byte, bytes, comp, double, float, int, itemB64, ints, list, long, longs, nbt, short, str, type W } from './nbtWriter.ts';
 
 const EXPECTED_IDS = [
@@ -118,14 +127,17 @@ describe('readNbt', () => {
 });
 
 describe('gunzip / base64', () => {
-  it('round-trips through DecompressionStream', async () => {
+  it('round-trips through fflate, sync and async', async () => {
     const data = new TextEncoder().encode('hello nbt'.repeat(50));
+    expect(gunzipBytes(new Uint8Array(gzipSync(data)))).toEqual(data);
     expect(await gunzip(new Uint8Array(gzipSync(data)))).toEqual(data);
     expect(base64ToBytes(Buffer.from([0, 1, 254, 255]).toString('base64'))).toEqual(Uint8Array.of(0, 1, 254, 255));
   });
 
   it('rejects data that is not gzip', async () => {
     await expect(decodeItemBytes(btoa('not gzip at all'))).rejects.toThrow();
+    await expect(gunzip(Uint8Array.of(1, 2, 3))).rejects.toThrow();
+    expect(() => decodeRoot(btoa('not gzip at all'))).toThrow();
   });
 });
 
@@ -233,5 +245,132 @@ describe('itemFromNbt', () => {
     itemFromNbt(ea({ id: 'PET', petInfo: '{"type":"BEE","tier":"RARE","exp":12}' }));
     expect(parse).toHaveBeenCalledTimes(1);
     parse.mockRestore();
+  });
+});
+
+describe('readNbt skip', () => {
+  const every = (): Record<string, W> => ({
+    b: byte(1),
+    s: short(2),
+    i: int(3),
+    l: long(4n),
+    f: float(5),
+    d: double(6),
+    ba: bytes([1, 2]),
+    str: str('long text '.repeat(10)),
+    li: list(3, [int(1), int(2)]),
+    lc: list(10, [comp({ a: str('x') }), comp({ b: list(8, [str('y')]) })]),
+    ll: list(9, [list(1, [byte(1)])]),
+    c: comp({ deep: comp({ x: int(1) }) }),
+    ia: ints([1, 2]),
+    la: longs([1n]),
+  });
+
+  it('skips a name at any depth, with every tag type inside, and keeps reading after it', () => {
+    const bytesIn = nbt({ x: comp(every()), keep: int(7), inner: comp({ x: str('gone'), y: str('kept') }), list: list(10, [comp({ x: int(1), z: int(2) })]) });
+    expect(readNbt(bytesIn, { skip: ['x'] })).toEqual({ keep: 7, inner: { y: 'kept' }, list: [{ z: 2 }] });
+    // each tag type skipped on its own
+    for (const [k, w] of Object.entries(every())) expect(readNbt(nbt({ [k]: w, after: int(1) }), { skip: [k] })).toEqual({ after: 1 });
+    expect(readNbt(bytesIn, { skip: [] })).toEqual(readNbt(bytesIn));
+  });
+
+  it('parent.child skips only inside a compound of that name', () => {
+    const root = nbt({ display: comp({ Name: str('§6Hi'), Lore: list(8, [str('a'), str('b')]) }), other: comp({ Lore: str('stays') }) });
+    expect(readNbt(root, { skip: ['display.Lore'] })).toEqual({ display: { Name: '§6Hi' }, other: { Lore: 'stays' } });
+    expect(readNbt(root, { skip: ['display.Lore', 'display.Name', 'other'] })).toEqual({ display: {} });
+  });
+
+  it('skipped bytes are still bounds-checked', () => {
+    const good = nbt({ x: str('abcdef'), y: int(1) });
+    expect(() => readNbt(good.subarray(0, 8), { skip: ['x'] })).toThrow(/unexpected end/);
+    expect(() => readNbt(Uint8Array.of(10, 0, 0, 13, 0, 1, 120), { skip: ['x'] })).toThrow(/unknown tag type 13/);
+    let w = list(0, []);
+    for (let i = 0; i < 600; i++) w = list(9, [w]);
+    expect(() => readNbt(nbt({ x: w }), { skip: ['x'] })).toThrow(/too deep/);
+  });
+
+  it('the scan and sales skip lists leave ids, counts and (sales) names intact on real items', () => {
+    for (const a of [...ahPage.auctions, ...ended.auctions]) {
+      const full = decodeRoot(a.item_bytes);
+      const scan = decodeRoot(a.item_bytes, { skip: SCAN_SKIP });
+      const sales = decodeRoot(a.item_bytes, { skip: SALES_SKIP });
+      expect(itemFromNbt(scan)).toEqual(itemFromNbt(full));
+      expect(itemFromNbt(sales)).toEqual(itemFromNbt(full));
+      expect(itemCount(scan)).toBe(itemCount(full));
+      expect(itemName(sales)).toBe(itemName(full));
+      expect(itemName(scan)).toBe('');
+      const item = (sales.i as NbtCompound[])[0]!;
+      expect(((item.tag as NbtCompound).display as NbtCompound).Lore).toBeUndefined();
+    }
+  });
+});
+
+describe('itemCount / itemName', () => {
+  it('reads Count and the display name, with defaults', async () => {
+    const root = await decodeItemBytesRoot(itemB64({ id: str('ENCHANTED_DIAMOND') }, { count: 64, name: '§a[Lvl 7] §6Thing', lore: ['§7x'] }));
+    expect(itemCount(root)).toBe(64);
+    expect(itemName(root)).toBe('[Lvl 7] Thing');
+    const ea = (o: Record<string, unknown>) => o as NbtCompound;
+    expect(itemCount(ea({}))).toBe(1);
+    expect(itemCount(ea({ i: [{ Count: 0 }] }))).toBe(1);
+    expect(itemCount(ea({ i: [{ Count: 2.5 }] }))).toBe(1);
+    expect(itemCount(ea({ i: [{ Count: 'x' }] }))).toBe(1);
+    expect(itemCount(ea({ i: 'nope' }))).toBe(1);
+    expect(itemName(ea({ i: [{ tag: { display: { Name: 5 } } }] }))).toBe('');
+    expect(itemName(ea({ i: [{ tag: { display: 'x' } }] }))).toBe('');
+    expect(itemName(ea({ i: [{ tag: 'x' }] }))).toBe('');
+    expect(itemName(ea({ i: [] }))).toBe('');
+  });
+
+  it('real sales: pet names carry the level', () => {
+    const names = ended.auctions.map((a) => itemName(decodeRoot(a.item_bytes, { skip: SALES_SKIP })));
+    expect(names).toContain('[Lvl 70] Mosquito');
+    expect(names).toContain('[Lvl 1] Bal');
+    expect(names.every((n) => !n.includes('§'))).toBe(true);
+  });
+});
+
+describe('RUNE and POTION ids (NEU names)', () => {
+  const ea = (o: Record<string, unknown>) => o as NbtCompound;
+  const id = (o: Record<string, unknown>) => skyblockIdFromNbt(ea(o));
+
+  it('runes: NAME_RUNE;LEVEL', async () => {
+    expect(id({ id: 'RUNE', runes: { MUSIC: 3 } })).toBe('MUSIC_RUNE;3');
+    expect(id({ id: 'RUNE', runes: { BLOOD_2: 1 } })).toBe('BLOOD_2_RUNE;1');
+    expect(id({ id: 'UNIQUE_RUNE', runes: { ANTLERS: 3 } })).toBe('ANTLERS_RUNE;3');
+    expect(id({ id: 'RUNE', runes: { music: 2 } })).toBe('MUSIC_RUNE;2');
+    expect(id({ id: 'RUNE', runes: { ' gem ': 0 } })).toBe('GEM_RUNE;0');
+    // no single integer level: the raw id
+    expect(id({ id: 'RUNE' })).toBe('RUNE');
+    expect(id({ id: 'RUNE', runes: {} })).toBe('RUNE');
+    expect(id({ id: 'RUNE', runes: { A: 1, B: 2 } })).toBe('RUNE');
+    expect(id({ id: 'RUNE', runes: { A: 1.5 } })).toBe('RUNE');
+    expect(id({ id: 'RUNE', runes: { A: 'x' } })).toBe('RUNE');
+    expect(id({ id: 'UNIQUE_RUNE', runes: { ' ': 1 } })).toBe('UNIQUE_RUNE');
+    expect(id({ id: 'RUNE', runes: 'x' })).toBe('RUNE');
+    expect(neuItemIdForScan('RUNE', ea({ runes: { BITE: 1 } }))).toBe('BITE_RUNE;1');
+    const b64 = itemB64({ id: str('RUNE'), runes: comp({ GEM: int(2) }) });
+    expect(skyblockIdFromNbt(await decodeItemBytes(b64))).toBe('GEM_RUNE;2');
+    // a real sale in the fixture
+    const rune = ended.auctions.find((a) => itemName(decodeRoot(a.item_bytes)).includes('Enchant Rune'))!;
+    expect(skyblockIdFromNbt(decodeRoot(rune.item_bytes))).toBe('ENCHANT_RUNE;1');
+  });
+
+  it('potions: POTION_<NAME>;<LEVEL>, POTION_<TYPE>, WATER_BOTTLE', () => {
+    expect(id({ id: 'POTION', potion: 'critical', potion_level: 4 })).toBe('POTION_CRITICAL;4');
+    expect(id({ id: 'POTION', potion: 'alchemy_xp_boost', potion_level: 3, potion_type: 'POTION' })).toBe('POTION_ALCHEMY_XP_BOOST;3');
+    // potion_name wins over potion, spaces become underscores
+    expect(id({ id: 'POTION', potion_name: 'Jump Boost', potion: 'jump', potion_level: 2 })).toBe('POTION_JUMP_BOOST;2');
+    expect(id({ id: 'POTION', potion_name: '  ', potion: 'speed', potion_level: 1 })).toBe('POTION_SPEED;1');
+    // no level: 0
+    expect(id({ id: 'POTION', potion: 'critical' })).toBe('POTION_CRITICAL;0');
+    expect(id({ id: 'POTION', potion: 'critical', potion_level: 'x' })).toBe('POTION_CRITICAL;0');
+    expect(id({ id: 'POTION', potion_type: 'AWKWARD' })).toBe('POTION_AWKWARD');
+    expect(id({ id: 'POTION', potion_type: 'mundane' })).toBe('POTION_MUNDANE');
+    expect(id({ id: 'POTION', potion: '', potion_type: '' })).toBe('WATER_BOTTLE');
+    expect(id({ id: 'POTION' })).toBe('WATER_BOTTLE');
+    // other potion-like ids are untouched
+    expect(id({ id: 'GOD_POTION_2' })).toBe('GOD_POTION_2');
+    expect(neuItemIdForScan('HYPERION', ea({ potion: 'x' }))).toBe('HYPERION');
   });
 });
