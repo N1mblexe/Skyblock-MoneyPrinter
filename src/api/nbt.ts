@@ -1,6 +1,6 @@
 // Minimal Java NBT reader (big-endian, tag types 0-12) + Hypixel item_bytes helpers. Owner: s1/ahdata.
 import { gunzipSync } from 'fflate';
-import { stripFormatting } from '../domain/ids.ts';
+import { neuItemId, stripFormatting } from '../domain/ids.ts';
 
 /** Plain JS value of an NBT tag. Longs become numbers (precision loss above 2^53 is fine for our use). */
 export type NbtValue = number | string | NbtValue[] | NbtCompound | Int8Array | Int32Array | number[];
@@ -355,35 +355,9 @@ function petFields(info: Record<string, unknown> | null): PetInfo | null {
   };
 }
 
-const nbtInt = (v: NbtValue | undefined): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null);
-const nbtStr = (v: NbtValue | undefined): string => (typeof v === 'string' ? v.trim() : '');
-
-/**
- * NEU's internal id for the SkyBlock ids many items share (RUNE / UNIQUE_RUNE / POTION), as NEU's ItemResolutionQuery
- * builds it; any other id unchanged:
- *  - RUNE / UNIQUE_RUNE with exactly one `runes` entry with an integer level -> `<NAME>_RUNE;<LVL>` (BITE_RUNE;1),
- *    else the id as is;
- *  - POTION -> `POTION_<NAME>;<LVL>` with NAME from `potion_name` (spaces -> '_'), else `potion`, and LVL =
- *    `potion_level` (0 when missing); with neither, `potion_type` -> `POTION_<TYPE>` (POTION_AWKWARD); with nothing,
- *    WATER_BOTTLE.
- * TEMPORARY local copy of src/domain/ids.ts `neuItemId` (added by s1/catalog in the same wave, which the catalog uses
- * for its ids): after the merge this should call that one instead.
- */
+/** NEU's internal id for RUNE / UNIQUE_RUNE / POTION items (src/domain/ids.ts `neuItemId`, shared with the catalog). */
 export function neuItemIdForScan(id: string, ea: NbtCompound): string {
-  if (id === 'RUNE' || id === 'UNIQUE_RUNE') {
-    const runes = ea.runes;
-    if (!isCompound(runes)) return id;
-    const keys = Object.keys(runes);
-    const lvl = keys.length === 1 ? nbtInt(runes[keys[0]!]) : null;
-    return lvl === null || !keys[0]!.trim() ? id : `${keys[0]!.trim().toUpperCase()}_RUNE;${lvl}`;
-  }
-  if (id === 'POTION') {
-    const name = nbtStr(ea.potion_name).replace(/ /g, '_') || nbtStr(ea.potion);
-    if (name) return `POTION_${name.toUpperCase()};${nbtInt(ea.potion_level) ?? 0}`;
-    const type = nbtStr(ea.potion_type);
-    return type ? `POTION_${type.toUpperCase()}` : 'WATER_BOTTLE';
-  }
-  return id;
+  return neuItemId(id, ea);
 }
 
 /**

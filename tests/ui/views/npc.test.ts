@@ -94,10 +94,10 @@ describe('npc view: flips', () => {
     const ids = rowIds();
     expect(ids).toContain('ENCHANTED_GOLD');
     expect(ids[0]).toBe('ENCHANTED_GOLD_BLOCK');
-    expect(ids).not.toContain('GOLD_INGOT'); // dead 0.1 bid -> suspect
-    const btn = q<HTMLButtonElement>('[data-testid="npc-hidden"]');
-    expect(btn.hidden).toBe(false);
-    expect(btn.textContent).toMatch(/gizli/);
+    // side-aware risk: GOLD_INGOT's dead 0.1 bid only matters when selling on the bazaar, so no bz2npc row is suspect
+    expect(ids).toContain('GOLD_INGOT');
+    expect(q('tr[data-key="bz2npc:GOLD_INGOT"]').querySelector('.npc-floor')).not.toBeNull();
+    expect(q<HTMLButtonElement>('[data-testid="npc-hidden"]').hidden).toBe(true);
     const tr = q(`tr[data-key="bz2npc:ENCHANTED_GOLD"]`);
     expect(tr.textContent).toContain('456');
     expect(tr.textContent).toContain('480');
@@ -128,13 +128,17 @@ describe('npc view: flips', () => {
   it('hidden-count toggle reveals suspects and writes the URL', async () => {
     mount();
     await flush();
-    q<HTMLButtonElement>('[data-testid="npc-hidden"]').click();
+    segBtn('npc2bz').click(); // MELON npc2bz sells into a 0.7 / 4.9 book: suspect
+    await flush();
+    const btn = q<HTMLButtonElement>('[data-testid="npc-hidden"]');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toMatch(/gizli/);
+    expect(rowIds()).not.toContain('MELON');
+    btn.click();
     await flush();
     expect(setQueryCalls()).toContainEqual({ hidden: '1' });
-    expect(rowIds()).toContain('GOLD_INGOT');
-    const tr = q(`tr[data-key="bz2npc:GOLD_INGOT"]`);
-    expect(tr.querySelector('.npc-floor')).not.toBeNull();
-    expect(tr.classList.contains('npc-suspect')).toBe(true);
+    expect(rowIds()).toContain('MELON');
+    expect(q('tr[data-key="npc2bz:MELON"]').classList.contains('npc-suspect')).toBe(true);
   });
 
   it('segment switch writes setQuery and persists across remounts', async () => {
