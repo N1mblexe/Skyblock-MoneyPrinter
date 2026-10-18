@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { AH, BITS } from '../../src/config.ts';
-import { bitsMultiplier, bitsQuotes, computeBitsRows, fameMultiplier, type BitsRow } from '../../src/domain/bits.ts';
+import { AH_SALES, BITS } from '../../src/config.ts';
+import { bitsItemCosts, bitsMultiplier, computeBitsRows, cookieCost, fameMultiplier, fillBasket, type BitsRow } from '../../src/domain/bits.ts';
+import { saleQuotes } from '../../src/domain/sale.ts';
 import { afterTax, ahNet } from '../../src/domain/pricing.ts';
 import { assessRisk } from '../../src/domain/risk.ts';
 import type { AhPrice, CalcCtx, Catalog, ItemInfo, ShopOffer, Snapshot } from '../../src/types/contracts.ts';
@@ -111,70 +112,11 @@ describe('fame multiplier', () => {
   });
 });
 
-describe('bitsQuotes', () => {
-  it('bazaar, AH and NPC quotes, best net first', () => {
-    const q = bitsQuotes(withAh(), 'KISMET');
-    expect(q.map((x) => x.source)).toEqual(['ah', 'bazaar']);
-    expect(q[0]!.net).toBeCloseTo(ahNet(1_600_000));
-    expect(q[0]!.fees).toBeCloseTo(1_600_000 - ahNet(1_600_000));
-    expect(q[0]!.liquidity).toBe(12);
-    expect(q[0]!.next).toBe(1_700_000);
-    expect(q[1]!.gross).toBeCloseTo(1_499_999.9);
-    expect(q[1]!.net).toBeCloseTo(afterTax(1_499_999.9, TAX));
-    expect(q[1]!.liquidity).toBe(7000);
-  });
-
-  it('insta-sell mode quotes the bids and the insta-sell volume', () => {
-    const q = bitsQuotes(bctx({ sellMode: 'insta' }), 'KISMET');
-    expect(q).toHaveLength(1);
-    expect(q[0]!.gross).toBe(1_400_000);
-    expect(q[0]!.liquidity).toBe(3000);
-  });
-
-  it('bazaar risk uses the price stats when available', () => {
-    const s = stats({ medianAsk: 105, medianBid: 100 });
-    const q = bitsQuotes(bctx({}, { stats: (id) => (id === 'BOOK' ? s : null) }), 'BOOK');
-    expect(q[0]!.risk).toEqual(assessRisk(snap.products.BOOK!, s));
-  });
-
-  it('AH flags: thin market, big gap, variant category', () => {
-    expect(bitsQuotes(withAh(), 'GOD')[0]!.risk!.flags).toEqual(expect.arrayContaining(['AH_THIN', 'AH_GAP']));
-    expect(bitsQuotes(withAh(), 'GOD')[0]!.next).toBe(9_000_000);
-    const wand = bitsQuotes(withAh(), 'WAND')[0]!;
-    expect(wand.risk!.flags).toEqual(['AH_VARIANT']);
-    expect(wand.next).toBeUndefined();
-    expect(bitsQuotes(withAh(), 'KISMET')[0]!.risk!.flags).toEqual([]);
-    expect(4).toBeGreaterThanOrEqual(AH.minCount);
-  });
-
-  it('Derpy quadruples the AH claim tax', () => {
-    expect(bitsQuotes(withAh({}, { derpy: true }), 'GOD')[0]!.net).toBeCloseTo(ahNet(2_000_000, true));
-    expect(ahNet(2_000_000, true)).toBeLessThan(ahNet(2_000_000));
-  });
-
-  it('NPC price wins over a cheaper bazaar quote; NPC quotes have no risk or liquidity', () => {
-    const q = bitsQuotes(bctx(), 'CHEAP');
-    expect(q[0]).toEqual({ source: 'npc', gross: 6, fees: 0, net: 6, liquidity: null, risk: null });
-    expect(q[1]!.source).toBe('bazaar');
-  });
-
-  it('ties keep bazaar ahead of the AH and the NPC', () => {
-    const net = afterTax(104.9, TAX);
-    const c = bctx(
-      {},
-      {
-        catalog: { ...cat, items: { ...cat.items, BOOK: item('BOOK', { bazaar: true, npcSell: net }) } },
-        ah: () => ({ price: net, count: 5 }),
-      },
-    );
-    // a sub-1M BIN still pays the 1 % listing fee, so the AH loses here; the NPC tie goes to the bazaar
-    expect(bitsQuotes(c, 'BOOK').map((x) => x.source)).toEqual(['bazaar', 'npc', 'ah']);
-  });
-
-  it('no product, no BIN, no NPC price: no quotes', () => {
-    expect(bitsQuotes(withAh(), 'NOTHING')).toEqual([]);
-    expect(bitsQuotes(bctx(), 'NO_ASK')).toEqual([]);
-    expect(bitsQuotes(withAh({}, { ah: () => ({ price: 0, count: 3 }) }), 'GOD')).toEqual([]);
+describe('quotes', () => {
+  it('every way to sell an offer comes from sale.ts, best net first', () => {
+    const c = withAh();
+    expect(row(computeBitsRows(c).rows, 'KISMET').quotes).toEqual(saleQuotes(c, 'KISMET'));
+    expect(row(computeBitsRows(c).rows, 'CHEAP').quotes.map((q) => q.venue)).toEqual(['npc', 'bazaar']);
   });
 });
 
@@ -193,9 +135,12 @@ describe('computeBitsRows', () => {
   it('values each offer at its best quote, per bit', () => {
     const k = row(rows, 'KISMET');
     expect(k.valueSource).toBe('ah');
-    expect(k.value).toBeCloseTo(ahNet(1_600_000));
-    expect(k.coinsPerBit).toBeCloseTo(ahNet(1_600_000) / 1350);
+    // listed one coin under the lowest BIN
+    expect(k.value).toBeCloseTo(ahNet(1_599_999));
+    expect(k.coinsPerBit).toBeCloseTo(ahNet(1_599_999) / 1350);
     expect(k.liquidity).toBe(12);
+    expect(k.rate).toBe(AH_SALES.defaultPerHour);
+    expect(row(rows, 'CHEAP').rate).toBe(Infinity);
     expect(k.quotes).toHaveLength(2);
     expect(row(rows, 'BOOK').valueSource).toBe('bazaar');
     expect(row(rows, 'BOOK').risk).toEqual(assessRisk(snap.products.BOOK!, null));
@@ -255,8 +200,13 @@ describe('computeBitsRows', () => {
     expect(s.best!.id).not.toBe('DEAD');
     const want = rows.find((r) => r.coinsPerBit != null && !r.untradeable && r.risk?.level !== 'suspect')!;
     expect(s.best).toBe(want);
-    expect(s.coinsPerCookie).toBeCloseTo(4800 * want.coinsPerBit!);
-    expect(s.profitPerCookie).toBeCloseTo(4800 * want.coinsPerBit! - 2_000_000.1);
+    // the basket: one cookie's bits, best coins per bit first, no suspect or unsold rows
+    expect(s.basket.bits + s.basket.leftBits).toBe(4800);
+    expect(s.basket.lines[0]!.row).toBe(want);
+    expect(s.basket.lines.every((l) => l.row.risk?.level !== 'suspect' && !l.row.untradeable)).toBe(true);
+    expect(s.basket.coins).toBeCloseTo(s.basket.lines.reduce((a, l) => a + l.coins, 0), 6);
+    expect(s.coinsPerCookie).toBe(s.basket.coins);
+    expect(s.profitPerCookie).toBeCloseTo(s.basket.coins - 2_000_000.1);
     expect(row(rows, 'KISMET').vsCookie).toBeCloseTo(row(rows, 'KISMET').coinsPerBit! / s.cookieCostPerBit!);
   });
 
@@ -264,7 +214,7 @@ describe('computeBitsRows', () => {
     const s = computeBitsRows(withAh(), { multiplier: 1.6 }).summary;
     expect(s.bitsPerCookie).toBeCloseTo(7680);
     expect(s.cookieCostPerBit).toBeCloseTo(2_000_000.1 / 7680);
-    expect(s.coinsPerCookie).toBeCloseTo(7680 * s.best!.coinsPerBit!);
+    expect(s.basket.bits + s.basket.leftBits).toBeCloseTo(7680);
     const r1 = row(rows, 'KISMET').vsCookie!;
     expect(row(computeBitsRows(withAh(), { multiplier: 1.6 }).rows, 'KISMET').vsCookie).toBeCloseTo(r1 * 1.6);
   });
@@ -306,5 +256,82 @@ describe('computeBitsRows', () => {
     expect(s.coinsPerCookie).toBeNull();
     expect(s.profitPerCookie).toBeNull();
     expect(computeBitsRows(bctx({}, { catalog: { ...cat, shops: [] } }), { multiplier: 1 }).rows).toEqual([]);
+  });
+});
+
+describe('cookie basket', () => {
+  const r = (id: string, bits: number, value: number | null, rate: number | null, o: Partial<BitsRow> = {}): BitsRow => ({
+    key: `${id}|${bits}`,
+    id,
+    name: id,
+    bits,
+    outQty: 1,
+    value,
+    valueSource: value == null ? null : 'bazaar',
+    coinsPerBit: value == null ? null : value / bits,
+    vsCookie: null,
+    liquidity: null,
+    rate,
+    untradeable: false,
+    risk: null,
+    quotes: [],
+    ...o,
+  });
+
+  it('fills by coins per bit, each offer capped by its sales over BITS.basketHours', () => {
+    const perDay = (n: number) => n / BITS.basketHours;
+    const rows = [
+      r('A', 1000, 5_000, perDay(2)), // 2 offers a day
+      r('SUS', 1, 1e9, 1e9, { risk: { level: 'suspect', score: 9, flags: ['DEAD_BID'] } }),
+      r('B', 500, 2_000, perDay(100)),
+      r('NONE', 10, null, null),
+      r('BIG', 9_000, 1e9, 1e9),
+      r('SACK', 1, 1e9, 1e9, { untradeable: true }),
+      r('ZERO', 100, 300, 0),
+    ];
+    const b = fillBasket(rows, 4800);
+    expect(b.lines.map((l) => [l.row.id, l.offers, l.bits, l.coins])).toEqual([
+      ['A', 2, 2000, 10_000],
+      ['B', 5, 2500, 10_000],
+    ]);
+    expect(b).toMatchObject({ bits: 4500, coins: 20_000, leftBits: 300 });
+  });
+
+  it('offers of one item share its market; stacks count their items', () => {
+    const perDay = (n: number) => n / BITS.basketHours;
+    const rows = [r('A', 100, 1_000, perDay(10), { outQty: 2 }), r('A', 200, 1_500, perDay(10), { key: 'A|200', outQty: 2 })];
+    // 10 items a day: 5 offers of 2, the second offer of A gets nothing
+    const b = fillBasket(rows, 10_000);
+    expect(b.lines.map((l) => [l.row.key, l.offers])).toEqual([['A|100', 5]]);
+    expect(fillBasket([r('NPC', 100, 1_000, Infinity)], 1_000).lines[0]!.offers).toBe(10);
+  });
+
+  it('an empty basket: no coins per cookie or profit', () => {
+    const c = bctx({}, { catalog: { ...cat, shops: [bit('DEAD', 1)] } });
+    const s = computeBitsRows(c, { multiplier: 1 }).summary;
+    expect(s.basket.lines).toEqual([]);
+    expect(s.coinsPerCookie).toBeNull();
+    expect(s.profitPerCookie).toBeNull();
+  });
+});
+
+describe('bits prices', () => {
+  it('a bit costs the cookie buy price / bits per cookie, at settings.bitsMultiplier by default', () => {
+    expect(cookieCost(withAh())).toMatchObject({ multiplier: 1, bitsPerCookie: 4800, cookieCost: 2_000_000.1 });
+    expect(cookieCost(withAh({ bitsMultiplier: 2 })).perBit).toBeCloseTo(2_000_000.1 / 9600);
+    expect(cookieCost(withAh(), -1).multiplier).toBe(1);
+    expect(computeBitsRows(withAh({ bitsMultiplier: 2 })).summary.bitsPerCookie).toBe(9600);
+  });
+
+  it("each bits item's cheapest offer per item, in coins; nothing without a cookie price", () => {
+    const m = bitsItemCosts(withAh());
+    const perBit = 2_000_000.1 / 4800;
+    expect(m.get('KISMET')).toBeCloseTo(1350 * perBit);
+    expect(m.get('FUEL')).toBeCloseTo((75 / 8) * perBit);
+    // BOOK: 1 bit beats 0-bit and coin offers (both skipped)
+    expect(m.get('BOOK')).toBeCloseTo(perBit);
+    expect(m.has('ZERO_OUT')).toBe(false);
+    const { BOOSTER_COOKIE: _, ...rest } = snap.products;
+    expect(bitsItemCosts(bctx({}, { snap: { ...snap, products: rest } })).size).toBe(0);
   });
 });

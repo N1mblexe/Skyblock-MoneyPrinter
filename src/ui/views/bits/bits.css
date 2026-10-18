@@ -21,7 +21,7 @@
 .bits-view .bits-hint[hidden],
 .bits-view .bits-stats[hidden],
 .bits-view .tbl[hidden],
-.bits-view [data-bits-clear][hidden] {
+.bits-view .bits-basket[hidden] {
   display: none;
 }
 .bits-rank {
@@ -35,10 +35,6 @@
 }
 .bits-rank [data-bits-custom] {
   width: 9rem;
-}
-/* the custom value is in effect: the rank select is only a fallback */
-.bits-rank.bits-custom-on [data-bits-rank] {
-  opacity: 0.6;
 }
 .bits-using {
   align-self: center;
@@ -112,4 +108,32 @@
 }
 .bits-quotes tr.bits-win {
   font-weight: 600;
+}
+
+.bits-basket {
+  display: grid;
+  gap: var(--s-2);
+}
+.bits-basket-h {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+.bits-basket p {
+  margin: 0;
+}
+.bits-basket-lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 2px;
+}
+.bits-basket-lines li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  align-items: baseline;
+}
+.bits-basket-lines .num {
+  margin-left: auto;
 }

@@ -1,10 +1,10 @@
-// Kat upgrades (#/kat): buy a pet on the AH, upgrade its rarity at Kat, sell it on the AH (src/domain/kat.ts).
-// Rows come from derived.kat() without the skip option, else are recomputed when calcCtx() (AH scan, catalog,
-// snapshot, calc settings, mayor) or settings.taming changes. Taming is a setting (the planner and alerts use it too);
+// Kat upgrades (#/kat): buy a pet on the AH, upgrade its rarity at Kat, sell it on the AH or to George
+// (src/domain/kat.ts). Rows come from derived.kat() for its skip option (KAT_DERIVED_SKIP), else are recomputed when
+// calcCtx() (AH scan and sales, catalog, snapshot, calc settings, mayor) or settings.taming changes. Taming is a setting (the planner and alerts use it too);
 // the other filters live in the URL.
-import { KAT, LS_VIEWPREFS } from '../../../config.ts';
+import { AH, KAT, LS_VIEWPREFS } from '../../../config.ts';
 import { isPetMaxKey } from '../../../domain/ahFlips.ts';
-import { computeKatFlips, KAT_RARITIES, katScanReady, type KatItemLine, type KatRow, type KatSkip } from '../../../domain/kat.ts';
+import { computeKatFlips, KAT_DERIVED_SKIP, KAT_RARITIES, katScanReady, type KatItemLine, type KatRow, type KatSkip } from '../../../domain/kat.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
 import { isDerpy } from '../../../state/derived.ts';
 import type { AppState, CalcCtx, Store, View, ViewContext } from '../../../types/contracts.ts';
@@ -89,7 +89,7 @@ function columns(): KitColumn<KatRow>[] {
       get: (r) => r.sell,
       align: 'right',
       priority: 2,
-      html: (r) => (r.sell > 0 ? coins((x) => x.sell)(r) : `<span class="muted">${esc(t('kat.noPrice'))}</span>`),
+      html: (r) => (r.sell > 0 ? `${coins((x) => x.sell)(r)}<span class="id-sub">${saleMarker(r)}</span>` : `<span class="muted">${esc(t('kat.noPrice'))}</span>`),
     },
     {
       key: 'profit',
@@ -121,8 +121,19 @@ function columns(): KitColumn<KatRow>[] {
   ];
 }
 
+/** Where the upgraded pet sells: George, or the AH key it is priced from (max level, a level band, any level). */
+export function saleMarker(r: KatRow): string {
+  if (r.sellVenue === 'george') return `<span class="badge src-george" data-kat-sale="george">${esc(t('kat.sale_george'))}</span>`;
+  const top = Number(/@L(\d+)$/.exec(r.sellKey)?.[1] ?? NaN);
+  const kind = isPetMaxKey(r.sellKey) ? 'max' : top > 0 ? 'band' : 'any';
+  // a band runs from the previous band's top + 1 (AH.petBands)
+  const lo = (AH.petBands.filter((b) => b < top).at(-1) ?? 0) + 1;
+  return `<span data-kat-sale="${kind}">${esc(kind === 'band' ? t('kat.sale_band', { a: lo, b: top }) : t(`kat.sale_${kind}`))}</span>`;
+}
+
 function srcBadge(l: KatItemLine): string {
   if (l.source === 'ah') return `<span class="badge">${esc(t('common.src_ah'))}</span>`;
+  if (l.source === 'bits') return `<span class="badge" data-src="bits">${esc(t('kat.src_bits'))}</span>`;
   return l.source ? sourceBadge(l.source) : `<span class="badge risk-suspect">${esc(t('kat.noPrice'))}</span>`;
 }
 
@@ -158,7 +169,11 @@ export function katDetail(r: KatRow, derpy: boolean): string {
     .join('');
   const notes: string[] = [];
   if (!r.levelKnown) notes.push(t('kat.levelGuess'));
-  if (!isPetMaxKey(r.sellKey)) notes.push(t('kat.sellVariant', { rarity: rarityName(r.to), level: r.levelEnd }));
+  if (r.sellVenue === 'george') notes.push(t('kat.georgeNote'));
+  else if (!isPetMaxKey(r.sellKey)) notes.push(t('kat.sellVariant', { rarity: rarityName(r.to), level: r.levelEnd }));
+  if (r.sellVenue === 'ah' && r.salesPerHour == null && r.sell > 0) notes.push(t('kat.noSales', { h: fmtHours(r.sellHours) }));
+  if (r.sellRef != null) notes.push(t('kat.medianCap', { ref: fmtCoins(r.sellRef) }));
+  if (r.steps.some((s) => s.skip.some((l) => l.source === 'bits'))) notes.push(t('kat.bitsNote'));
   if (r.unpriced.length) notes.push(t('kat.unpricedNote', { items: fmtList(r.unpriced) }));
   if (derpy) notes.push(t('kat.derpy'));
   return `<div class="kat-detail">
@@ -173,8 +188,10 @@ export function katDetail(r: KatRow, derpy: boolean): string {
     <dl class="kv">
       ${kv('kat.d_upgrade', itemsPriced(r) ? money(r.upgradeCost) : dash)}
       ${kv('kat.d_capital', itemsPriced(r) ? money(r.capital) : dash)}
-      ${r.sell > 0 ? kv('kat.d_sell', `${money(r.sell)} <span class="id-sub">${esc(r.sellKey)}</span>`) : kv('kat.d_sell', esc(t('kat.noPrice')))}
-      ${r.sell > 0 ? kv('kat.d_sellNet', money(r.sellNet)) : ''}
+      ${r.sell > 0 ? kv('kat.d_sell', `${money(r.sell)} ${saleMarker(r)} <span class="id-sub">${esc(r.sellVenue === 'george' ? r.pet + ';' + r.to : r.sellKey)}</span>`) : kv('kat.d_sell', esc(t('kat.noPrice')))}
+      ${r.sell > 0 && r.sellVenue === 'ah' ? kv('kat.d_sellNet', money(r.sellNet)) : ''}
+      ${r.sell > 0 && r.sellVenue === 'ah' ? kv('kat.d_sellHours', esc(fmtHours(r.sellHours))) : ''}
+      ${r.george != null && r.sellVenue === 'ah' ? kv('kat.d_george', money(r.george)) : ''}
       ${priced(r) ? kv('kat.d_profit', `<strong class="${r.profit >= 0 ? 'pos' : 'neg'}">${money(r.profit)}</strong>`) : ''}
       ${priced(r) ? kv('kat.d_margin', esc(fmtPct(r.margin))) : ''}
       ${kv('kat.d_hours', esc(fmtHours(r.hours)))}
@@ -239,18 +256,18 @@ export function createKatView(): View {
   let openKey: string | null = null;
   let lastRows: KatRow[] = [];
   const subs: (() => void)[] = [];
-  /** rows with skip items, for one calcCtx() and Taming level (calcCtx() keeps its identity when only Taming changes) */
-  let memo: { c: CalcCtx; taming: number; rows: KatRow[] } | null = null;
+  /** rows of another skip option, for one calcCtx() and Taming level (calcCtx() keeps its identity when only Taming changes) */
+  let memo: { c: CalcCtx; taming: number; skip: KatSkip; rows: KatRow[] } | null = null;
 
   const $ = <E extends Element = HTMLElement>(sel: string) => root!.querySelector<E>(sel)!;
 
   function rows(s: AppState, skip: KatSkip): KatRow[] {
-    // no skip items: the planner's rows (same options and Taming level)
-    if (skip === 'none') return ctx!.derived.kat();
+    // the planner's rows (same options and Taming level)
+    if (skip === KAT_DERIVED_SKIP) return ctx!.derived.kat();
     const c = ctx!.derived.calcCtx();
     if (!c) return [];
     const lvl = s.settings.taming;
-    if (memo?.c !== c || memo.taming !== lvl) memo = { c, taming: lvl, rows: computeKatFlips(c, { skip, taming: lvl }) };
+    if (memo?.c !== c || memo.taming !== lvl || memo.skip !== skip) memo = { c, taming: lvl, skip, rows: computeKatFlips(c, { skip, taming: lvl }) };
     return memo.rows;
   }
 
@@ -298,7 +315,7 @@ export function createKatView(): View {
     tools.hidden = false;
     taming?.sync();
     const v = qs.get();
-    const all = rows(s, v.skip ? 'flowers' : 'none');
+    const all = rows(s, v.skip === 'none' || v.skip === 'flowers' ? v.skip : 'best');
     lastRows = all;
     const res = filterKat(
       all,
@@ -368,7 +385,16 @@ export function createKatView(): View {
               { value: 'max', label: () => t('kat.band_max') },
             ],
           },
-          { kind: 'toggle', key: 'skip', label: () => t('kat.skip') },
+          {
+            kind: 'segment',
+            key: 'skip',
+            label: () => t('kat.skip'),
+            options: [
+              { value: 'best', label: () => t('kat.skip_best') },
+              { value: 'none', label: () => t('kat.skip_none') },
+              { value: 'flowers', label: () => t('kat.skip_flowers') },
+            ],
+          },
           { kind: 'toggle', key: 'unpriced', label: () => t('kat.showUnpriced') },
           { kind: 'toggle', key: 'suspect', label: () => t('kat.showSuspect') },
         ],
