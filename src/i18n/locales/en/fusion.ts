@@ -100,5 +100,7 @@ export const fusion = {
     'Fusion fees and requirements (machine unlocks, level requirements etc.) are not modeled. Buy/sell mode and tax come from the Global settings above; currently: <strong>{cost}</strong>, <strong>{sell}</strong>.',
   note3:
     'Prices come from the top of the order book (best buy order + 0.1 / lowest sell offer − 0.1), never quick_status averages. Tax is only taken from bazaar sales. Profit / hour is estimated from how fast both inputs buy and the output sells, your capital and your order slots.',
+  noteNpc:
+    'An input an NPC shop sells is bought there when it is cheaper than the bazaar (marked NPC): instantly, at most the NPC daily limit per day (Settings). Risk covers the bazaar-bought inputs’ buy side and the output’s sell side.',
   note4: 'Recipes are stored in this browser only; download JSON for a backup.',
 };

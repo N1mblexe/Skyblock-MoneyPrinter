@@ -1,8 +1,9 @@
 // Pieces shared by the flip and books views: cell helpers, detail-panel sections, legacy-prefs migration.
 import { t } from '../../../i18n/index.ts';
 import { lsGet, lsSet } from '../../../storage/local.ts';
-import type { MarketStat, OrderLevel, Product, RiskReport, Throughput } from '../../../types/contracts.ts';
-import { riskFlagText } from '../../cells.ts';
+import { coreOf } from '../../../domain/market.ts';
+import type { MarketStat, OrderLevel, Product, Quote, RiskReport, Throughput, ViewContext } from '../../../types/contracts.ts';
+import { riskFlagText, riskScopeHtml, type RiskScope } from '../../cells.ts';
 import { esc } from '../../dom.ts';
 import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtPct, locale } from '../../format.ts';
 
@@ -42,12 +43,29 @@ export function kv(pairs: [string, string][]): string {
   return `<dl class="kv">${pairs.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${v}</dd>`).join('')}</dl>`;
 }
 
-/** Risk flags, each with its explanation. */
-export function riskListHtml(r: RiskReport): string {
+/** Risk flags, each with its explanation, then the sides the report checked (when `scope` is given). */
+export function riskListHtml(r: RiskReport, scope?: RiskScope): string {
   const flags = r.flags.filter((f) => f !== 'NO_HISTORY' || r.flags.length === 1);
   const head = `<p><span class="badge risk-${r.level}">${esc(t(`risk.${r.level}`))}</span></p>`;
-  if (!flags.length) return head + `<p class="muted small">${esc(t('flip.riskNone'))}</p>`;
-  return head + `<ul class="dp-flags">${flags.map((f) => `<li><code>${esc(f)}</code> ${esc(riskFlagText(f))}</li>`).join('')}</ul>`;
+  const tail = scope ? riskScopeHtml(scope) : '';
+  if (!flags.length) return head + `<p class="muted small">${esc(t('flip.riskNone'))}</p>` + tail;
+  return head + `<ul class="dp-flags">${flags.map((f) => `<li><code>${esc(f)}</code> ${esc(riskFlagText(f))}</li>`).join('')}</ul>` + tail;
+}
+
+/** Badge for a clamped buy-order price: raised to the NPC floor, or capped at the ask (an insta-buy instead). */
+export function clampBadge(c: Quote['clamped'] | undefined): string {
+  if (!c) return '';
+  const npc = c === 'npcFloor';
+  return ` <span class="badge src-npc flip-clamp" title="${esc(t(npc ? 'flip.clampedNpcTip' : 'flip.clampedAskTip'))}">${esc(t(npc ? 'flip.clampedNpc' : 'flip.clampedAsk'))}</span>`;
+}
+
+/**
+ * The clamp on the current bazaar buy quote of `id` (the shared market core of the derived context), for rows that
+ * don't carry it (books' input, NPC rows). A clamp doesn't depend on the quantity.
+ */
+export function buyClampOf(ctx: ViewContext, id: string): Quote['clamped'] | undefined {
+  const c = ctx.derived.calcCtx();
+  return c ? (coreOf(c).buy(id)?.quote.clamped ?? undefined) : undefined;
 }
 
 function levelsTable(caption: string, levels: readonly OrderLevel[], n: number): string {

@@ -360,3 +360,68 @@ describe('flip view', () => {
     expect(root.children).toHaveLength(0);
   });
 });
+
+describe('flip view: conservative estimates, side-aware risk and the ask cap', () => {
+  const P = 'CONS_ITEM';
+  const lv = (price: number) => [{ price, amount: 5000, orders: 10 }];
+  const CSNAP: Snapshot = {
+    lastUpdated: 0,
+    fetchedAt: 0,
+    source: 'fixture',
+    products: { [P]: makeProduct({ id: P, bids: lv(100), asks: lv(120), quick: { buyPrice: 120, sellPrice: 100 } }) },
+  };
+  /** enough history for conservatism: recent medians inside the spread */
+  const consHistory = (): HistoryRepo => ({
+    ...fakeHistory(),
+    stats: (id: string) => (id === P ? { n: 30, medianAsk: 115, medianBid: 105, madAsk: 1, madBid: 1, change24h: null } : null),
+  });
+  function mountCons(conservative = true, over: Partial<ViewContext> = {}) {
+    view.unmount();
+    store = createStore(initialState({ ...defaultSettings, conservative }));
+    store.set({ snapshot: CSNAP, catalog: CATALOG });
+    const history = consHistory();
+    ctx = { store, history, navigate: vi.fn(), t: (k: string) => k, refresh: async () => {}, ...ctxExtras(store, history), ...over } as never;
+    view = createFlipView();
+    mount({ id: 'flip', query: { q: P } });
+  }
+  const open = () => (q(`tr[data-key="${P}"] td.num`) as HTMLElement).click();
+
+  it('marks a row conservatism adjusted and explains each change in the panel', async () => {
+    mountCons();
+    await flush();
+    expect(rowKeys()).toEqual([P]);
+    const badge = q(`tr[data-key="${P}"] .cons-badge`);
+    expect(badge.textContent).toBe('Ayarlı');
+    expect(badge.title).toMatch(/fiyat geçmişine/);
+    open();
+    const lines = [...panel().querySelectorAll('[data-testid="cons-list"] li')].map((li) => li.textContent!);
+    // buy order max(100.1, 105.1); sell offer min(119.9, 114.9)
+    expect(lines[0]).toMatch(/^Alış fiyatı anlık veride 100[.,]1 → 105[.,]1/);
+    expect(lines[1]).toMatch(/^Satış fiyatı anlık veride 119[.,]9 → 114[.,]9/);
+    expect(panel().textContent).toContain('Temkinli ayarlar');
+    // a flip trades both sides
+    expect(panel().querySelector('.risk-scope')!.textContent).toMatch(/alış ve satış/);
+  });
+
+  it('with conservative estimates off the row keeps the snapshot numbers', async () => {
+    mountCons(false);
+    await flush();
+    expect(root.querySelector(`tr[data-key="${P}"] .cons-badge`)).toBeNull();
+    open();
+    expect(panel().querySelector('[data-testid="cons-list"]')).toBeNull();
+    expect(panel().textContent).not.toContain('Temkinli ayarlar');
+  });
+
+  it('a buy order capped at the ask is planned as an insta-buy with the ask-cap note', async () => {
+    mountCons(false);
+    await flush();
+    const row = { ...ctx.derived.flips()[0]!, buyClamped: 'ask' as const };
+    mountCons(false, { derived: { ...ctx.derived, flips: () => [row] } });
+    await flush();
+    expect(q(`tr[data-key="${P}"] .flip-clamp`).textContent).toBe('Ask sınırı');
+    open();
+    const steps = [...panel().querySelectorAll('.dp-steps li')].map((li) => li.textContent);
+    expect(steps[0]).toMatch(/insta-buy yap/);
+    expect(q('[data-testid="flip-clamp"]').textContent).toMatch(/sipariş slotu kullanmaz/);
+  });
+});

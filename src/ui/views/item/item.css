@@ -448,3 +448,15 @@
 .item-view td .btn {
   font-family: var(--f-body);
 }
+
+/* conservative adjustments under "your flip" */
+.item-cons .item-sub {
+  font-size: var(--fs-sm);
+  margin: var(--s-3) 0 var(--s-1);
+}
+.item-cons .cons-list {
+  margin: 0;
+  padding-left: 1.2em;
+  display: grid;
+  gap: var(--s-1);
+}

@@ -269,6 +269,23 @@ describe('overview view', () => {
     expect(body('market').querySelector('[data-k="ah"]')!.textContent).toBe('kapalı');
   });
 
+  it('market card reports the AH sales feed coverage and the estimate mode', async () => {
+    mount({ snapshot: SNAP });
+    const k = (key: string) => body('market').querySelector(`[data-k="${key}"]`)?.textContent ?? null;
+    expect(k('ahSales')).toBe('henüz satış görülmedi');
+    expect(k('estimates')).toBe('temkinli (son geçmiş)');
+    store.set({ ahSales: { v: 1, updatedAt: Date.now(), coverageHours: 0.5, byId: {} } });
+    await flush();
+    expect(k('ahSales')).toBe('satış hızları için 2 sa gerekli, 0,5 sa var');
+    store.set({ ahSales: { v: 1, updatedAt: Date.now(), coverageHours: 3.25, byId: { A: { n: 3, items: 3, median: 5, perHour: 1, coverageHours: 3.25, last: 0 } } } });
+    await flush();
+    expect(k('ahSales')).toBe('3,3 sa kapsandı · 1 ürün');
+    store.set((s) => ({ settings: { ...s.settings, ahEnabled: false, conservative: false } }));
+    await flush();
+    expect(k('ahSales')).toBeNull();
+    expect(k('estimates')).toBe('ham anlık veri');
+  });
+
   it('switches language', () => {
     mount({ snapshot: SNAP, catalog: CATALOG });
     setLang('en');

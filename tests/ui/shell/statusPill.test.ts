@@ -67,4 +67,26 @@ describe('status pill', () => {
     expect(mutations.length).toBeGreaterThan(0);
     expect(pill.title).toContain('boom');
   });
+
+  it('shows the AH sales coverage while the AH is on, with a tooltip', () => {
+    const now = Date.now();
+    h = harness({ status: 'live', snapshot: snap(now - 5_000) });
+    h.mount();
+    const sales = h.q('[data-testid="status-sales"]');
+    expect(sales.hidden).toBe(true);
+    h.store.set({ ahSales: { v: 1, updatedAt: now, coverageHours: 0.5, byId: {} } });
+    expect(sales.hidden).toBe(false);
+    expect(sales.textContent).toBe('satış 0,5/2 sa');
+    expect(sales.dataset.low).toBe('true');
+    expect(sales.title).toContain('temkinli bir tahmin');
+    h.store.set({ ahSales: { v: 1, updatedAt: now, coverageHours: 12, byId: { A: { n: 1, items: 1, median: 1, perHour: 1, coverageHours: 12, last: now } } } });
+    expect(sales.textContent).toBe('satış 12,0 sa');
+    expect(sales.dataset.low).toBe('false');
+    expect(sales.title).toContain('1 ürün');
+    // the live region stays the status alone
+    expect(h.q('[data-testid="status-pill"]').contains(sales)).toBe(false);
+    h.store.set((s) => ({ settings: { ...s.settings, ahEnabled: false } }));
+    expect(sales.hidden).toBe(true);
+    expect(sales.hasAttribute('title')).toBe(false);
+  });
 });

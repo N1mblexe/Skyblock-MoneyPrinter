@@ -4,7 +4,7 @@ import { HOTKEYS, LS_VIEWPREFS } from '../../../config.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, FlipRow, MarketStat, Route, View, ViewContext } from '../../../types/contracts.ts';
-import { riskBadge } from '../../cells.ts';
+import { consBadge, consListHtml, riskBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
 import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtPct } from '../../format.ts';
 import {
@@ -25,6 +25,7 @@ import { sparklineSvg } from '../../sparkline.ts';
 import './flip.css';
 import {
   changeHtml,
+  clampBadge,
   fillText,
   focusedRowKey,
   kv,
@@ -43,8 +44,7 @@ import {
 
 export const FLIP_PREFS_KEY = LS_VIEWPREFS + 'flip';
 
-/** FlipRow plus the buy-quote clamp, once the domain exposes it (contract request). */
-type Row = FlipRow & { buyClamped?: 'npcFloor' | 'ask' };
+type Row = FlipRow;
 
 const SORT_KEYS = ['name', 'buyAt', 'sellAt', 'profit', 'margin', 'change', 'change1h', 'cons', 'vol', 'comp', 'uph', 'capital', 'slots', 'fill', 'limited', 'pph', 'risk'] as const;
 
@@ -111,12 +111,6 @@ export function createFlipView(): View {
     return s;
   }
 
-  function clampBadge(r: Row): string {
-    if (!r.buyClamped) return '';
-    const npc = r.buyClamped === 'npcFloor';
-    return ` <span class="badge src-npc flip-clamp" title="${esc(t(npc ? 'flip.clampedNpcTip' : 'flip.clampedAskTip'))}">${esc(t(npc ? 'flip.clampedNpc' : 'flip.clampedAsk'))}</span>`;
-  }
-
   const num = (key: string, get: (r: Row) => number | null, html: (r: Row) => string, extra: Partial<KitColumn<Row>> = {}): KitColumn<Row> => ({
     key,
     label: () => t(`flip.col_${key}`),
@@ -133,7 +127,7 @@ export function createFlipView(): View {
       label: () => t('flip.col_item'),
       title: () => t('flip.tip_item'),
       get: (r) => r.name,
-      html: (r) => `<a href="#/item/${encodeURIComponent(r.id)}">${esc(r.name)}</a>${clampBadge(r)}<span class="id-sub">${esc(r.id)}</span>`,
+      html: (r) => `<a href="#/item/${encodeURIComponent(r.id)}">${esc(r.name)}</a>${clampBadge(r.buyClamped)}${consBadge(r.cons)}<span class="id-sub">${esc(r.id)}</span>`,
       csv: (r) => `${r.name} (${r.id})`,
       cls: 'name-cell',
       priority: 0,
@@ -198,8 +192,10 @@ export function createFlipView(): View {
     const { costMode, sellMode, orderSlots } = s.settings;
     const tp = r.tp;
     const n = fmtInt(Math.round(tp.batchQty));
+    // a buy order capped at the ask is an insta-buy (walks the sell offers, no slot)
+    const buyOrder = costMode === 'order' && r.buyClamped !== 'ask';
     const steps = [
-      costMode === 'order'
+      buyOrder
         ? t('flip.stepBuyOrder', { n, price: esc(fmtCoins(r.buyAt)), h: esc(fmtHours(tp.buyHours ?? tp.fillHours)) })
         : t('flip.stepBuyInsta', { n, price: esc(fmtCoins(r.buyAt)) }),
       sellMode === 'offer'
@@ -208,7 +204,7 @@ export function createFlipView(): View {
       t('flip.stepProfit', { batch: esc(fmtCoins(r.profit * tp.batchQty)), pph: esc(fmtCoins(r.profitPerHour)) }),
     ];
     const clamp = r.buyClamped
-      ? `<p class="small">${clampBadge(r)} ${esc(t(r.buyClamped === 'npcFloor' ? 'flip.clampedNpcTip' : 'flip.clampedAskTip'))}</p>`
+      ? `<p class="small" data-testid="flip-clamp">${clampBadge(r.buyClamped)} ${esc(t(r.buyClamped === 'npcFloor' ? 'flip.clampedNpcTip' : 'flip.clampedAskTip'))}</p>`
       : '';
     const watched = ctx.watch.has(r.id);
     return (
@@ -221,7 +217,8 @@ export function createFlipView(): View {
           clamp +
           kv([[t('flip.profitUnit'), span(signCls(r.profit), fmtCoins(r.profit))], ...tpPairs(tp, orderSlots, r.profitPerHour)]),
       ) +
-      section(t('flip.riskTitle'), riskListHtml(r.risk)) +
+      (r.cons ? section(t('risk.consTitle'), consListHtml(r.cons, { buy: r.buyAt, sell: r.sellAt })) : '') +
+      section(t('flip.riskTitle'), riskListHtml(r.risk, 'both')) +
       section(t('flip.statsTitle'), statsHtml(st(r.id))) +
       section(t('flip.bookTitle'), orderBookHtml(s.snapshot?.products[r.id])) +
       section(
@@ -328,7 +325,7 @@ export function createFlipView(): View {
     els.title.textContent = t('flip.title');
     els.intro.textContent = t('flip.intro');
     els.hint.textContent = t('flip.hotkeys');
-    els.note.innerHTML = ['noteHow', 'notePph', 'noteSettings'].map((k) => `<p>${t('flip.' + k)}</p>`).join('');
+    els.note.innerHTML = ['noteHow', 'notePph', 'noteCons', 'noteSettings'].map((k) => `<p>${t('flip.' + k)}</p>`).join('');
   }
 
   function starCurrent(): void {

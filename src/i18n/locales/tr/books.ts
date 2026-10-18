@@ -32,6 +32,7 @@ export const books: Messages['books'] = {
   col_profit: 'Kâr / kitap',
   col_margin: 'Marj',
   col_uph: 'Kitap / saat',
+  col_slots: 'Slot',
   col_pph: 'Kâr / saat',
   col_risk: 'Risk',
   col_verified: 'Doğrulama',
@@ -44,8 +45,9 @@ export const books: Messages['books'] = {
   tip_profit: 'Vergi sonrası satış − toplam maliyet. Örs XP maliyeti dahil değil.',
   tip_margin: 'Kârın toplam maliyete oranı.',
   tip_uph: 'Saatte üretip satabileceğin çıktı kitabı (girdi dolum hızı adet sayısına bölünür).',
+  tip_slots: 'Bir partinin kullandığı bazaar sipariş slotu: girdi buy order’ı ve çıktı sell offer’ı (her sipariş en fazla 71.680 adet).',
   tip_pph: 'Kitap / saat × kitap başı kâr. Varsayılan sıralama.',
-  tip_risk: 'Girdi ve çıktı kitabının risk kontrollerinin birleşimi.',
+  tip_risk: 'Çıktı kitabının satış tarafı kontrolleri, artı girdi kitabındaki fiyat sıçraması ve ortalama fiyat sapması.',
   tip_verified: 'Doğrulanmış: çıktı seviyesi elle derlenmiş örs sınırının içinde. Doğrulanmamış: sınır bilinmiyor ya da aşılmış.',
 
   chainCell: '{k} → {l} (×{n})',
@@ -64,11 +66,12 @@ export const books: Messages['books'] = {
   stepCombine: 'Örsde birleştir: <strong>{c}</strong> birleştirme ile {books} adet {output}.',
   stepSellOffer: '{output} için <strong>{price}</strong> fiyattan sell offer ver (~{h} içinde satılır).',
   stepSellInsta: '{output} insta-sell yap (ortalama <strong>{price}</strong>, hemen).',
+  slotsNote: 'Girdi buy order’ı çıktı kitabı başına {n} kitap tutar, bu yüzden büyük bir parti birden fazla slot isteyebilir.',
   inputBook: '{book} · girdi: {name}',
   outputBook: '{book} · çıktı: {name}',
   openInput: 'Girdi kitabını aç',
   openOutput: 'Çıktı kitabını aç',
 
   note:
-    '<strong>Nasıl hesaplanır:</strong> Her çıktı kitabı için en kârlı girdi seviyesi seçilir (en fazla 4 seviye aşağı, 16 kitap). Girdinin dolum hızı gereken kitap sayısına bölünür. Fiyatlar order book’un tepesinden gelir; vergi sadece satıştan düşülür. Örs XP maliyeti modellenmez.',
+    '<strong>Nasıl hesaplanır:</strong> Her çıktı kitabı için saatlik kârı en yüksek girdi seviyesi seçilir (en fazla 4 seviye aşağı, 16 kitap). Girdinin dolum hızı gereken kitap sayısına bölünür. İki ayak da emirdir, bu yüzden bir zincir flip gibi sipariş slotu kullanır. Fiyatlar order book’un tepesinden gelir; vergi sadece satıştan düşülür. Örs XP maliyeti modellenmez.',
 };

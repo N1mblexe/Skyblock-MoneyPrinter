@@ -44,7 +44,7 @@ export const flip = {
   tip_item: 'Item name and bazaar ID. Click the row to open the detail panel.',
   tip_spark: 'Lowest sell offer (buy price) over the last 24 hours. Green: rising, red: falling.',
   tip_buyAt:
-    'Unit price you buy at. In buy-order mode: best buy order + 0.1 (at least 0.9 × NPC sell price, at most the lowest sell offer); in insta mode: average over sell offers.',
+    'Unit price you buy at. In buy-order mode: best buy order + 0.1 (at least 0.9 × NPC sell price; an order that would reach the lowest sell offer is an insta-buy instead); in insta mode: average over sell offers.',
   tip_sellAt: 'Unit price you sell at (before tax). In sell-offer mode: best sell offer − 0.1; in insta mode: average over buy orders.',
   tip_profit: 'Sell price after tax minus buy price, per unit.',
   tip_margin: 'Profit per unit relative to the buy price.',
@@ -79,7 +79,8 @@ export const flip = {
   clampedNpc: 'NPC floor',
   clampedAsk: 'Ask cap',
   clampedNpcTip: 'The buy order price was raised to 0.9 × the NPC sell price: cheaper bids don’t really fill.',
-  clampedAskTip: 'The buy order price was capped at the lowest sell offer (no spread); it fills like an insta-buy.',
+  clampedAskTip:
+    'A buy order would reach the lowest sell offer (no spread), so this is an insta-buy instead: priced by walking the sell offers, bounded by their depth, and it takes no order slot.',
 
   planTitle: 'Step-by-step plan',
   stepBuyOrder_one: 'Place a buy order for <strong>{n}</strong> unit at <strong>{price}</strong> (fills in ~{h}).',
@@ -132,5 +133,7 @@ export const flip = {
     '<strong>How to read:</strong> prices come from the top of the order book (you buy at best buy order + 0.1 and sell at best sell offer − 0.1); quick_status averages are never used. Tax is taken only from bazaar sales. Buy orders are assumed to cost at least 0.9 × the NPC sell price; 0.1 “dead” bids on raw materials don’t really fill.',
   notePph:
     '<strong>Profit / hour is an estimate:</strong> the batch is bounded by the tightest of your volume share, capital, order-book depth and order slots (the “Limited by” column). Consistency and change columns come from price history collected in this browser. Suspect rows (dead bid, extreme spread, wide spread + low volume, price spike) are hidden while “Hide suspicious” is on.',
+  noteCons:
+    '<strong>Conservative estimates</strong> (on by default, Settings) use the recent price history: a row marked “Adjusted” buys no cheaper and sells no dearer than the recent median, fills slower when volume is below its weekly average, and pays for being outbid. Rows without enough history keep the snapshot numbers.',
   noteSettings: 'Tax, capital, volume share, cycle length, slots and buy/sell mode are set in the <strong>Settings</strong> panel.',
 };

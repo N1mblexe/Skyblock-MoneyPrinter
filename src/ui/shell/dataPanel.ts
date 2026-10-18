@@ -1,18 +1,27 @@
-// Settings drawer "Data" section: catalog/snapshot facts, price-history info + clear, settings backup.
+// Settings drawer "Data" section: catalog/snapshot facts, price-history info + clear, the AH sales store (size +
+// clear), settings backup.
 import { downloadJson } from '../kit/download.ts';
 import { msgOf, msgText, onLangChange, t } from '../../i18n/index.ts';
 import { sanitizeSettings } from '../../state/appState.ts';
 import type { AppState, HistoryRepo, Store, ToastKind } from '../../types/contracts.ts';
 import { esc } from '../dom.ts';
-import { fmtAge, fmtInt, locale } from '../format.ts';
+import { fmtAge, fmtInt, fmtNum, locale } from '../format.ts';
 
 export const SETTINGS_FILE = 'bazaar-masasi-settings.json';
 /** how long the "click again to clear" state lasts */
 export const CLEAR_CONFIRM_MS = 4000;
 
+/** The realized AH sales store (api/ahSales.ts AhSalesPoller): its size and a way to empty it. */
+export interface SalesStoreAccess {
+  info(): Promise<{ sales: number; ids: number; coverageHours: number }>;
+  clear(): Promise<void>;
+}
+
 export interface DataPanelOptions {
   store: Store<AppState>;
   history?: HistoryRepo;
+  /** the AH sales store; the sales box is hidden without it */
+  sales?: SalesStoreAccess;
   toast(msg: string, kind?: ToastKind): void;
 }
 
@@ -57,6 +66,8 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
     `<dl class="kv data-kv" data-testid="data-info"></dl>` +
     `<div class="hist-box"><h4 class="set-h4 hist-h"></h4><dl class="kv hist-kv"></dl>` +
     `<button type="button" class="btn btn-sm btn-danger hist-clear" data-testid="history-clear"></button></div>` +
+    `<div class="hist-box sales-box" data-testid="sales-store" hidden><h4 class="set-h4 sales-h"></h4><dl class="kv sales-kv"></dl>` +
+    `<button type="button" class="btn btn-sm btn-danger sales-clear" data-testid="sales-clear"></button></div>` +
     `<div class="manual-home"></div>` +
     `<div class="backup"><h4 class="set-h4 backup-h"></h4><div class="backup-row">` +
     `<button type="button" class="btn btn-sm backup-export" data-testid="settings-export"></button>` +
@@ -69,6 +80,18 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
   let confirmUntil = 0;
   let confirmTimer: ReturnType<typeof setTimeout> | null = null;
   let busy = false;
+  const salesBox = $('.sales-box');
+  const salesKv = $('.sales-kv');
+  const salesBtn = $<HTMLButtonElement>('.sales-clear');
+  let salesInfo: Awaited<ReturnType<SalesStoreAccess['info']>> | null = null;
+  /** info() failed (store unavailable) */
+  let salesFailed = false;
+  let salesConfirmUntil = 0;
+  let salesTimer: ReturnType<typeof setTimeout> | null = null;
+  let salesBusy = false;
+  /** drops info() answers that arrive after a newer request */
+  let salesSeq = 0;
+  let alive = true;
 
   const row = (k: string, v: string, title?: string) => `<dt>${esc(k)}</dt><dd${title ? ` title="${esc(title)}"` : ''}>${esc(v)}</dd>`;
 
@@ -115,6 +138,76 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
     clearBtn.disabled = busy;
   }
 
+  function renderSales(): void {
+    const sales = opts.sales;
+    salesBox.hidden = !sales;
+    if (!sales) return;
+    $('.sales-h').textContent = t('shell.salesStore');
+    const i = salesInfo;
+    salesKv.innerHTML = salesFailed
+      ? `<dt class="muted">${esc(t('shell.salesUnavailable'))}</dt>`
+      : !i
+        ? `<dt class="muted">${esc(t('common.loading'))}</dt>`
+        : row(t('shell.salesCount'), fmtInt(i.sales)) +
+          row(t('shell.salesIds'), fmtInt(i.ids)) +
+          row(t('shell.salesCoverage'), t('shell.salesCoverageVal', { h: fmtNum(i.coverageHours, 1) }));
+    const confirming = Date.now() < salesConfirmUntil;
+    salesBtn.textContent = confirming ? t('shell.salesConfirm') : t('shell.salesClear');
+    salesBtn.classList.toggle('confirming', confirming);
+    salesBtn.disabled = salesBusy || salesFailed;
+  }
+
+  /** re-read the sales store size (async) */
+  function loadSales(): void {
+    const sales = opts.sales;
+    if (!sales) return;
+    const seq = ++salesSeq;
+    sales.info().then(
+      (i) => {
+        if (!alive || seq !== salesSeq) return;
+        salesInfo = i;
+        salesFailed = false;
+        renderSales();
+      },
+      () => {
+        if (!alive || seq !== salesSeq) return;
+        salesFailed = true;
+        renderSales();
+      },
+    );
+  }
+
+  async function clearSales(): Promise<void> {
+    const sales = opts.sales;
+    if (!sales || salesBusy) return;
+    if (Date.now() >= salesConfirmUntil) {
+      salesConfirmUntil = Date.now() + CLEAR_CONFIRM_MS;
+      if (salesTimer) clearTimeout(salesTimer);
+      salesTimer = setTimeout(() => {
+        salesConfirmUntil = 0;
+        renderSales();
+      }, CLEAR_CONFIRM_MS);
+      renderSales();
+      return;
+    }
+    salesConfirmUntil = 0;
+    if (salesTimer) clearTimeout(salesTimer);
+    salesBusy = true;
+    renderSales();
+    try {
+      await sales.clear();
+      // the poller emits nothing on clear: drop the summary so no view keeps using the old sales
+      store.set({ ahSales: null });
+      opts.toast(t('shell.salesCleared'), 'ok');
+    } catch (e) {
+      opts.toast(t('shell.salesClearFail', { err: msgText(msgOf(e)) }), 'err');
+    } finally {
+      salesBusy = false;
+      renderSales();
+      loadSales();
+    }
+  }
+
   function renderLabels(): void {
     $('.set-h').textContent = t('shell.sec_data');
     $('.backup-h').textContent = t('shell.backup');
@@ -122,6 +215,7 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
     $('.backup-import-lbl').textContent = t('shell.importSettings');
     renderInfo();
     renderHistory();
+    renderSales();
   }
 
   async function clearHistory(): Promise<void> {
@@ -175,6 +269,7 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
   const onClick = (ev: MouseEvent) => {
     const target = ev.target instanceof Element ? ev.target : null;
     if (target?.closest('.hist-clear')) void clearHistory();
+    else if (target?.closest('.sales-clear')) void clearSales();
     else if (target?.closest('.backup-export')) exportSettings();
   };
   const onChange = (ev: Event) => {
@@ -191,9 +286,12 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
   const unsub = store.subscribe((s, prev) => {
     if (s.catalog !== prev.catalog || s.catalogError !== prev.catalogError || s.snapshot !== prev.snapshot) renderInfo();
     if (s.historyTick !== prev.historyTick) renderHistory();
+    // a new sales summary means the store changed size
+    if (s.ahSales !== prev.ahSales && s.ahSales) loadSales();
   });
   const unLang = onLangChange(renderLabels);
   renderLabels();
+  loadSales();
 
   return {
     el,
@@ -201,9 +299,12 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
     refresh() {
       renderInfo();
       renderHistory();
+      loadSales();
     },
     destroy() {
+      alive = false;
       if (confirmTimer) clearTimeout(confirmTimer);
+      if (salesTimer) clearTimeout(salesTimer);
       el.removeEventListener('click', onClick);
       el.removeEventListener('change', onChange);
       unsub();
