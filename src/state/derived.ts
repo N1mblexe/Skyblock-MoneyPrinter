@@ -1,4 +1,4 @@
-// Memoized domain results shared by all views. Owner: history package.
+// Memoized domain results shared by all views. Owner: s1/state.
 import { catalogFromFile } from '../data/catalog.ts';
 import { computeAhFlips } from '../domain/ahFlips.ts';
 import { computeBookCombines } from '../domain/books.ts';
@@ -7,6 +7,7 @@ import { computeCrafts } from '../domain/craft.ts';
 import { computeFlips } from '../domain/flip.ts';
 import { computeFusion } from '../domain/fusion.ts';
 import { computeKatFlips, katScanReady } from '../domain/kat.ts';
+import { createMarketCore } from '../domain/market.ts';
 import { computeNpcFlips } from '../domain/npc.ts';
 import { toOpportunities } from '../domain/optimizer.ts';
 import { computeShopRows } from '../domain/shops.ts';
@@ -29,89 +30,204 @@ export const CALC_SETTINGS = [
   'bitsMultiplier',
 ] as const satisfies readonly (keyof Settings)[];
 
+/** Settings the market core (quotes, risk, conservatism, NPC legs) reads: part of the market key. */
+export const MARKET_SETTINGS = [
+  'taxRate',
+  'share',
+  'costMode',
+  'sellMode',
+  'npcDailyLimit',
+  'conservative',
+  'cycleHours',
+] as const satisfies readonly (typeof CALC_SETTINGS)[number][];
+
+/** Settings that only size trades (capital, slots, fill model): rows are re-planned, the core is kept. */
+export const THROUGHPUT_SETTINGS = ['capital', 'orderSlots', 'forgeSlots', 'fillModel'] as const satisfies readonly (typeof CALC_SETTINGS)[number][];
+
+const keyOf = (s: Settings, keys: readonly (keyof Settings)[]): string => keys.map((k) => String(s[k])).join('|');
+
 /** Memo key of the calc-relevant settings. */
 export function calcSettingsKey(s: Settings): string {
-  return CALC_SETTINGS.map((k) => String(s[k])).join('|');
+  return keyOf(s, CALC_SETTINGS);
 }
 
-/**
- * Domain results memoized on what they depend on: (snapshot, catalog, calc settings, historyTick, ah) identities;
- * fusion() also on the fusion recipes, kat() and opportunities() also on settings.taming. Changing lang/theme/density/notify/hideSuspicious/autoRefresh recomputes
- * nothing. calcCtx() keeps its identity while that key holds, so its `settings` is the object the key was built
- * from: read display settings from the store, not from calcCtx().settings.
- * ctx.ah is only set when settings.ahEnabled.
- */
 /** Mayor Derpy quadruples the AH claim tax. */
 export const isDerpy = (e: AppState['election']): boolean => e?.mayor?.key.toLowerCase() === 'derpy';
 
+const same = (a: readonly unknown[], b: readonly unknown[]): boolean => a.length === b.length && a.every((v, i) => v === b[i]);
+
+type StatsAll = ReturnType<HistoryRepo['statsAll']>;
+
+/**
+ * Domain results, each memoized on exactly what it reads (by identity, or by the values of its settings):
+ *
+ *  - bazaar key: snapshot, catalog, MARKET_SETTINGS, historyTick, Derpy. One plain context per bazaar key makes
+ *    ONE history.statsAll(taxRate) call, on first use, and pins it for the key: `ctx.stats` / `ctx.market` read its
+ *    maps, so stats can't slide mid-tick (nor on an AH update).
+ *  - core key: the bazaar key + the AH part (the AH scan and the AH sales feed, both null when !ahEnabled). One base
+ *    context per core key holds the market core (`ctx.core`), built over the AH part, so nothing the core memoizes
+ *    (risk, quotes, AH legs) outlives the data it came from.
+ *  - throughput: THROUGHPUT_SETTINGS.
+ *
+ *  | function               | depends on                                                   |
+ *  |------------------------|--------------------------------------------------------------|
+ *  | flips, books, npc      | bazaar key + throughput                                      |
+ *  | fusion                 | bazaar key + throughput + fusion recipes                     |
+ *  | crafts, chains         | core key + throughput                                        |
+ *  | kat                    | calcCtx() (core key + all calc settings), taming, scan version |
+ *  | shops                  | core key                                                     |
+ *  | ahFlips                | AH scan + catalog + ahEnabled                                |
+ *  | opportunities          | the six row sets above + calcCtx()                           |
+ *  | marketStats            | taxRate (history.marketStats, memoized there per record/minute) |
+ *
+ * flips / books / npc / fusion trade the bazaar and NPCs only: they get a context without AH accessors, computed on
+ * the current core but kept across AH updates (their rows don't change with it). calcCtx() is the full context
+ * (every calc setting and the AH accessors). Contexts keep their identity while their inputs hold, as per-context
+ * memos (getPricer) rely on that. A context's `settings` is the object it was built from: read display settings
+ * from the store, not from calcCtx().settings. Changing lang/theme/density/notify/hideSuspicious/autoRefresh
+ * recomputes nothing.
+ */
 export function createDerived(store: Store<AppState>, history: HistoryRepo): Derived {
-  let key: unknown[] = [];
-  let ctx: CalcCtx | null = null;
-  const memo = new Map<string, unknown>();
-  let fusionMemo: { ctx: CalcCtx; recipes: AppState['fusion']; rows: ReturnType<typeof computeFusion> } | null = null;
+  let bazaarKey: readonly unknown[] = [];
+  let plain: CalcCtx | null = null;
+  let coreKey: readonly unknown[] = [];
+  let base: CalcCtx | null = null;
+  /** the base context's AH accessors (the core reads the same ones) */
+  let baseAh: Pick<CalcCtx, 'ah' | 'ahSales'> = {};
+  let tKey: readonly unknown[] = [];
+  let tctx: CalcCtx | null = null;
+  let fKey: readonly unknown[] = [];
+  let fctx: CalcCtx | null = null;
+  const memos = new Map<string, { deps: readonly unknown[]; value: unknown }>();
+
+  function memo<T>(name: string, deps: readonly unknown[], fn: () => T): T {
+    const m = memos.get(name);
+    if (m && same(m.deps, deps)) return m.value as T;
+    const value = fn();
+    memos.set(name, { deps, value });
+    return value;
+  }
+
+  /** snapshot, catalog, market settings and the pinned history stats; no core, no AH */
+  function plainCtx(s: AppState): CalcCtx | null {
+    // catalog failed to load: flips/NPC still work with id-derived names
+    if (!s.snapshot || !(s.catalog || s.catalogError)) return null;
+    const derpy = isDerpy(s.election);
+    const k = [s.snapshot, s.catalog, keyOf(s.settings, MARKET_SETTINGS), s.historyTick, derpy];
+    if (plain && same(k, bazaarKey)) return plain;
+    bazaarKey = k;
+    const taxRate = s.settings.taxRate;
+    let all: StatsAll | null = null;
+    const stats = () => (all ??= history.statsAll(taxRate));
+    return (plain = {
+      snap: s.snapshot,
+      catalog: s.catalog ?? emptyCatalog(),
+      settings: s.settings,
+      stats: (id) => stats().price.get(id) ?? null,
+      market: (id) => stats().market.get(id) ?? null,
+      derpy,
+    });
+  }
+
+  /** the AH scan and sales feed in use: null when the AH is off */
+  const ahPart = (s: AppState) => (s.settings.ahEnabled ? ([s.ah, s.ahSales] as const) : ([null, null] as const));
+  const throughput = (s: AppState) => keyOf(s.settings, THROUGHPUT_SETTINGS);
+
+  /** the plain context + the market core over the AH part (the core's own context has the AH accessors) */
+  function marketCtx(s: AppState): CalcCtx | null {
+    const p = plainCtx(s);
+    if (!p) return null;
+    const [ah, sales] = ahPart(s);
+    const k = [p, ah, sales];
+    if (base && same(k, coreKey)) return base;
+    coreKey = k;
+    baseAh = {
+      ah: ah ? (id) => ah.lowestBin[id] ?? null : undefined,
+      ahSales: sales ? (id) => sales.byId[id] ?? null : undefined,
+    };
+    return (base = { ...p, core: createMarketCore({ ...p, ...baseAh }) });
+  }
+
+  /** base + current throughput settings, no AH accessors */
+  function tradeCtx(s: AppState, b: CalcCtx): CalcCtx {
+    const k = [b, throughput(s)];
+    if (!tctx || !same(k, tKey)) {
+      tKey = k;
+      tctx = { ...b, settings: s.settings };
+    }
+    return tctx;
+  }
+
+  /** base + every calc setting + the AH accessors */
+  function fullCtx(s: AppState, b: CalcCtx): CalcCtx {
+    const k = [b, calcSettingsKey(s.settings)];
+    if (!fctx || !same(k, fKey)) {
+      fKey = k;
+      fctx = { ...b, settings: s.settings, ...baseAh };
+    }
+    return fctx;
+  }
+
+  /** memoized on the bazaar key + throughput and `extra` (not on the AH part: bazaar / NPC trades only) */
+  function trade<T>(name: string, empty: T, fn: (c: CalcCtx) => T, extra: readonly unknown[] = []): T {
+    const s = store.get();
+    const b = marketCtx(s);
+    if (!b) return empty;
+    return memo(name, [plain, throughput(s), ...extra], () => fn(tradeCtx(s, b)));
+  }
+
+  /** memoized on the core key and the throughput settings (unless `noThroughput`); gets calcCtx() */
+  function withAh<T>(name: string, empty: T, fn: (c: CalcCtx) => T, noThroughput = false): T {
+    const s = store.get();
+    const b = marketCtx(s);
+    if (!b) return empty;
+    return memo(name, [b, noThroughput ? null : throughput(s)], () => fn(fullCtx(s, b)));
+  }
 
   function current(): CalcCtx | null {
     const s = store.get();
-    const derpy = isDerpy(s.election);
-    const k = [s.snapshot, s.catalog, calcSettingsKey(s.settings), s.historyTick, s.ah, derpy];
-    if (k.some((v, i) => v !== key[i])) {
-      key = k;
-      memo.clear();
-      const ah = s.settings.ahEnabled ? s.ah : null;
-      ctx =
-        s.snapshot && (s.catalog || s.catalogError)
-          ? {
-              snap: s.snapshot,
-              // catalog failed to load: flips/NPC still work with id-derived names
-              catalog: s.catalog ?? emptyCatalog(),
-              settings: s.settings,
-              stats: (id) => history.stats(id),
-              ah: ah ? (id) => ah.lowestBin[id] ?? null : undefined,
-              derpy,
-            }
-          : null;
-    }
-    return ctx;
+    const b = marketCtx(s);
+    return b && fullCtx(s, b);
   }
 
-  function cached<T>(name: string, empty: T, fn: (c: CalcCtx) => T): () => T {
-    return () => {
-      const c = current();
-      if (!c) return empty;
-      if (!memo.has(name)) memo.set(name, fn(c));
-      return memo.get(name) as T;
-    };
-  }
-
-  const taming = () => store.get().settings.taming;
   const d: Derived = {
     calcCtx: current,
-    flips: cached('flips', [], computeFlips),
-    crafts: cached('crafts', [], computeCrafts),
-    chains: (start = 'bazaar') => cached(`chains:${start}`, [], (c) => computeChains(c, start))(),
-    npc: cached('npc', [], computeNpcFlips),
-    books: cached('books', [], computeBookCombines),
-    shops: cached('shops', [], computeShopRows),
+    flips: () => trade('flips', [], computeFlips),
+    books: () => trade('books', [], computeBookCombines),
+    npc: () => trade('npc', [], computeNpcFlips),
+    fusion: () => {
+      const recipes = store.get().fusion;
+      return trade('fusion', [], (c) => computeFusion(c, recipes), [recipes]);
+    },
+    crafts: () => withAh('crafts', [], computeCrafts),
+    chains: (start = 'bazaar') => withAh(`chains:${start}`, [], (c) => computeChains(c, start)),
+    shops: () => withAh('shops', [], computeShopRows, true),
     // the Kat page's defaults: no skip items. settings.taming is not in CALC_SETTINGS (it only drops rows), so the
     // Kat results and the opportunities built from them are memoized per Taming level
-    kat: () =>
-      cached(`kat:${taming()}`, [], (c) => (katScanReady(store.get().ah) ? computeKatFlips(c, { skip: 'none', taming: taming() }) : []))(),
-    // not in the memo key: the AH snapshot already is, and AH flips read nothing else from the context
-    ahFlips: cached('ahFlips', [], (c) => {
-      const ah = store.get().ah;
-      return ah && store.get().settings.ahEnabled ? computeAhFlips(ah, c.catalog) : [];
-    }),
-    fusion: () => {
+    kat: () => {
       const c = current();
       if (!c) return [];
-      const recipes = store.get().fusion;
-      if (fusionMemo?.ctx !== c || fusionMemo.recipes !== recipes) fusionMemo = { ctx: c, recipes, rows: computeFusion(c, recipes) };
-      return fusionMemo.rows;
+      const { ah, settings } = store.get();
+      const taming = settings.taming;
+      return memo('kat', [c, ah, taming], () => (katScanReady(ah) ? computeKatFlips(c, { skip: 'none', taming }) : []));
     },
-    opportunities: () =>
-      cached(`opps:${taming()}`, [], (c) =>
-        toOpportunities({ flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc(), kat: d.kat() }, c.settings),
-      )(),
+    // AH flips read nothing else from the context
+    ahFlips: () => {
+      const s = store.get();
+      const b = marketCtx(s);
+      if (!b) return [];
+      return memo('ahFlips', [s.ah, b.catalog, s.settings.ahEnabled], () =>
+        s.ah && s.settings.ahEnabled ? computeAhFlips(s.ah, b.catalog) : [],
+      );
+    },
+    opportunities: () => {
+      const c = current();
+      if (!c) return [];
+      const rows = { flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc(), kat: d.kat() };
+      return memo('opps', [c, ...Object.values(rows)], () => toOpportunities(rows, c.settings));
+    },
+    // history's own memo (a new record or minute): the same map as the pinned sweep's while that is current. Views
+    // read it once per render; the rows' ctx.market / ctx.stats stay pinned to the tick they were computed on.
     marketStats: () => history.marketStats(store.get().settings.taxRate),
   };
   return d;

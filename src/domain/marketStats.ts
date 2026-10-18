@@ -1,12 +1,14 @@
-// Per-item market statistics from history points. Owner: history package.
-import { HISTORY_Q15_BUCKET_MS, PRICE_TICK, STATS } from '../config.ts';
-import type { HistoryPoint, MarketStat } from '../types/contracts.ts';
-import { pctChange } from './stats.ts';
+// Per-item market statistics (MarketStat) and risk baselines (PriceStats) from history columns or points. Owner: s1/state.
+import { HISTORY_Q15_BUCKET_MS, HISTORY_RAW_KEEP_MS, PRICE_TICK, STATS } from '../config.ts';
+import type { HistoryPoint, MarketStat, PriceStats } from '../types/contracts.ts';
+import { medianInPlace, medMadInPlace, pctChange } from './stats.ts';
 
 const H = 3600_000;
 const HOURS_PER_WEEK = 168;
 /** volume trends need at least this much time between the first and last counter reading */
 const TREND_MIN_SPAN_MS = 30 * 60_000;
+/** PriceStats.change24h needs at least this much time between the first and last two-sided point */
+const CHANGE_MIN_SPAN_MS = 20 * H;
 
 /**
  * Column view of one item's history, sorted by ts; row k is (ts[k], bid[k], ask[k], buyWeek[k], sellWeek[k]).
@@ -21,53 +23,6 @@ export interface StatColumns {
   buyWeek: ArrayLike<number>;
   /** instaSellsWeek (moving week) */
   sellWeek: ArrayLike<number>;
-}
-
-/**
- * k-th smallest of a[0..n) (Wirth's selection, O(n) on average, reorders a): afterwards a[0..k) <= a[k].
- * a must not contain NaN.
- */
-function select(a: Float64Array, n: number, k: number): number {
-  let l = 0;
-  let r = n - 1;
-  while (l < r) {
-    const x = a[k]!;
-    let i = l;
-    let j = r;
-    do {
-      while (a[i]! < x) i++;
-      while (x < a[j]!) j--;
-      if (i <= j) {
-        const tmp = a[i]!;
-        a[i] = a[j]!;
-        a[j] = tmp;
-        i++;
-        j--;
-      }
-    } while (i <= j);
-    if (j < k) l = i;
-    if (k < i) r = j;
-  }
-  return a[k]!;
-}
-
-/** Median of a[0..n) by selection (reorders a); same value as stats.median, without the sort. NaN when n = 0. */
-export function medianInPlace(a: Float64Array, n: number): number {
-  if (n <= 0) return NaN;
-  const m = n >> 1;
-  const hi = select(a, n, m);
-  if (n % 2) return hi;
-  let lo = -Infinity;
-  for (let i = 0; i < m; i++) if (a[i]! > lo) lo = a[i]!;
-  return (lo + hi) / 2;
-}
-
-/** [median, MAD] of a[0..n) (overwrites a); same values as stats.median / stats.mad. */
-export function medMadInPlace(a: Float64Array, n: number): [number, number] {
-  if (n <= 0) return [NaN, NaN];
-  const med = medianInPlace(a, n);
-  for (let i = 0; i < n; i++) a[i] = Math.abs(a[i]! - med);
-  return [med, medianInPlace(a, n)];
 }
 
 const fin = (x: number) => Number.isFinite(x);
@@ -144,6 +99,7 @@ function volTrend(ts: ArrayLike<number>, w: ArrayLike<number>, n: number): numbe
  *  - volatility = MAD / median of mid; spreadMedian = median((ask - bid) / bid) over bid > 0;
  *    consistency = share of points where (ask - tick)(1 - tax) - (bid + tick) > 0.
  *  - buyVolTrend / sellVolTrend: estimate from the moving-week counters, see volTrend.
+ *  - bidMovesPerHour / askMovesPerHour: see movesPerHour.
  * scratch (length >= 2n) avoids allocations when called for many items.
  */
 export function marketStatFromColumns(
@@ -192,7 +148,85 @@ export function marketStatFromColumns(
     consistency: enough ? good / nm : null,
     buyVolTrend: volTrend(c.ts, c.buyWeek, n),
     sellVolTrend: volTrend(c.ts, c.sellWeek, n),
+    bidMovesPerHour: movesPerHour(c.ts, c.bid, n, now),
+    askMovesPerHour: movesPerHour(c.ts, c.ask, n, now),
   };
+}
+
+/**
+ * How often the best price on one side changed: over the points of the last HISTORY_RAW_KEEP_MS up to now (the raw
+ * store's every-snapshot records), the number of consecutive pairs whose prices are both finite and differ, divided
+ * by the hours from the first to the last of those points. null with fewer than 2 points or a zero span.
+ */
+function movesPerHour(ts: ArrayLike<number>, px: ArrayLike<number>, n: number, now: number): number | null {
+  const k1 = lastAtOrBefore(ts, n, now);
+  let k0 = k1;
+  const from = now - HISTORY_RAW_KEEP_MS;
+  while (k0 > 0 && ts[k0 - 1]! >= from) k0--;
+  if (k0 < 0 || k1 - k0 < 1) return null;
+  const span = ts[k1]! - ts[k0]!;
+  if (!(span > 0)) return null;
+  let moves = 0;
+  for (let k = k0 + 1; k <= k1; k++) {
+    const a = px[k - 1]!;
+    const b = px[k]!;
+    if (fin(a) && fin(b) && a !== b) moves++;
+  }
+  return moves / (span / H);
+}
+
+/**
+ * Risk baseline of one item from n column rows (sorted by ts), as HistoryRepo.stats returns it:
+ *  - medians / MADs of ask and bid use the points thinned to the last point per 15-min bucket (like the q15 store),
+ *    minus points newer than now - 15 min, so a fresh multi-hour spike in the dense raw data can't become the median
+ *    it is compared against. n counts those baseline points.
+ *  - change24h: mid change from the first to the last two-sided point (full resolution), when they are at least
+ *    20 h apart.
+ * null when n = 0 (no points at all). scratch (length >= 2n) avoids allocations when called for many items.
+ */
+export function priceStatsFromColumns(
+  c: Pick<StatColumns, 'ts' | 'bid' | 'ask'>,
+  n: number,
+  now: number,
+  scratch: Float64Array = new Float64Array(2 * n),
+): PriceStats | null {
+  if (n === 0) return null;
+  const cut = now - HISTORY_Q15_BUCKET_MS;
+  const asks = scratch;
+  const bids = scratch.subarray(n);
+  let nb = 0;
+  let na = 0;
+  let used = 0;
+  let first = -1;
+  let last = -1;
+  let nextBucket = bucketOf(c.ts[0]!);
+  for (let k = 0; k < n; k++) {
+    const a = c.ask[k]!;
+    const b = c.bid[k]!;
+    if (fin(a) && fin(b)) {
+      if (first < 0) first = k;
+      last = k;
+    }
+    const bucket = nextBucket;
+    if (k + 1 < n) {
+      nextBucket = bucketOf(c.ts[k + 1]!);
+      if (nextBucket === bucket) continue; // not the bucket's last point
+    }
+    if (c.ts[k]! > cut) continue;
+    used++;
+    if (fin(a)) asks[na++] = a;
+    if (fin(b)) bids[nb++] = b;
+  }
+  const [medianAsk, madAsk] = medMadInPlace(asks, na);
+  const [medianBid, madBid] = medMadInPlace(bids, nb);
+  const mid = (k: number) => (c.bid[k]! + c.ask[k]!) / 2;
+  const change24h = first >= 0 && c.ts[last]! - c.ts[first]! >= CHANGE_MIN_SPAN_MS ? pctChange(mid(first), mid(last)) : null;
+  return { n: used, medianAsk, medianBid, madAsk, madBid, change24h };
+}
+
+/** PriceStats from (ts-sorted) history points. See priceStatsFromColumns. */
+export function priceStatsFromPoints(pts: readonly HistoryPoint[], now: number): PriceStats | null {
+  return priceStatsFromColumns({ ts: pts.map((p) => p.ts), bid: pts.map((p) => p.bid), ask: pts.map((p) => p.ask) }, pts.length, now);
 }
 
 /** Stats for one item from its (ts-sorted) history points. See marketStatFromColumns. */
