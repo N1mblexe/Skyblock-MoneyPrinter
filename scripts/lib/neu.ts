@@ -147,6 +147,51 @@ export function extractShopOffers(item: NeuItem): ShopOfferRaw[] {
   return out;
 }
 
+/**
+ * A shop recipe (catalog kind 'shop'): an npc_shop offer that costs items (plus maybe coins), or a NEU `trade`
+ * recipe. Coins are the input SKYBLOCK_COIN with qty = coins. Ids still in NEU form.
+ */
+export interface ShopRecipeRaw {
+  /** the shop's NEU id, or 'trade' */
+  shop: string;
+  output: string;
+  count: number;
+  inputs: { id: string; qty: number }[];
+}
+
+export const COIN_ID = 'SKYBLOCK_COIN';
+export const TRADE_SHOP = 'trade';
+/** NEU cost ids for currencies: SKYBLOCK_COIN, SKYBLOCK_BIT, SKYBLOCK_COPPER, SKYBLOCK_GOLD_MEDAL, ... */
+const isCurrency = (id: string) => id.startsWith('SKYBLOCK_');
+
+/**
+ * Shop recipes from one NEU item file:
+ *  - npc_shop offers paid with at least one item stack and otherwise only coins (coin-only offers are `nb`). Offers
+ *    that also cost another currency (bits, copper, North Stars, medals, ...) are skipped: crafts can't price those,
+ *    and they would push the catalog past its size budget;
+ *  - `trade` recipes (`cost` one stack; when a `min`/`max` cost-count range is given, the max is used).
+ */
+export function extractShopRecipes(item: NeuItem): ShopRecipeRaw[] {
+  const out: ShopRecipeRaw[] = [];
+  for (const r of item.recipes ?? []) {
+    if (!r || typeof r !== 'object') continue;
+    if (r.type === 'npc_shop' && Array.isArray(r.cost)) {
+      const res = stack(r.result);
+      const costs = r.cost.map(stack);
+      if (!res || !costs.length || costs.some((c) => !c)) continue;
+      const cs = costs as { id: string; qty: number }[];
+      if (!cs.some((c) => !isCurrency(c.id)) || cs.some((c) => isCurrency(c.id) && c.id !== COIN_ID)) continue;
+      out.push({ shop: item.internalname, output: res.id, count: res.qty, inputs: cs });
+    } else if (r.type === 'trade') {
+      const res = stack(r.result);
+      const cost = stack(Array.isArray(r.cost) && r.cost.length === 1 ? r.cost[0] : r.cost);
+      if (!res || !cost || (isCurrency(cost.id) && cost.id !== COIN_ID)) continue;
+      out.push({ shop: TRADE_SHOP, output: res.id, count: res.qty, inputs: [{ id: cost.id, qty: posNum(r.max) ?? cost.qty }] });
+    }
+  }
+  return out;
+}
+
 const PET_ID = /^([A-Z0-9_]+);(\d+)$/;
 
 /**
