@@ -290,8 +290,9 @@ export function createDataPanel(opts: DataPanelOptions): DataPanel {
     if (s.ahSales !== prev.ahSales && s.ahSales) loadSales();
   });
   const unLang = onLangChange(renderLabels);
+  // the sales store is read on refresh() (the drawer opening) and on new summaries, never at mount: the app wires
+  // the poller after the shell, and boot shouldn't wait on IndexedDB for a closed drawer
   renderLabels();
-  loadSales();
 
   return {
     el,

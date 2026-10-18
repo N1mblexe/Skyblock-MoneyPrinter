@@ -26,9 +26,11 @@ function salesAccess(over: Partial<SalesStoreAccess> = {}) {
   return access;
 }
 
+/** mount, then refresh() as the shell does when the drawer opens */
 function mount(sales?: SalesStoreAccess): HTMLElement {
   panel = createDataPanel({ store, toast, ...(sales ? { sales } : {}) });
   document.body.append(panel.el);
+  panel.refresh();
   return panel.el;
 }
 const box = () => document.querySelector<HTMLElement>('[data-testid="sales-store"]')!;
@@ -66,8 +68,11 @@ describe('data panel: AH sales store', () => {
     expect(box().querySelector('h4')!.textContent).toBe('AH satış kayıtları');
   });
 
-  it('re-reads the size when a new sales summary arrives and on refresh()', async () => {
+  it('reads the store only on refresh() and new sales summaries, never at mount', async () => {
     const access = salesAccess();
+    const early = createDataPanel({ store, toast, sales: access });
+    expect(access.info).not.toHaveBeenCalled();
+    early.destroy();
     mount(access);
     await vi.waitFor(() => expect(access.info).toHaveBeenCalledTimes(1));
     store.set({ ahSales: { ...SALES, updatedAt: 1 } });
