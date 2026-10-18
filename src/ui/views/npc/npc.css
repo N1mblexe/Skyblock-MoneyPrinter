@@ -161,7 +161,8 @@
   font-size: var(--fs-sm);
 }
 .npc-steps,
-.npc-flags {
+.npc-flags,
+.npc-detail .cons-list {
   margin: 0;
   padding-left: 1.4em;
   display: grid;

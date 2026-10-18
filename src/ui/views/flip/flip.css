@@ -57,6 +57,7 @@
   min-width: 180px;
 }
 :is(.flip-view, .books-view) .badge.flip-clamp,
+:is(.flip-view, .books-view) .badge.cons-badge,
 :is(.flip-view, .books-view) .badge.book-ver {
   margin-left: var(--s-1);
   vertical-align: middle;

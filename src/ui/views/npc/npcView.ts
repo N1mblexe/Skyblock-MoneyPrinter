@@ -1,11 +1,9 @@
 // NPC & Shops view: bazaar <-> NPC fixed-price flips (both directions) and currency shop offers valued in coins.
 // Rows come from ctx.derived.npc() / ctx.derived.shops(); filters live in the URL (three query states so a filter
 // reset never switches the segment); row details open in the kit detail panel.
-import { PRICE_TICK } from '../../../config.ts';
-import { round1 } from '../../../domain/pricing.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, Route, ShopRow, View, ViewContext } from '../../../types/contracts.ts';
-import { itemCell, riskBadge, sourceBadge } from '../../cells.ts';
+import { consBadge, itemCell, riskBadge, sourceBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
 import { fmtCoins, fmtCompact, fmtInt, fmtPct } from '../../format.ts';
 import {
@@ -20,6 +18,7 @@ import {
   type QueryState,
   type SortState,
 } from '../../kit/index.ts';
+import { buyClampOf, clampBadge } from '../flip/parts.ts';
 import { flipDetailHtml, shopDetailHtml } from './npcDetail.ts';
 import {
   currencyLabel,
@@ -102,9 +101,10 @@ export function createNpcView(): View {
     if (r.direction === 'npc2bz') return priceCell(r.buyAt, sourceBadge('npc'));
     const s = state();
     if (s.settings.costMode === 'insta') return priceCell(r.buyAt, sourceBadge('insta'));
-    const bid = s.snapshot?.products[r.id]?.bid;
-    const floored = bid == null || r.buyAt > round1(bid + PRICE_TICK) + 1e-9;
-    const hint = floored ? ` <span class="npc-floor" title="${esc(t('npc.floorTitle'))}">${esc(t('npc.floorHint'))}</span>` : '';
+    const clamp = buyClampOf(ctx!, r.id);
+    // a buy order capped at the ask is an insta-buy
+    if (clamp === 'ask') return priceCell(r.buyAt, sourceBadge('insta') + clampBadge(clamp));
+    const hint = clamp === 'npcFloor' ? ` <span class="npc-floor" title="${esc(t('npc.floorTitle'))}">${esc(t('npc.floorHint'))}</span>` : '';
     return priceCell(r.buyAt, sourceBadge('order') + hint);
   }
 
@@ -129,7 +129,7 @@ export function createNpcView(): View {
       key: 'name',
       label: () => t('npc.col_item'),
       get: (r) => r.name,
-      html: (r) => itemCell(r.id, r.name, true),
+      html: (r) => itemCell(r.id, r.name, true) + consBadge(r.cons),
       cls: 'name-cell',
       priority: 0,
     },
@@ -417,7 +417,7 @@ export function createNpcView(): View {
   // ------------------------------------------------------------------ detail panel
   function detailCtx(id: string) {
     const s = state();
-    return { snap: s.snapshot!, catalog: s.catalog!, settings: s.settings, watched: ctx!.watch.has(id) };
+    return { snap: s.snapshot!, catalog: s.catalog!, settings: s.settings, watched: ctx!.watch.has(id), buyClamp: buyClampOf(ctx!, id) };
   }
 
   function panelBody(html: string, id: string): HTMLElement {

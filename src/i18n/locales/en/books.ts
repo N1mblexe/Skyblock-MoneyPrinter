@@ -30,6 +30,7 @@ export const books = {
   col_profit: 'Profit / book',
   col_margin: 'Margin',
   col_uph: 'Books / hour',
+  col_slots: 'Slots',
   col_pph: 'Profit / hour',
   col_risk: 'Risk',
   col_verified: 'Verification',
@@ -42,8 +43,9 @@ export const books = {
   tip_profit: 'Sell price after tax minus total cost. Anvil XP cost not included.',
   tip_margin: 'Profit relative to the total cost.',
   tip_uph: 'Output books you can make and sell per hour (the input fill rate divided by the count).',
+  tip_slots: 'Bazaar order slots one batch uses: the input buy order and the output sell offer (each order holds at most 71,680 units).',
   tip_pph: 'Books / hour × profit per book. Default sort.',
-  tip_risk: 'Input and output book risk checks combined.',
+  tip_risk: 'The output book’s sell-side checks, plus price spikes and quote divergence on the input book.',
   tip_verified: 'Verified: the output level is within the curated anvil limit. Unverified: the limit is unknown or exceeded.',
 
   chainCell: '{k} → {l} (×{n})',
@@ -62,11 +64,12 @@ export const books = {
   stepCombine: 'Combine on the anvil: <strong>{c}</strong> combines make {books} × {output}.',
   stepSellOffer: 'Place a sell offer for {output} at <strong>{price}</strong> (sells in ~{h}).',
   stepSellInsta: 'Insta-sell {output} (average <strong>{price}</strong>, immediately).',
+  slotsNote: 'The input buy order holds {n} books per output book, so a big batch can need more than one slot.',
   inputBook: '{book} · input: {name}',
   outputBook: '{book} · output: {name}',
   openInput: 'Open input book',
   openOutput: 'Open output book',
 
   note:
-    '<strong>How it is computed:</strong> for each output book the most profitable input level is chosen (at most 4 levels down, 16 books). The input fill rate is divided by the number of books needed. Prices come from the top of the order book; tax is taken only from the sale. Anvil XP cost is not modelled.',
+    '<strong>How it is computed:</strong> for each output book the input level with the highest profit per hour is chosen (at most 4 levels down, 16 books). The input fill rate is divided by the number of books needed. Both legs are orders, so a chain takes order slots like a flip. Prices come from the top of the order book; tax is taken only from the sale. Anvil XP cost is not modelled.',
 };

@@ -5,7 +5,7 @@ import { parseBookId } from '../../../domain/books.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, BookRow, Catalog, Route, Snapshot, View, ViewContext } from '../../../types/contracts.ts';
-import { riskBadge } from '../../cells.ts';
+import { consBadge, consListHtml, riskBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
 import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtPct } from '../../format.ts';
 import {
@@ -23,12 +23,25 @@ import {
   type QueryValues,
 } from '../../kit/index.ts';
 import '../flip/flip.css';
-import { focusedRowKey, kv, limitedText, orderBookHtml, riskListHtml, section, signCls, span, tpPairs, watchButton } from '../flip/parts.ts';
+import {
+  buyClampOf,
+  clampBadge,
+  focusedRowKey,
+  kv,
+  limitedText,
+  orderBookHtml,
+  riskListHtml,
+  section,
+  signCls,
+  span,
+  tpPairs,
+  watchButton,
+} from '../flip/parts.ts';
 import './books.css';
 
 export const BOOKS_PREFS_KEY = LS_VIEWPREFS + 'books';
 
-const SORT_KEYS = ['name', 'chain', 'buyAt', 'cost', 'sellAt', 'profit', 'margin', 'uph', 'pph', 'risk', 'verified'] as const;
+const SORT_KEYS = ['name', 'chain', 'buyAt', 'cost', 'sellAt', 'profit', 'margin', 'uph', 'slots', 'pph', 'risk', 'verified'] as const;
 
 export const BOOKS_SCHEMA = {
   q: { kind: 'string', def: '' },
@@ -119,7 +132,7 @@ export function createBooksView(): View {
       label: () => t('books.col_item'),
       title: () => t('books.tip_item'),
       get: (r) => r.name,
-      html: (r) => `<a href="#/item/${encodeURIComponent(r.id)}">${esc(r.name)}</a><span class="id-sub">${esc(r.id)}</span>`,
+      html: (r) => `<a href="#/item/${encodeURIComponent(r.id)}">${esc(r.name)}</a>${consBadge(r.cons)}<span class="id-sub">${esc(r.id)}</span>`,
       csv: (r) => `${r.name} (${r.id})`,
       cls: 'name-cell',
       priority: 0,
@@ -140,6 +153,8 @@ export function createBooksView(): View {
     num('profit', (r) => r.profit, (r) => span(signCls(r.profit), fmtCoins(r.profit)), { priority: 3 }),
     num('margin', (r) => r.margin, (r) => span(signCls(r.margin), fmtPct(r.margin)), { priority: 1 }),
     num('uph', (r) => r.tp.unitsPerHour, (r) => esc(fmtCompact(r.tp.unitsPerHour)), { priority: 3 }),
+    // both legs are orders: the input buy order (count books per output book) and the output sell offer
+    num('slots', (r) => r.tp.slots ?? null, (r) => esc(fmtInt(r.tp.slots ?? 0)), { priority: 3 }),
     num('pph', (r) => r.profitPerHour, (r) => `<strong>${span(signCls(r.profitPerHour), fmtCoins(r.profitPerHour))}</strong>`, { priority: 1 }),
     {
       key: 'risk',
@@ -179,8 +194,10 @@ export function createBooksView(): View {
     const inName = name(r.inputId);
     const books = Math.round(tp.batchQty);
     const inputs = books * r.count;
+    // an input order capped at the ask is an insta-buy (walks the sell offers, no slot)
+    const clamp = costMode === 'order' ? buyClampOf(ctx, r.inputId) : undefined;
     const steps = [
-      costMode === 'order'
+      costMode === 'order' && clamp !== 'ask'
         ? t('books.stepBuyOrder', { n: fmtInt(inputs), input: esc(inName), price: esc(fmtCoins(r.buyAt)), h: esc(fmtHours(tp.buyHours ?? tp.fillHours)) })
         : t('books.stepBuyInsta', { n: fmtInt(inputs), input: esc(inName), price: esc(fmtCoins(r.buyAt)) }),
       t('books.stepCombine', { c: fmtInt(books * (r.count - 1)), books: fmtInt(books), output: esc(r.name) }),
@@ -204,13 +221,18 @@ export function createBooksView(): View {
         (books >= 1
           ? `<ol class="dp-steps">${steps.map((x) => `<li>${x}</li>`).join('')}</ol>`
           : `<p class="small" data-testid="plan-zero">${esc(t('flip.planZero', { why: limitedText(tp.limitedBy) }))}</p>`) +
+          (clamp
+            ? `<p class="small" data-testid="books-clamp">${clampBadge(clamp)} ${esc(t(clamp === 'npcFloor' ? 'flip.clampedNpcTip' : 'flip.clampedAskTip'))}</p>`
+            : '') +
+          `<p class="muted small">${esc(t('books.slotsNote', { n: fmtInt(r.count) }))}</p>` +
           kv([
             [t('flip.profitUnit'), span(signCls(r.profit), fmtCoins(r.profit))],
             [t('books.col_cost'), esc(fmtCoins(r.cost))],
             ...tpPairs(tp, orderSlots, r.profitPerHour),
           ]),
       ) +
-      section(t('flip.riskTitle'), riskListHtml(r.risk)) +
+      (r.cons ? section(t('risk.consTitle'), consListHtml(r.cons, { buy: r.buyAt, sell: r.sellAt })) : '') +
+      section(t('flip.riskTitle'), riskListHtml(r.risk, 'book')) +
       section(t('books.inputBook', { book: t('flip.bookTitle'), name: inName }), orderBookHtml(snap?.products[r.inputId])) +
       section(t('books.outputBook', { book: t('flip.bookTitle'), name: r.name }), orderBookHtml(snap?.products[r.id])) +
       section(

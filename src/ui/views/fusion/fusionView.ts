@@ -5,7 +5,7 @@
 import { LS_VIEWPREFS } from '../../../config.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import type { AppState, Catalog, FusionRecipe, FusionRow, ItemInfo, Route, View, ViewContext } from '../../../types/contracts.ts';
-import { itemCell, riskBadge } from '../../cells.ts';
+import { itemCell, riskBadge, sourceBadge } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
 import { fmtCoins, fmtInt, fmtPct } from '../../format.ts';
 import { bindQueryState, createDrawer, type Drawer, type QuerySchema, type QueryState } from '../../kit/index.ts';
@@ -397,7 +397,9 @@ export function createFusionView(): View {
       d.unit == null
         ? `<span class="neg">${esc(t('fusion.noPrice'))}</span>`
         : esc(t(side === 'buy' ? 'fusion.unitBuy' : 'fusion.unitSell', { p: fmtCoins(d.unit) }));
-    return `<span class="fu-name">${itemCell(d.id, d.name ?? d.id, true)}</span>${shardChips(d.shard)}<span class="fu-price num">${price}</span>`;
+    // inputs show where they are bought (an NPC shop when cheaper: instant, capped at the daily limit)
+    const src = side === 'buy' && d.unit != null && d.source ? ` <span class="fu-src">${sourceBadge(d.source)}</span>` : '';
+    return `<span class="fu-name">${itemCell(d.id, d.name ?? d.id, true)}</span>${shardChips(d.shard)}<span class="fu-price num">${price}${src}</span>`;
   }
 
   const stat = (key: string, label: string, raw: number | null, inner: string, cls = '', title = '') =>
@@ -417,7 +419,7 @@ export function createFusionView(): View {
       stat('profit', t('fusion.profit'), p, esc(fmtCoins(p)), pcls) +
       stat('margin', t('fusion.margin'), r?.margin ?? null, esc(fmtPct(r?.margin)), r?.margin == null ? '' : pcls) +
       stat('pph', t('fusion.pph'), pph, esc(fmtCoins(pph)), pph == null ? '' : pph >= 0 ? 'pos' : 'neg', tpTitle) +
-      stat('risk', t('fusion.risk'), r?.risk?.score ?? null, r?.risk ? riskBadge(r.risk) : '—');
+      stat('risk', t('fusion.risk'), r?.risk?.score ?? null, r?.risk ? riskBadge(r.risk) : '—', '', t('risk.scope_fusion'));
     const missing = r ? r.missing.filter((m) => m !== '') : [];
     if (msg) html += `<p class="fu-msg small muted">${esc(msg)}</p>`;
     else if (missing.length) html += `<p class="fu-msg fu-missing small neg">${esc(t('fusion.missing', { ids: missing.join(', ') }))}</p>`;
@@ -591,7 +593,7 @@ export function createFusionView(): View {
     const note = h('details', { class: 'note fu-note' }, h('summary', null, t('fusion.noteTitle')));
     note.insertAdjacentHTML('beforeend', `<p>${t('fusion.note1')}</p>`);
     note.append(modesEl);
-    note.insertAdjacentHTML('beforeend', `<p>${esc(t('fusion.note3'))}</p><p>${esc(t('fusion.note4'))}</p>`);
+    note.insertAdjacentHTML('beforeend', `<p>${esc(t('fusion.note3'))}</p><p>${esc(t('fusion.noteNpc'))}</p><p>${esc(t('fusion.note4'))}</p>`);
 
     root.replaceChildren(
       h(

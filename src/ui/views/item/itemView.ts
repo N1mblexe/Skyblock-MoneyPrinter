@@ -4,7 +4,7 @@
 import { ahClaimTax, ahListingFee, ahNet } from '../../../domain/pricing.ts';
 import { isDerpy } from '../../../state/derived.ts';
 import { ALERT_METRICS } from '../../../domain/alertMetrics.ts';
-import { ALERTS, LS_VIEWPREFS } from '../../../config.ts';
+import { AH_SALES, ALERTS, LS_VIEWPREFS } from '../../../config.ts';
 import { flipPlanFor, metricValue } from '../../../domain/alerts.ts';
 import { buyQuote } from '../../../domain/pricing.ts';
 import { assessRisk } from '../../../domain/risk.ts';
@@ -29,9 +29,9 @@ import type {
   View,
   ViewContext,
 } from '../../../types/contracts.ts';
-import { itemCell, riskBadge, riskFlagText } from '../../cells.ts';
+import { consListHtml, itemCell, riskBadge, riskFlagText, riskScopeHtml } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
-import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtList, fmtPct } from '../../format.ts';
+import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtList, fmtNum, fmtPct } from '../../format.ts';
 import { parseNumberInput } from '../../kit/index.ts';
 import { createTable, type TableHandle } from '../../table.ts';
 import {
@@ -284,7 +284,7 @@ export function createItemView(): View {
       return;
     }
     const p = s.snapshot.products[id] ?? null;
-    const known = !!p || !!s.catalog?.items[id] || !!s.ah?.lowestBin[id];
+    const known = !!p || !!s.catalog?.items[id] || !!s.ah?.lowestBin[id] || !!s.ahSales?.byId[id];
     if (!known) {
       showMsg(`<div class="card"><h1>${esc(t('unknownTitle'))}</h1><p class="note">${esc(t('unknown', { id }))}</p></div>`);
       return;
@@ -393,6 +393,8 @@ export function createItemView(): View {
       );
     }
     let body = head + kv(rows);
+    const cons = consListHtml(f.row?.cons, { buy: f.buy, sell: f.sell });
+    if (cons) body += `<div class="item-cons" data-testid="item-cons"><h3 class="item-sub">${esc(t('risk.consTitle'))}</h3>${cons}</div>`;
     if (!f.row) body += `<p class="note small" data-testid="not-on-flip">${esc(t('notOnFlipTab'))}</p>`;
     if (set.costMode === 'order') {
       const q = buyQuote(p, 'order', undefined, info?.npcSell);
@@ -444,6 +446,34 @@ export function createItemView(): View {
     ];
     const partial = ah.failedPages?.length ? note(t('ahPartial', { n: ah.failedPages.length })) : '';
     return kv(rows) + partial + (derpy ? note(t('ahDerpy')) : '') + note(t('ahCaveat'));
+  }
+
+  /**
+   * Realized AH sales of this id (auctions_ended feed): median sold price, count, sales per hour (only once the feed
+   * has covered AH_SALES.minCoverageHours) and coverage. null without the feed, or when the id has neither sales
+   * nor AH listings.
+   */
+  function salesHtml(s: AppState): string | null {
+    const sales = s.ahSales;
+    if (!sales) return null;
+    const a = sales.byId[id];
+    if (!a) return s.ah?.lowestBin[id] ? note(t('salesNone', { h: fmtNum(sales.coverageHours, 1) })) : null;
+    const min = AH_SALES.minCoverageHours;
+    const rate =
+      a.perHour != null && a.coverageHours >= min
+        ? esc(t('salesPerHourVal', { n: fmtNum(a.perHour, 2) }))
+        : `<span class="muted">${esc(t('salesPerHourLow', { h: fmtNum(a.coverageHours, 1), min }))}</span>`;
+    const rows: KvRow[] = [
+      [t('salesMedian'), esc(fmtPrice(a.median)), '', 'salesMedian'],
+      [t('salesCount'), esc(t('salesCountVal', { n: fmtInt(a.n), items: fmtInt(a.items) })), '', 'salesCount'],
+      [t('salesPerHour'), rate, '', 'salesPerHour'],
+      [t('salesCoverage'), esc(t('salesCoverageVal', { h: fmtNum(a.coverageHours, 1) })), '', 'salesCoverage'],
+      [t('salesLast'), esc(t('ahAgeVal', { age: fmtAge(Date.now() - a.last) })), '', 'salesLast'],
+    ];
+    let out = kv(rows);
+    if (a.n < AH_SALES.minSales) out += note(t('salesFew', { min: AH_SALES.minSales }));
+    if (!s.settings.ahEnabled) out += note(t('salesOff'));
+    return out + note(t('salesCaveat'));
   }
 
   function shardHtml(s: AppState): string | null {
@@ -519,7 +549,7 @@ export function createItemView(): View {
           .map((f) => `<li><span class="mono small muted">${esc(f)}</span> ${esc(riskFlagText(f))}</li>`)
           .join('')}</ul>`
       : `<p class="note">${esc(t('riskNone'))}</p>`;
-    return `<p class="item-risk-head">${riskBadge(risk)} <span class="small muted">${esc(t('riskScore', { n: risk.score }))}</span></p>${flags}`;
+    return `<p class="item-risk-head">${riskBadge(risk)} <span class="small muted">${esc(t('riskScore', { n: risk.score }))}</span></p>${flags}${riskScopeHtml('item')}`;
   }
 
   function renderFacts(p: Product | null, s: AppState): void {
@@ -533,6 +563,8 @@ export function createItemView(): View {
     }
     const ah = ahHtml(s);
     if (ah) parts.push(card(t('ahTitle'), ah, ' data-testid="item-ah"'));
+    const sales = salesHtml(s);
+    if (sales) parts.push(card(t('salesTitle'), sales, ' data-testid="item-ah-sales"'));
     const shard = shardHtml(s);
     if (shard) parts.push(card(t('shardTitle'), shard, ' data-testid="item-shard"'));
     if (p) {
@@ -999,6 +1031,7 @@ export function createItemView(): View {
             s.catalogError !== prev.catalogError ||
             s.settings !== prev.settings ||
             s.ah !== prev.ah ||
+            s.ahSales !== prev.ahSales ||
             s.watchlist !== prev.watchlist ||
             s.alerts !== prev.alerts
           ) {

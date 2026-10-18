@@ -1,10 +1,10 @@
 // Overview dashboard: compact cards summarising every tool, each linking to its full page.
-import { LS_VIEWPREFS, OPTIMIZER, STATS } from '../../../config.ts';
+import { AH_SALES, LS_VIEWPREFS, OPTIMIZER, STATS } from '../../../config.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import { isPetMaxKey } from '../../../domain/ahFlips.ts';
 import type { AppState, PlanResult, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
-import { fmtAge, fmtCoins, fmtCompact, fmtInt, fmtPct } from '../../format.ts';
+import { fmtAge, fmtCoins, fmtCompact, fmtInt, fmtNum, fmtPct } from '../../format.ts';
 import { bindQueryState, type QuerySchema, type QueryState, type QueryValues } from '../../kit/index.ts';
 import { sparklineSvg } from '../../sparkline.ts';
 import { logMessage } from '../watch/alertText.ts';
@@ -320,6 +320,18 @@ export function createOverviewView(): View {
           [t('overview.f_ah'), esc(ah), 'ah'],
         ];
         if (s.settings.ahEnabled && s.ah) rows.push([t('overview.f_ahItems'), esc(fmtInt(Object.keys(s.ah.lowestBin).filter((id) => !isPetMaxKey(id)).length))]);
+        if (s.settings.ahEnabled) {
+          // sales rates are measured only once the feed has covered AH_SALES.minCoverageHours
+          const cov = s.ahSales?.coverageHours ?? 0;
+          const h = fmtNum(cov, 1);
+          const sales = !s.ahSales
+            ? t('overview.ahSalesNone')
+            : cov >= AH_SALES.minCoverageHours
+              ? t('overview.ahSalesVal', { h, n: fmtInt(Object.keys(s.ahSales.byId).length) })
+              : t('overview.ahSalesLow', { h, min: AH_SALES.minCoverageHours });
+          rows.push([t('overview.f_ahSales'), esc(sales), 'ahSales']);
+        }
+        rows.push([t('overview.f_estimates'), esc(t(s.settings.conservative ? 'overview.estCons' : 'overview.estRaw')), 'estimates']);
         rows.push([t('overview.f_history'), esc(fmtInt(info.raw + info.q15))]);
         rows.push([t('overview.f_watch'), esc(`${fmtInt(s.watchlist.length)} / ${fmtInt(s.alerts.length)}`)]);
         return kv(rows);
@@ -420,6 +432,7 @@ export function createOverviewView(): View {
             s.settings !== prev.settings ||
             s.historyTick !== prev.historyTick ||
             s.ah !== prev.ah ||
+            s.ahSales !== prev.ahSales ||
             s.ahProgress !== prev.ahProgress ||
             s.watchlist !== prev.watchlist ||
             s.alerts !== prev.alerts ||

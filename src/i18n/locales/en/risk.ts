@@ -1,4 +1,5 @@
-// 'risk' namespace: risk levels, flag explanations and price-source badges (src/ui/cells.ts).
+// 'risk' namespace: risk levels, flag explanations, the sides a row's risk covers, price-source badges and the
+// conservative-estimate notes (src/ui/cells.ts).
 export const risk = {
   ok: 'Clean',
   caution: 'Caution',
@@ -22,4 +23,18 @@ export const risk = {
   srcCraft: 'Craft',
   srcAh: 'AH',
   srcMix: 'NPC + bazaar',
+  scope_both: 'Checked on the bazaar sides this trade uses: the buy side and the sell side.',
+  scope_buy: 'Only the bazaar buy side is checked (the sale goes to an NPC): spread and dead-bid flags apply to selling, not buying.',
+  scope_sell: 'Only the bazaar sell side is checked (the purchase comes from an NPC shop).',
+  scope_book: 'The output book’s sell side, plus price spikes and quote divergence on the input book (a dead bid or wide spread doesn’t hurt a buyer).',
+  scope_fusion: 'The buy side of bazaar-bought inputs and the sell side of the output; inputs bought from an NPC carry no market risk.',
+  scope_item: 'Both sides are checked here. Strategy pages check only the sides they trade, so a row there can be cleaner than this.',
+  consBadge: 'Adjusted',
+  consTip: 'Adjusted by recent price history (conservative estimates). Open the row for details.',
+  consTitle: 'Conservative adjustments',
+  consBuy: 'Buy price {from} in the snapshot → {to}: no lower than the recent median, re-listing cost included.',
+  consSell: 'Sell price {from} in the snapshot → {to}: no higher than the recent median, re-listing cost taken off.',
+  consRate: 'Fill rate × {mul}: trading volume has been below its weekly average lately.',
+  consChurn: 'Re-listing ≈ {churn} per unit: the best price moves often here, so expect to be outbid or undercut a few times.',
+  consNote: 'Conservative estimates are on in Settings; turn them off to see the raw snapshot numbers.',
 };

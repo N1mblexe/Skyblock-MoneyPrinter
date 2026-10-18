@@ -8,7 +8,7 @@ export const npc = {
   dirDesc_bz2npc:
     'Buy on the bazaar (buy order or insta-buy, per the “When buying” setting), sell to an NPC merchant at its fixed price. No tax on NPC sales.',
   dirDesc_npc2bz:
-    'Buy from an NPC shop at its fixed price, sell on the bazaar (sell offer or insta-sell, per the “When selling” setting). Tax is deducted. NPC purchases are capped at {limit} per item per day.',
+    'Buy from an NPC shop at its fixed price, sell on the bazaar (sell offer or insta-sell, per the “When selling” setting). Tax is deducted. NPC purchases are instant, capped at {limit} per item per day.',
   dirDesc_shops:
     'Shop offers paid in currencies such as bits, copper and motes. Each offer is valued in coins; the offer that turns a currency into the most coins comes first.',
 
@@ -80,7 +80,7 @@ export const npc = {
 
   noteTitle: 'How is this computed?',
   noteLimits:
-    'NPC shops cap purchases per item per day: currently {limit}/day (Settings → NPC daily limit). In the NPC → Bazaar direction units/hour are capped by that limit, bazaar volume, capital and order slots; when the limit binds, the “Limited by” column says “NPC daily limit”.',
+    'NPC shops cap purchases per item per day: currently {limit}/day (Settings → NPC daily limit). In the NPC → Bazaar direction the purchase is instant (no waiting, no order slot) but a cycle can buy at most limit ÷ 24 × cycle hours; units/hour are capped by that, bazaar volume, capital and order slots, and when the limit binds the “Limited by” column says “NPC daily limit”. The risk checks only the bazaar side you trade: the buy side for Bazaar → NPC, the sell side for NPC → Bazaar.',
   noteFloor:
     'In the Bazaar → NPC direction buy orders are assumed to cost at least 0.9 × the NPC sell price; 0.1 “dead” bids don’t really fill.',
   notePricing:
@@ -100,6 +100,9 @@ export const npc = {
   d_buyHours: 'Buy time',
   d_sellHours: 'Sell time',
   d_npcLimit: 'NPC daily limit',
+  d_npcCap: 'NPC purchases',
+  d_npcCapVal: '≈ {n} / hour · {cycle} per cycle',
+  d_instant: 'instant',
   d_ahSales: 'AH sales',
   d_valueSource: 'Value source',
   d_unpriced: 'No price for this offer’s output (not on the bazaar and no NPC sell price).',
@@ -109,7 +112,7 @@ export const npc = {
   step_buyOrder: 'Place a buy order on the bazaar at {price} coins each ({batch} units, {slots} slots).',
   step_instaBuy: 'Insta-buy on the bazaar at ≈ {price} coins each ({batch} units).',
   step_sellNpc: 'Sell to the NPC merchant at {price} coins each (no tax).',
-  step_buyNpc: 'Buy {batch} units from the NPC shop at {price} coins each (at most {limit} per day).',
+  step_buyNpc: 'Buy {batch} units from the NPC shop at {price} coins each, instantly (at most {limit} per day, ≈ {perHour} per hour; no order slot).',
   step_sellOffer: 'Post a sell offer on the bazaar; {price} coins each after tax ({slots} slots).',
   step_instaSell: 'Insta-sell on the bazaar; ≈ {price} coins each after tax.',
   step_profit: 'Profit: {profit} per unit, ≈ {pph} per hour.',

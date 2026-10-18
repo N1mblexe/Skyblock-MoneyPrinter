@@ -102,5 +102,7 @@ export const fusion: Messages['fusion'] = {
     'Fusion ücretleri ve gereksinimleri (makine kilitleri, seviye şartları vb.) hesaba katılmaz. Alış/satış şekli ve vergi üstteki Genel ayarlar’dan gelir; şu an: <strong>{cost}</strong>, <strong>{sell}</strong>.',
   note3:
     'Fiyatlar order book’un tepesinden alınır (en iyi buy order + 0,1 / en düşük sell offer − 0,1), quick_status ortalamaları kullanılmaz. Vergi sadece bazaar satışından düşülür. Kâr / saat, iki girdinin alış ve çıktının satış hızına, sermayene ve sipariş slotlarına göre tahmin edilir.',
+  noteNpc:
+    'Bir NPC dükkanının sattığı girdi, bazaar’dan ucuzsa oradan alınır (NPC işaretli): anında, günde en fazla NPC günlük limiti kadar (Ayarlar). Risk, bazaar’dan alınan girdilerin alış tarafını ve çıktının satış tarafını kapsar.',
   note4: 'Tarifler sadece bu tarayıcıda saklanır; yedek için JSON indir.',
 };
