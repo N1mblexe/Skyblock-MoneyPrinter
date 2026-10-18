@@ -2,8 +2,9 @@ import 'fake-indexeddb/auto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HISTORY_Q15_BUCKET_MS } from '../../src/config.ts';
 import { marketStatFromPoints } from '../../src/domain/marketStats.ts';
+import { mad, median, pctChange } from '../../src/domain/stats.ts';
 import { createHistoryRepo } from '../../src/storage/history.ts';
-import type { Product, Snapshot } from '../../src/types/contracts.ts';
+import type { HistoryPoint, PriceStats, Product, Snapshot } from '../../src/types/contracts.ts';
 
 const MIN = 60_000;
 const H = 60 * MIN;
@@ -62,6 +63,94 @@ async function counts(name: string): Promise<{ version: number; stores: string[]
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+/** history.stats() before the columnar sweep: per item, from its recent() points. Kept as the reference. */
+function referenceStats(points: readonly HistoryPoint[], now: number): PriceStats | null {
+  if (points.length === 0) return null;
+  const bucketOf = (ts: number) => Math.floor(ts / HISTORY_Q15_BUCKET_MS) * HISTORY_Q15_BUCKET_MS;
+  const cut = now - HISTORY_Q15_BUCKET_MS;
+  const asks: number[] = [];
+  const bids: number[] = [];
+  let n = 0;
+  let first: HistoryPoint | null = null;
+  let last: HistoryPoint | null = null;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]!;
+    if (Number.isFinite(p.ask) && Number.isFinite(p.bid)) {
+      first ??= p;
+      last = p;
+    }
+    const next = points[i + 1];
+    if (next && bucketOf(next.ts) === bucketOf(p.ts)) continue;
+    if (p.ts > cut) continue;
+    n++;
+    if (Number.isFinite(p.ask)) asks.push(p.ask);
+    if (Number.isFinite(p.bid)) bids.push(p.bid);
+  }
+  const mid = (p: HistoryPoint) => (p.bid + p.ask) / 2;
+  const change24h = first && last && last.ts - first.ts >= 20 * H ? pctChange(mid(first), mid(last)) : null;
+  const ma = median(asks);
+  const mb = median(bids);
+  return { n, medianAsk: ma, medianBid: mb, madAsk: mad(asks, ma), madBid: mad(bids, mb), change24h };
+}
+
+describe('history statsAll', () => {
+  it('PriceStats equal the per-item reference on randomized histories, across id versions', async () => {
+    const c = clock();
+    const repo = createHistoryRepo(newName(), c.now);
+    let seed = 99;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    const ids = Array.from({ length: 40 }, (_, i) => `I${i}`);
+    // 26h: sparse (5-40 min gaps) then dense (1-2 min) for the last 3h; ids come and go, sides go missing
+    for (let t = T0; t <= T0 + 26 * H; t += t < T0 + 23 * H ? Math.floor(5 + rnd() * 35) * MIN : Math.floor(1 + rnd() * 2) * MIN) {
+      c.t = t;
+      const prices: Record<string, [number | null, number | null, number?, number?]> = {};
+      for (const id of ids) {
+        if (rnd() < 0.08) continue;
+        const bid = rnd() < 0.1 ? null : 100 + Math.round(rnd() * 400) / 4;
+        const ask = rnd() < 0.1 ? null : 200 + Math.round(rnd() * 400) / 4;
+        prices[id] = [bid, ask];
+      }
+      await repo.record(snap(t, prices));
+    }
+    c.t += 7 * MIN; // mid-bucket: the now - 15 min cut drops the newest buckets
+    const all = repo.statsAll(TAX);
+    expect(repo.statsAll(TAX)).toBe(all);
+    expect(repo.marketStats(TAX)).toBe(all.market);
+    expect([...all.price.keys()].sort()).toEqual([...all.market.keys()].sort());
+    let checked = 0;
+    for (const id of ids) {
+      const want = referenceStats(repo.recent(id), c.t);
+      expect(all.price.get(id) ?? null, id).toEqual(want);
+      expect(repo.stats(id), id).toBe(all.price.get(id) ?? null);
+      if (want?.change24h != null) checked++;
+    }
+    expect(checked).toBeGreaterThan(30);
+    expect(repo.stats('NOPE')).toBeNull();
+  });
+
+  it('memoizes per record, minute and tax rate; stats() reuses the latest sweep', async () => {
+    const c = clock();
+    const repo = createHistoryRepo(newName(), c.now);
+    expect(repo.stats('A')).toBeNull(); // no records: an empty sweep
+    await repo.record(snap(c.t, { A: [100, 110] }));
+    c.t += 20 * MIN;
+    await repo.record(snap(c.t, { A: [100, 120] }));
+    const a = repo.statsAll(TAX);
+    const b = repo.statsAll(0.01);
+    expect(b).not.toBe(a);
+    expect(b.price.get('A')).toEqual(a.price.get('A')); // PriceStats don't depend on the tax rate
+    expect(repo.stats('A')).toBe(b.price.get('A'));
+    expect(repo.statsAll(TAX)).toBe(a);
+    c.t += MIN;
+    expect(repo.statsAll(TAX)).not.toBe(a);
+    // a new minute without a statsAll call: stats() sweeps at the latest tax rate
+    c.t += MIN;
+    const st = repo.stats('A');
+    expect(repo.statsAll(TAX).price.get('A')).toBe(st);
+    expect(st).toMatchObject({ n: 1, medianAsk: 110 });
+  });
+});
 
 describe('history marketStats', () => {
   it('equals marketStatFromPoints(recent(id)) for every id, across id versions', async () => {
@@ -162,14 +251,35 @@ describe('history marketStats', () => {
     const want = marketStatFromPoints('ITEM_5', repo.recent('ITEM_5'), c.t, TAX);
     expect(st.consistency).toBeCloseTo(want.consistency!, 12);
     expect(st.volatility).toBeCloseTo(want.volatility!, 12);
-    console.info(`marketStats: ${N} ids x ${recs} records in ${dt.toFixed(1)} ms (best of 3)`);
+    // statsAll is the same sweep (marketStats reads from it); stats(id) for every id costs one sweep, not N
+    let dtAll = Infinity;
+    let dtPerId = Infinity;
+    for (let k = 0; k < 3; k++) {
+      c.t += MIN;
+      let t0 = performance.now();
+      const all = repo.statsAll(TAX);
+      dtAll = Math.min(dtAll, performance.now() - t0);
+      expect(all.price.size).toBe(N);
+      c.t += MIN;
+      t0 = performance.now();
+      for (const id of ids) repo.stats(id);
+      dtPerId = Math.min(dtPerId, performance.now() - t0);
+    }
+    const ps = repo.stats('ITEM_5')!;
+    expect(ps).toEqual(referenceStats(repo.recent('ITEM_5'), c.t));
+    expect(ps.n).toBeGreaterThan(90);
+    console.info(
+      `marketStats: ${N} ids x ${recs} records in ${dt.toFixed(1)} ms; statsAll ${dtAll.toFixed(1)} ms; stats(id) x ${N} ${dtPerId.toFixed(1)} ms (best of 3)`,
+    );
     // target < 50 ms in isolation (~20 ms measured on a desktop); 150 ms bound tolerates the parallel full suite;
-    // generous on CI / under coverage instrumentation
-    // (V8 coverage deoptimizes the hot loops ~10x; vitest has no public flag for it, hence the worker config peek)
+    // generous on CI / under coverage instrumentation, where only a lost sweep (N of them instead of one) should fail
+    // (V8 coverage deoptimizes the hot loops ~10-15x; vitest has no public flag for it, hence the worker config peek)
     const coverage = (globalThis as { __vitest_worker__?: { config?: { coverage?: { enabled?: boolean } } } }).__vitest_worker__?.config
       ?.coverage?.enabled;
     const slow = !!process.env.CI || coverage !== false;
-    expect(dt).toBeLessThan(slow ? 500 : 150);
+    expect(dt).toBeLessThan(slow ? 2000 : 150);
+    expect(dtAll).toBeLessThan(slow ? 2000 : 150);
+    expect(dtPerId).toBeLessThan(slow ? 2500 : 200);
   }, 60_000);
 });
 

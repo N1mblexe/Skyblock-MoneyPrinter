@@ -5,6 +5,7 @@ import { alertMessage, fmtMetric, startAlerts } from '../../src/state/alertsRunn
 import { initialState } from '../../src/state/appState.ts';
 import { createDerived } from '../../src/state/derived.ts';
 import { createStore } from '../../src/state/store.ts';
+import { createHistoryRepo } from '../../src/storage/history.ts';
 import type { AlertEvent, AlertRule, AppState, Snapshot } from '../../src/types/contracts.ts';
 import { baseSettings, catalog, makeProduct, snap as fixtureSnap } from '../domain/helpers.ts';
 import { fakeHistory } from '../helpers/fakes.ts';
@@ -155,6 +156,38 @@ describe('market alerts in the runner', () => {
     expect(toast.mock.calls[0]![0]).toMatch(/fırsat/);
     store.set({ snapshot: snapAt(T0 + 60_000) });
     expect(toast).toHaveBeenCalledTimes(1); // same row: no repeat
+    stop();
+  });
+
+  it('a market-alert run after a snapshot sees stats that include it (history recorded before the one store update)', async () => {
+    const clock = { t: T0 };
+    const history = createHistoryRepo(`alerts-${Math.random()}`, () => clock.t); // memory only (no indexedDB in node)
+    const store = createStore<AppState>({ ...initialState({ ...baseSettings, lang: 'tr' }), catalog });
+    const derived = createDerived(store, history);
+    const seen: (number | undefined)[] = [];
+    // the runner reads rows through derived; record the pinned market stats each run sees
+    const spy: typeof derived = {
+      ...derived,
+      flips: () => (seen.push(derived.calcCtx()!.market!('X')?.n), derived.flips()),
+    };
+    const stop = startAlerts({ store, derived: spy, toast: vi.fn(), notify: vi.fn(), now: () => clock.t });
+    store.set({ oppAlerts: [{ key: 'm', scope: ['flip'], metric: 'profit', value: 0, maxRisk: 'caution', enabled: true, seen: [], hits: [] }] });
+    /** app.ts applySnapshot: record, then one store update */
+    const apply = async (s: Snapshot) => {
+      await history.record(s);
+      store.set((st) => ({ snapshot: s, status: 'live', lastError: null, historyTick: st.historyTick + 1 }));
+    };
+    for (let k = 0; k < 3; k++) {
+      clock.t = T0 + k * 20 * MIN; // one 15-min bucket each: MarketStat.n counts every snapshot so far
+      await apply(snapAt(clock.t));
+    }
+    expect(seen).toEqual([1, 2, 3]);
+    // the old order (show the snapshot, then record) ran the rules on stats without it
+    clock.t += 20 * MIN;
+    const s = snapAt(clock.t);
+    store.set({ snapshot: s });
+    await history.record(s);
+    expect(seen.at(-1)).toBe(3);
     stop();
   });
 

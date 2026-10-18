@@ -1,23 +1,33 @@
 import { describe, expect, it, vi } from 'vitest';
 import { initialState } from '../../src/state/appState.ts';
-import { CALC_SETTINGS, calcSettingsKey, createDerived } from '../../src/state/derived.ts';
+import { CALC_SETTINGS, calcSettingsKey, createDerived, MARKET_SETTINGS, THROUGHPUT_SETTINGS } from '../../src/state/derived.ts';
 import { createStore } from '../../src/state/store.ts';
-import type { AppState, MarketStat, Settings } from '../../src/types/contracts.ts';
+import type { AhSalesSnapshot, AppState, CalcCtx, MarketStat, PriceStats, Settings } from '../../src/types/contracts.ts';
 import { baseSettings, catalog, snap } from '../domain/helpers.ts';
 import { fakeHistory } from '../helpers/fakes.ts';
 
-const flipSpy = vi.hoisted(() => ({ n: 0 }));
+const flipSpy = vi.hoisted(() => ({ n: 0, ctx: null as unknown }));
 vi.mock('../../src/domain/flip.ts', async (orig) => {
   const m = await orig<typeof import('../../src/domain/flip.ts')>();
-  return { ...m, computeFlips: (...a: Parameters<typeof m.computeFlips>) => (flipSpy.n++, m.computeFlips(...a)) };
+  return { ...m, computeFlips: (...a: Parameters<typeof m.computeFlips>) => (flipSpy.n++, (flipSpy.ctx = a[0]), m.computeFlips(...a)) };
 });
 
 function setup(over: Partial<AppState> = {}) {
   const stats = new Map<string, MarketStat>();
-  const history = fakeHistory({ marketStats: vi.fn(() => stats) });
+  const price = new Map<string, PriceStats>();
+  const history = fakeHistory({ marketStats: vi.fn(() => stats), statsAll: vi.fn(() => ({ price, market: stats })) });
   const store = createStore<AppState>({ ...initialState(baseSettings), snapshot: snap, catalog, ...over });
-  return { store, history, stats, d: createDerived(store, history) };
+  return { store, history, stats, price, d: createDerived(store, history) };
 }
+
+const KAT = [{ pet: 'TESTPET', from: 3, to: 4, coins: 1_000_000, hours: 24, items: [] }];
+const KAT_AH = { v: 3, fetchedAt: 0, lastUpdated: 0, lowestBin: { 'TESTPET;3': { price: 1e6, count: 5 }, 'TESTPET;4': { price: 1e7, count: 5 } } };
+const sales = (perHour: number): AhSalesSnapshot => ({
+  v: 1,
+  updatedAt: 0,
+  coverageHours: 3,
+  byId: { HYPERION: { n: 5, items: 5, median: 5e8, perHour, coverageHours: 3, last: 0 } },
+});
 
 const patch = (store: ReturnType<typeof setup>['store'], s: Partial<Settings>) => store.set((st) => ({ settings: { ...st.settings, ...s } }));
 
@@ -57,8 +67,8 @@ describe('createDerived', () => {
     expect(flipSpy.n).toBe(1);
   });
 
-  it('every calc setting recomputes', () => {
-    const { store, d } = setup();
+  it('every calc setting recomputes what reads it and changes calcCtx()', () => {
+    const { store, d } = setup({ catalog: { ...catalog, kat: KAT }, ah: KAT_AH });
     const alt: Partial<Settings> = {
       taxRate: 0.01,
       capital: 1,
@@ -75,24 +85,176 @@ describe('createDerived', () => {
       bitsMultiplier: 2,
     };
     expect(Object.keys(alt).sort()).toEqual([...CALC_SETTINGS].sort());
+    expect([...MARKET_SETTINGS, ...THROUGHPUT_SETTINGS, 'ahEnabled', 'bitsMultiplier'].sort()).toEqual([...CALC_SETTINGS].sort());
+    const flipSide = new Set<string>([...MARKET_SETTINGS, ...THROUGHPUT_SETTINGS]);
+    expect(d.kat()).toHaveLength(1);
     for (const k of CALC_SETTINGS) {
-      const before = d.flips();
+      const before = { flips: d.flips(), crafts: d.crafts(), kat: d.kat(), ctx: d.calcCtx() };
       const key = calcSettingsKey(store.get().settings);
       patch(store, { [k]: alt[k] });
       expect(calcSettingsKey(store.get().settings)).not.toBe(key);
-      expect(d.flips(), k).not.toBe(before);
+      expect(d.calcCtx(), k).not.toBe(before.ctx);
       expect(d.calcCtx()!.settings[k]).toBe(alt[k]);
+      // ahEnabled and bitsMultiplier: flips read neither
+      if (flipSide.has(k)) expect(d.flips(), k).not.toBe(before.flips);
+      else expect(d.flips(), k).toBe(before.flips);
+      if (k === 'ahEnabled') {
+        expect(d.crafts()).not.toBe(before.crafts);
+        expect(d.kat()).toEqual([]);
+      }
+      if (k === 'bitsMultiplier') {
+        expect(d.crafts()).toBe(before.crafts);
+        expect(d.kat()).not.toBe(before.kat);
+      }
     }
   });
 
-  it('snapshot, catalog, historyTick and ah changes recompute', () => {
+  it('snapshot, catalog and historyTick changes recompute everything; an AH change only what reads the AH', () => {
     const { store, d } = setup();
     let f = d.flips();
-    for (const p of [{ snapshot: { ...snap } }, { catalog: { ...catalog } }, { historyTick: 1 }, { ah: { fetchedAt: 0, lastUpdated: 0, lowestBin: {} } }]) {
+    for (const p of [{ snapshot: { ...snap } }, { catalog: { ...catalog } }, { historyTick: 1 }]) {
+      const c = d.crafts();
       store.set(p);
       expect(d.flips()).not.toBe(f);
+      expect(d.crafts()).not.toBe(c);
       f = d.flips();
     }
+    const r = { flips: d.flips(), books: d.books(), npc: d.npc(), fusion: d.fusion(), crafts: d.crafts(), chains: d.chains(), shops: d.shops() };
+    const core = d.calcCtx()!.core;
+    flipSpy.n = 0;
+    store.set({ ah: { fetchedAt: 0, lastUpdated: 0, lowestBin: {} } });
+    expect(d.flips()).toBe(r.flips);
+    expect(d.books()).toBe(r.books);
+    expect(d.npc()).toBe(r.npc);
+    expect(d.fusion()).toBe(r.fusion);
+    expect(flipSpy.n).toBe(0);
+    expect(d.crafts()).not.toBe(r.crafts);
+    expect(d.chains()).not.toBe(r.chains);
+    expect(d.shops()).not.toBe(r.shops);
+    expect(d.calcCtx()!.core).not.toBe(core); // the core is keyed on the AH part
+  });
+
+  it('a capital change keeps the market core and recomputes flips, not shops', () => {
+    const { store, d } = setup();
+    const ctx = d.calcCtx()!;
+    const core = ctx.core;
+    expect(core).toBeDefined();
+    const r = { flips: d.flips(), crafts: d.crafts(), shops: d.shops() };
+    flipSpy.n = 0;
+    patch(store, { capital: 1e9 });
+    const next = d.calcCtx()!;
+    expect(next).not.toBe(ctx);
+    expect(next.settings.capital).toBe(1e9);
+    expect(next.core).toBe(core);
+    expect(d.flips()).not.toBe(r.flips);
+    expect(flipSpy.n).toBe(1);
+    expect((flipSpy.ctx as CalcCtx).settings.capital).toBe(1e9);
+    expect((flipSpy.ctx as CalcCtx).core).toBe(core);
+    expect(d.crafts()).not.toBe(r.crafts);
+    expect(d.shops()).toBe(r.shops);
+    // a market setting rebuilds it
+    patch(store, { share: 0.2 });
+    expect(d.calcCtx()!.core).not.toBe(core);
+    expect(d.calcCtx()!.core!.ctx.settings.share).toBe(0.2);
+  });
+
+  it('contexts keep their identity while their inputs hold; trade rows get no AH accessors', () => {
+    const ah = { fetchedAt: 0, lastUpdated: 0, lowestBin: { HYPERION: { price: 5e8, count: 3 } } };
+    const { store, d } = setup({ ah });
+    const c = d.calcCtx();
+    expect(d.calcCtx()).toBe(c);
+    d.flips();
+    const fc = flipSpy.ctx as CalcCtx;
+    expect(fc.ah).toBeUndefined();
+    expect(fc.ahSales).toBeUndefined();
+    expect(fc.core).toBe(c!.core);
+    store.set({ nextPollAt: 1 });
+    expect(d.calcCtx()).toBe(c);
+    patch(store, { taming: 10 }); // Taming only drops Kat rows
+    expect(d.calcCtx()).toBe(c);
+    patch(store, { bitsMultiplier: 2 });
+    d.flips();
+    expect(flipSpy.ctx).toBe(fc);
+  });
+
+  it('an AH update builds a new core over the new AH data; the pinned stats stay', () => {
+    const ah = { fetchedAt: 0, lastUpdated: 0, lowestBin: { HYPERION: { price: 5e8, count: 3 } } };
+    const { store, d, history } = setup({ ah, ahSales: sales(2) });
+    const core = d.calcCtx()!.core!;
+    expect(core.ahBuy('HYPERION')).toMatchObject({ price: 5e8, rate: 2, count: 3 });
+    d.calcCtx()!.stats!('X');
+    store.set({ ah: { ...ah, lowestBin: { HYPERION: { price: 4e8, count: 1 } } } });
+    const next = d.calcCtx()!.core!;
+    expect(next).not.toBe(core);
+    expect(next.ahBuy('HYPERION')).toMatchObject({ price: 4e8, count: 1 });
+    expect(core.ahBuy('HYPERION')).toMatchObject({ price: 5e8, count: 3 }); // an old core keeps its own data
+    store.set({ ahSales: sales(5) });
+    expect(d.calcCtx()!.core!.ahBuy('HYPERION')).toMatchObject({ rate: 5 });
+    patch(store, { ahEnabled: false });
+    expect(d.calcCtx()!.core!.ahBuy('HYPERION')).toBeNull();
+    d.calcCtx()!.stats!('X');
+    expect(history.statsAll).toHaveBeenCalledTimes(1);
+  });
+
+  it('ctx.ahSales follows store.ahSales while ahEnabled; a sales update recomputes crafts, not flips', () => {
+    const { store, d } = setup({ ahSales: sales(2) });
+    expect(d.calcCtx()!.ahSales!('HYPERION')!.perHour).toBe(2);
+    expect(d.calcCtx()!.ahSales!('NOPE')).toBeNull();
+    const r = { flips: d.flips(), crafts: d.crafts() };
+    store.set({ ahSales: sales(3) });
+    expect(d.calcCtx()!.ahSales!('HYPERION')!.perHour).toBe(3);
+    expect(d.flips()).toBe(r.flips);
+    expect(d.crafts()).not.toBe(r.crafts);
+    patch(store, { ahEnabled: false });
+    expect(d.calcCtx()!.ahSales).toBeUndefined();
+    patch(store, { ahEnabled: true });
+    store.set({ ahSales: null });
+    expect(d.calcCtx()!.ahSales).toBeUndefined();
+  });
+
+  it('ahFlips: memoized on the AH scan, catalog and ahEnabled', () => {
+    const ah = { fetchedAt: 0, lastUpdated: 0, lowestBin: {} };
+    const { store, d } = setup({ ah });
+    const rows = d.ahFlips();
+    expect(d.ahFlips()).toBe(rows);
+    patch(store, { capital: 1 });
+    store.set({ historyTick: 3 });
+    expect(d.ahFlips()).toBe(rows);
+    store.set({ ah: { ...ah } });
+    expect(d.ahFlips()).not.toBe(rows);
+    patch(store, { ahEnabled: false });
+    expect(d.ahFlips()).toEqual([]);
+    store.set({ snapshot: null });
+    expect(d.ahFlips()).toEqual([]);
+  });
+
+  it('stats are read once per historyTick (one statsAll call, pinned)', () => {
+    const { store, d, history, price } = setup({ catalog: { ...catalog, kat: KAT }, ah: KAT_AH });
+    const statsAll = history.statsAll as ReturnType<typeof vi.fn>;
+    const st: PriceStats = { n: 50, medianAsk: 10, medianBid: 9, madAsk: 1, madBid: 1, change24h: null };
+    price.set('X', st);
+    expect(statsAll).not.toHaveBeenCalled(); // lazily, on the first read
+    d.opportunities();
+    d.shops();
+    d.fusion();
+    d.ahFlips();
+    expect(d.calcCtx()!.stats!('X')).toBe(st);
+    expect(d.calcCtx()!.market!('X')).toBeNull();
+    d.marketStats();
+    patch(store, { capital: 1 }); // a throughput change keeps the pinned stats
+    d.flips();
+    expect(d.calcCtx()!.stats!('X')).toBe(st);
+    expect(statsAll).toHaveBeenCalledTimes(1);
+    expect(statsAll).toHaveBeenLastCalledWith(baseSettings.taxRate);
+    store.set({ historyTick: 1 });
+    d.opportunities();
+    d.calcCtx()!.stats!('X');
+    d.calcCtx()!.stats!('Y');
+    expect(statsAll).toHaveBeenCalledTimes(2);
+    patch(store, { taxRate: 0.01 });
+    d.calcCtx()!.stats!('X');
+    expect(statsAll).toHaveBeenLastCalledWith(0.01);
+    expect(statsAll).toHaveBeenCalledTimes(3);
   });
 
   it('kat: Kat page defaults, fed to the planner, recomputed on AH and election changes', () => {
@@ -164,13 +326,16 @@ describe('createDerived', () => {
     expect(d.calcCtx()!.ah).toBeUndefined();
   });
 
-  it('ctx.stats and marketStats delegate to history', () => {
-    const { store, d, history, stats } = setup();
-    expect(d.calcCtx()!.stats!('X')).toBeNull();
+  it('ctx.stats come from the pinned sweep; marketStats from history.marketStats (its own memo), once per call', () => {
+    const { store, d, history, stats } = setup({ snapshot: null });
     expect(d.marketStats()).toBe(stats);
     expect(history.marketStats).toHaveBeenLastCalledWith(baseSettings.taxRate);
-    patch(store, { taxRate: 0.01 });
-    d.marketStats();
-    expect(history.marketStats).toHaveBeenLastCalledWith(0.01);
+    expect(history.statsAll).not.toHaveBeenCalled();
+    store.set({ snapshot: snap });
+    expect(d.calcCtx()!.stats!('X')).toBeNull();
+    expect(history.statsAll).toHaveBeenLastCalledWith(baseSettings.taxRate);
+    expect(d.marketStats()).toBe(stats);
+    expect(history.marketStats).toHaveBeenCalledTimes(2);
+    expect(history.statsAll).toHaveBeenCalledTimes(1);
   });
 });

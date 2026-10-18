@@ -1,4 +1,5 @@
 // Bootstrap wiring: settings -> history/cache -> catalog -> shell -> router/views -> poller.
+import { createAhSalesPoller } from './api/ahSales.ts';
 import { createAhScanner } from './api/auctions.ts';
 import { createElectionPoller } from './api/election.ts';
 import { createPoller } from './api/poller.ts';
@@ -80,16 +81,21 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     },
   };
 
-  /** Store a new snapshot and append it to history. */
+  /**
+   * Append a snapshot to history, then show it: one store update (snapshot + historyTick), so every derived result
+   * is computed once per snapshot and the alert runner sees stats that include it. A failed history write still
+   * shows the snapshot. The latest-snapshot cache is written in the background.
+   */
   async function applySnapshot(snap: Snapshot, status: AppState['status']): Promise<void> {
-    store.set({ snapshot: snap, status, lastError: null });
+    let recorded = true;
     try {
       await history.record(snap);
-      await history.saveLatest(snap);
-      store.set((s) => ({ historyTick: s.historyTick + 1 }));
     } catch (e) {
+      recorded = false;
       console.warn('history write failed', e);
     }
+    store.set((s) => ({ snapshot: snap, status, lastError: null, historyTick: recorded ? s.historyTick + 1 : s.historyTick }));
+    history.saveLatest(snap).catch((e: unknown) => console.warn('saving latest snapshot failed', e));
   }
 
   // History + last snapshot from IndexedDB, so the page is useful before the first fetch finishes.
@@ -175,6 +181,13 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     onError: (e) => console.warn('AH scan failed', e),
     enabled: () => store.get().settings.ahEnabled,
   });
+  // realized AH sales; follows the "Auction house scan" toggle like the scanner. Turning the AH off keeps the last
+  // summary in the store, as it keeps store.ah: derived ignores both while settings.ahEnabled is off.
+  const ahSales = createAhSalesPoller({
+    onUpdate: (s) => store.set({ ahSales: s }),
+    onError: (e) => console.warn('AH sales fetch failed', e),
+    enabled: () => store.get().settings.ahEnabled,
+  });
   const election = createElectionPoller({
     onInfo: (info) => store.set({ election: info }),
     onError: (e) => console.warn('election fetch failed', e),
@@ -192,14 +205,25 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   void refresh();
 
   void ah.loadCached().then((c) => c && !store.get().ah && store.set({ ah: c }));
-  if (settings.ahEnabled) ah.start();
+  ahSales
+    .loadCached()
+    .then((c) => c && !store.get().ahSales && store.set({ ahSales: c }))
+    .catch((e: unknown) => console.warn('loading AH sales failed', e));
+  if (settings.ahEnabled) {
+    ah.start();
+    ahSales.start();
+  }
   election.start();
   store.subscribe((s, prev) => {
     if (s.settings.ahEnabled === prev.settings.ahEnabled) return;
     if (s.settings.ahEnabled) {
       ah.start();
       void ah.scanNow();
-    } else ah.stop();
+      ahSales.start();
+    } else {
+      ah.stop();
+      ahSales.stop();
+    }
   });
 
   store.subscribe((s, prev) => {
