@@ -6,7 +6,7 @@ import { catalogFromFile, validateCatalogFile } from '../../../src/data/catalog.
 import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
-import type { AhSnapshot, AppState, Catalog, CatalogFile, CraftRow, Settings, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
+import type { AhSalesSnapshot, AhSnapshot, AppState, Catalog, CatalogFile, CraftRow, Settings, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { createCraftView } from '../../../src/ui/views/craft/craftView.ts';
 import { createForgeView } from '../../../src/ui/views/forge/forgeView.ts';
 import { filterChains, filterCrafts, migrateLegacyPrefs, ownFlipMargin, slippage } from '../../../src/ui/views/craft/helpers.ts';
@@ -123,13 +123,13 @@ describe('craft view', () => {
     await flush();
     const ks = keys();
     expect(ks.length).toBeGreaterThan(3);
-    expect(ks[0]).toBe('ENCHANTED_COAL#4');
+    const top = ctx.derived.crafts().find((r) => r.recipe.key === ks[0])!;
     const pph = ctx.derived.crafts().filter((r) => ks.includes(r.recipe.key)).map((r) => r.profitPerHour);
     expect(Math.max(...pph)).toBe(ctx.derived.crafts().find((r) => r.recipe.key === ks[0])!.profitPerHour);
     const total = ctx.derived.crafts().filter((r) => r.recipe.kind === 'craft').length;
     expect(q('.craft-count').textContent).toBe(t('craft.count', { n: ks.length, total }));
     expect(keys().some((k) => k.startsWith('REFINED_MITHRIL'))).toBe(false); // forge recipes live on the Forge page
-    expect(rows()[0]!.querySelector('a[href="#/item/ENCHANTED_COAL"]')).not.toBeNull();
+    expect(rows()[0]!.querySelector(`a[href="#/item/${top.id}"]`)).not.toBeNull();
     // unpriced hidden by default, with a hint
     expect(root.querySelector('tr.craft-unpriced')).toBeNull();
     expect(q('.craft-unp').textContent).toMatch(/\d/);
@@ -249,6 +249,8 @@ describe('craft view', () => {
 
   it('opens the detail panel with steps, ingredient + output rows and market columns', async () => {
     store.set({ snapshot: snap, catalog });
+    // capital binds: the cheapest source (a sub-craft from gold ingots) is kept over a faster bazaar order
+    setSettings({ capital: 100_000 });
     mount();
     await flush();
     const panel = openRow('ENCHANTED_GOLD_BLOCK#1');
@@ -392,6 +394,70 @@ describe('craft view', () => {
     expect(after.unpriced).toContain('TEST_DRILL');
     openRow(drillKey);
     expect(panel.querySelector('.craft-unpriced-msg')!.textContent).toContain(t('craft.offUnpricedAhOff'));
+  });
+
+  it('lists shop trades behind the Recipes filter, with AH ingredients, AH sales notes and NPC + bazaar mixes', async () => {
+    const cat = catalogWith((f) => {
+      f.items.TEST_GEM = { n: 'Test Gem', ah: 1 };
+      f.items.TEST_RING = { n: 'Test Ring', ns: 10_000_000 };
+      f.items.TEST_TOKEN = { n: 'Test Token', ah: 1 };
+      f.recipes.push({ o: 'TEST_RING', c: 1, i: [['TEST_GEM', 2]], k: 'craft' });
+      f.recipes.push({ o: 'TEST_TOKEN', c: 1, i: [['ENCHANTED_GOLD', 1]], k: 'shop', s: 'trade' });
+    });
+    const ah: AhSnapshot = {
+      fetchedAt: Date.now(),
+      lastUpdated: Date.now(),
+      lowestBin: { TEST_GEM: { price: 1000, count: 4 }, TEST_TOKEN: { price: 5_000_000, count: 5 } },
+    };
+    const sales: AhSalesSnapshot = { v: 1, updatedAt: Date.now(), coverageHours: 12, byId: { TEST_TOKEN: { n: 30, items: 30, median: 5_000_000, perHour: 2.5, coverageHours: 12, last: Date.now() } } };
+    store.set({ snapshot: snap, catalog: cat, ah, ahSales: sales });
+    setSettings({ ahEnabled: true });
+    mount({ minMargin: 'none' });
+    await flush();
+    const ringKey = cat.recipes.find((r) => r.output === 'TEST_RING')!.key;
+    const tokenKey = cat.recipes.find((r) => r.output === 'TEST_TOKEN')!.key;
+    // crafts by default: no shop trade
+    expect(keys()).toContain(ringKey);
+    expect(keys()).not.toContain(tokenKey);
+    const crafts = ctx.derived.crafts().filter((r) => r.recipe.kind === 'craft').length;
+    expect(q('.craft-count').textContent).toContain(String(crafts));
+    segment('src', 'shop');
+    await flush();
+    expect(urlState().src).toBe('shop');
+    expect(keys()).toContain(tokenKey);
+    expect(keys()).not.toContain(ringKey);
+    const tr = rows().find((r) => r.dataset.key === tokenKey)!;
+    expect(tr.querySelector('.badge.craft-shop')!.getAttribute('title')).toContain(t('craft.shopTrade'));
+    let panel = openRow(tokenKey);
+    expect(panel.querySelector('.craft-steps')!.textContent).toContain(t('craft.shopTrade'));
+    // AH-sold with measured sales: limited by AH sales, with the measured rate in the notes
+    const token = ctx.derived.crafts().find((r) => r.recipe.key === tokenKey)!;
+    expect(token.valueSource).toBe('ah');
+    expect(panel.querySelector('.craft-ah-rate')!.textContent).toContain('12');
+    expect(panel.querySelector('.craft-npc-limit')).not.toBeNull();
+    segment('src', 'all');
+    await flush();
+    expect(keys()).toEqual(expect.arrayContaining([ringKey, tokenKey]));
+
+    // an AH-bought ingredient: listings and the assumed sales rate
+    panel = openRow(ringKey);
+    const ing = panel.querySelector('tr.craft-l-in')!;
+    expect(ing.querySelector('.badge.src-ah')).not.toBeNull();
+    expect(ing.textContent).toContain(t('craft.ahRateAssumed', { n: '' }).slice(0, 10));
+
+    // NPC + bazaar: an NPC-capped ingredient topped up from the bazaar
+    const mixRow = ctx.derived.crafts().find((r) => r.unpriced.length === 0 && r.lines.some((l) => l.source === 'mix'));
+    if (mixRow) {
+      segment('src', mixRow.recipe.kind === 'shop' ? 'shop' : 'craft');
+      check('unpriced', true);
+      type('[data-filter="minVol"]', '0');
+      await flush();
+      if (keys().includes(mixRow.recipe.key)) {
+        panel = openRow(mixRow.recipe.key);
+        expect(panel.querySelector('tr.craft-l-in .badge.src-mix')).not.toBeNull();
+        expect(panel.textContent).toContain(t('craft.mixNote', { npc: '', bz: '' }).slice(0, 8));
+      }
+    }
   });
 
   it('toggles the watchlist from the row action and from the panel', async () => {

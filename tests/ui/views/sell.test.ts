@@ -62,6 +62,11 @@ describe('sell view', () => {
     expect(methods).toEqual(want.options.map((o) => o.method));
     expect(card.querySelector('tbody tr')!.classList.contains('sell-best')).toBe(true);
     expect(q('[data-testid="sell-total"]').textContent).toBe(t('sell.total', { value: fmtCoins(want.options[0]!.net) }));
+    // a craft option names where the crafted items are sold
+    const craft = want.options.find((o) => o.craft)!;
+    expect(craft).toBeDefined();
+    const tr = card.querySelector<HTMLElement>(`tbody tr[data-method="craft"]`)!;
+    expect(tr.textContent).toContain(t(`sell.craftSold_${craft.craft!.venue}`, { price: fmtCoins(craft.craft!.saleNet) }));
   });
 
   it('unknown names and bad quantities are refused; qty edits and removal persist', async () => {

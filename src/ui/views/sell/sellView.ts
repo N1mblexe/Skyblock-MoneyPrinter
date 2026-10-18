@@ -41,6 +41,7 @@ function optionRow(o: SellOption, best: boolean, cat: Catalog | null): string {
       left: fmtQty(c.leftover),
     });
     if (c.sideCost > 0) sub += ` · ${t('sell.craftSides', { cost: fmtCoins(c.sideCost * c.made) })}`;
+    sub += ` · ${t(`sell.craftSold_${c.venue}`, { price: fmtCoins(c.saleNet) })}`;
   }
   const time = o.hours === 0 ? t('sell.now') : o.hours == null ? '—' : fmtHours(o.hours);
   return `<tr class="${best ? 'sell-best' : ''}" data-method="${o.method}">
@@ -202,7 +203,7 @@ export function createSellView(): View {
       });
       subs.push(
         c.store.subscribe((s, prev) => {
-          if (s.snapshot !== prev.snapshot || s.catalog !== prev.catalog || s.settings !== prev.settings || s.ah !== prev.ah || s.election !== prev.election)
+          if (s.snapshot !== prev.snapshot || s.catalog !== prev.catalog || s.settings !== prev.settings || s.ah !== prev.ah || s.ahSales !== prev.ahSales || s.election !== prev.election)
             schedule();
         }),
       );

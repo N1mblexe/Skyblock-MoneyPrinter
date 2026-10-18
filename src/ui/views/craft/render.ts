@@ -1,7 +1,9 @@
 // Craft view: kit table columns and the detail panel body (steps, ingredient + output market lines, throughput notes).
-import { RISK } from '../../../config.ts';
+import { AH_SALES, RISK } from '../../../config.ts';
+import { salesOf } from '../../../domain/market.ts';
+import { saleQuotes, type SaleQuote } from '../../../domain/sale.ts';
 import { t } from '../../../i18n/index.ts';
-import type { AhPrice, Catalog, CraftRow, IngredientLine, Product, Recipe, Settings } from '../../../types/contracts.ts';
+import type { AhPrice, AhSalesStat, CalcCtx, Catalog, CraftRow, IngredientLine, Product, Recipe, Settings } from '../../../types/contracts.ts';
 import { itemCell, riskBadge, sourceBadge } from '../../cells.ts';
 import { esc } from '../../dom.ts';
 import { fmtCoins, fmtHours, fmtInt, fmtList, fmtPct, locale } from '../../format.ts';
@@ -18,9 +20,29 @@ export interface RenderEnv {
   ah(id: string): AhPrice | null;
   /** mayor Derpy in office (AH claim tax ×4) */
   derpy(): boolean;
+  /** how the item would sell on the AH (listing price, fees, sales rate), null when it can't */
+  ahSale(id: string): SaleQuote | null;
+  /** realized AH sales, once the sales feed has covered enough hours */
+  ahSales(id: string): AhSalesStat | null;
   /** recipe lookup by key (for viaRecipe) */
   recipe(key: string): Recipe | undefined;
   watched(id: string): boolean;
+}
+
+/** The AH part of a RenderEnv, read from the current calc context (null while there is none). */
+export function ahEnv(calc: () => CalcCtx | null | undefined): Pick<RenderEnv, 'ah' | 'derpy' | 'ahSale' | 'ahSales'> {
+  return {
+    ah: (id) => calc()?.ah?.(id) ?? null,
+    derpy: () => calc()?.derpy ?? false,
+    ahSale(id) {
+      const c = calc();
+      return c ? (saleQuotes(c, id, { venues: ['ah'] })[0] ?? null) : null;
+    },
+    ahSales(id) {
+      const c = calc();
+      return c ? salesOf(c, id) : null;
+    },
+  };
 }
 
 const isUnpriced = (r: CraftRow) => r.unpriced.length > 0;
@@ -35,9 +57,14 @@ function forgeBadge(recipe: Recipe): string {
   return `<span class="badge craft-forge">${esc(label)}</span>`;
 }
 
-/** Forge / NPC / AH / off-bazaar badges for the output. */
+/** Where a shop trade is made: the NEU shop id, or the Trades menu. */
+export const shopName = (recipe: Recipe): string => (!recipe.shop || recipe.shop === 'trade' ? t('craft.shopTrade') : recipe.shop);
+
+/** Forge / shop / NPC / AH / off-bazaar badges for the output. */
 export function outputBadges(r: CraftRow): string {
   let s = forgeBadge(r.recipe);
+  if (r.recipe.kind === 'shop')
+    s += `<span class="badge craft-shop" title="${esc(t('craft.shopTitle', { shop: shopName(r.recipe) }))}">${esc(t('craft.badgeShop'))}</span>`;
   if (!isUnpriced(r) && r.valueSource === 'npc')
     s += `<span class="badge src-npc" title="${esc(t('craft.npcValueTitle'))}">${esc(t('craft.badgeNpc'))}</span>`;
   if (!isUnpriced(r) && r.valueSource === 'ah')
@@ -239,6 +266,30 @@ function marketCells(p: Product | undefined, s: Settings, npcSell: number | unde
   };
 }
 
+/** units/hour as text: measured AH sales, or the cautious default while the feed has too little coverage */
+function ahRateText(env: RenderEnv, id: string): string {
+  const s = env.ahSales(id);
+  return s?.perHour != null
+    ? t('craft.ahRateMeasured', { n: fmtRate(s.perHour), h: fmtRate(s.coverageHours) })
+    : t('craft.ahRateAssumed', { n: fmtRate(AH_SALES.defaultPerHour) });
+}
+
+/** What an AH-bought or mixed (NPC + bazaar) ingredient line actually buys. */
+function sourceNote(env: RenderEnv, l: IngredientLine): string {
+  if (l.source === 'ah') {
+    const a = env.ah(l.id);
+    const listings = a ? t('craft.ahListings', { price: fmtCoins(a.price), count: fmtInt(a.count) }) : '';
+    return `<span class="craft-via small">${esc([listings, ahRateText(env, l.id)].filter(Boolean).join(' · '))}</span>`;
+  }
+  if (l.source === 'mix') {
+    const npc = l.leaves?.find((x) => x.source === 'npc');
+    const bz = l.leaves?.find((x) => x.source !== 'npc');
+    if (!npc || !bz) return '';
+    return `<span class="craft-via small">${esc(t('craft.mixNote', { npc: fmtQty(npc.qty), bz: fmtQty(bz.qty) }))}</span>`;
+  }
+  return '';
+}
+
 function fewChip(p: Product | undefined): string {
   if (!fewOrders(p)) return '';
   return ` <span class="chip craft-few" title="${esc(t('craft.fewOrdersTitle', { n: RISK.fewOrders }))}">${esc(t('craft.fewOrders'))}</span>`;
@@ -257,7 +308,7 @@ export function linesTable(env: RenderEnv, r: CraftRow): string {
       const rate = priced ? `<span${l.bottleneck ? ' class="bott"' : ''}>${esc(fmtRate(l.craftsPerHour))}</span>` : dash;
       const m = marketCells(p, s, cat?.items[l.id]?.npcSell);
       return `<tr class="craft-l-in${l.bottleneck ? ' craft-bott-row' : ''}" data-line="${esc(l.id)}">
-        <th scope="row" class="name-cell"><span class="craft-role">${esc(t('craft.roleIn'))}</span> ${itemCell(l.id, l.name, true)}${fewChip(p)}${viaText(env, l.viaRecipe)}</th>
+        <th scope="row" class="name-cell"><span class="craft-role">${esc(t('craft.roleIn'))}</span> ${itemCell(l.id, l.name, true)}${fewChip(p)}${viaText(env, l.viaRecipe)}${sourceNote(env, l)}</th>
         <td>${src}</td>
         <td class="num">${esc(fmtQty(l.qty))}</td>
         ${m.bidAsk}
@@ -326,8 +377,9 @@ export function sellStepsHtml(env: RenderEnv, r: CraftRow): string[] {
   if (r.valueSource === 'npc') li.push(t('craft.stepSellNpc', { value }));
   else if (r.valueSource === 'ah') {
     const ah = env.ah(r.id);
+    const sale = env.ahSale(r.id);
     const n = r.recipe.outCount > 0 ? r.recipe.outCount : 1;
-    const price = ah?.price ?? r.value / n;
+    const price = sale?.gross ?? ah?.price ?? r.value / n;
     const fees = n * price - r.value;
     li.push(t('craft.stepSellAh', { price: esc(fmtCoins(price)), count: esc(ah ? fmtInt(ah.count) : '?'), fees: esc(fmtCoins(fees)), value }));
     if (env.derpy()) li.push(esc(t('craft.derpyNote')));
@@ -345,7 +397,8 @@ function stepsHtml(env: RenderEnv, r: CraftRow): string {
   if (r.recipe.kind === 'forge') {
     const d = r.recipe.durationSec ? fmtHours(r.recipe.durationSec / 3600) : '?';
     li.push(t('craft.stepForge', { d: esc(d), slots: esc(fmtInt(s.forgeSlots)), n, name }));
-  } else li.push(t('craft.stepCraft', { n, name }));
+  } else if (r.recipe.kind === 'shop') li.push(t('craft.stepTrade', { shop: esc(shopName(r.recipe)), n, name }));
+  else li.push(t('craft.stepCraft', { n, name }));
   li.push(...sellStepsHtml(env, r));
   return `<ol class="craft-steps">${li.map((x) => `<li>${x}</li>`).join('')}</ol>`;
 }
@@ -414,7 +467,8 @@ export function notesHtml(env: RenderEnv, r: CraftRow): string {
     const cap = (Math.max(0, s.forgeSlots) * 3600) / r.recipe.durationSec;
     notes.push(esc(t('craft.forgeLine', { slots: fmtInt(s.forgeSlots), d: fmtHours(r.recipe.durationSec / 3600), cap: fmtRate(cap) })));
   }
-  if (r.lines.some((l) => l.source === 'npc' && !r.unpriced.includes(l.id))) {
+  if (!isUnpriced(r) && r.valueSource === 'ah') notes.push(`<span class="craft-ah-rate">${esc(ahRateText(env, r.id))}</span>`);
+  if (r.lines.some((l) => (l.source === 'npc' || l.source === 'mix') && !r.unpriced.includes(l.id)) || r.recipe.kind === 'shop') {
     notes.push(`<span class="craft-npc-limit">${esc(t('craft.npcLimit', { limit: fmtInt(s.npcDailyLimit) }))}</span>`);
   }
   if (r.recipe.req) notes.push(`<span class="craft-req">${esc(t('craft.reqLine', { req: r.recipe.req.replace(/^requires:\s*/i, '') }))}</span>`);

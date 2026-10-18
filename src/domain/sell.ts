@@ -1,12 +1,15 @@
 // "Sell or craft?": every way to turn items you already own into coins, compared on what you end up with.
-// Raw sales: insta-sell (walks the buy orders), sell offer (top of book − 0.1, takes time), NPC, AH (after fees).
+// Raw sales: insta-sell (walks the buy orders), sell offer (top of book − 0.1, takes time), NPC, AH (sale.ts: listed
+// under the lowest BIN, after fees, at the AH sales rate).
 // Crafting up: every chain move that starts at the item; your items are free inputs, side ingredients are bought
-// (craft pricer), whole crafts only, and the leftover items are sold raw at the best raw unit price.
+// (craft pricer), whole crafts only; the crafted items are sold for the crafted quantity at their best venue
+// (sale.ts) and the leftover items raw at the best raw unit price.
 import type { CalcCtx, CraftRow } from '../types/contracts.ts';
 import { walkBook } from './book.ts';
 import { chainGraph, priceMove } from './chains.ts';
-import { createCraftPricer } from './craft.ts';
-import { afterTax, ahNet, sellSide } from './pricing.ts';
+import { getPricer } from './craft.ts';
+import { afterTax, sellSide } from './pricing.ts';
+import { bestSale, saleQuotes, type SaleVenue } from './sale.ts';
 
 export type SellMethod = 'insta' | 'offer' | 'npc' | 'ah' | 'craft';
 
@@ -23,8 +26,12 @@ export interface CraftPlan {
   leftover: number;
   /** side-ingredient cost per crafted item */
   sideCost: number;
-  /** the move priced by the craft pricer (value = what one crafted item sells for) */
+  /** the move priced by the craft pricer (sideCost comes from it) */
   row: CraftRow;
+  /** where the crafted items are sold */
+  venue: SaleVenue;
+  /** what one crafted item nets when all `made` are sold */
+  saleNet: number;
 }
 
 export interface SellOption {
@@ -33,7 +40,7 @@ export interface SellOption {
   net: number;
   /** net per item you own */
   perItem: number;
-  /** estimated hours to sell (sell offers); 0 = immediate; null = unknown */
+  /** estimated hours to sell (sell offers and AH listings at your share of the market); 0 = immediate; null = unknown */
   hours: number | null;
   /** insta-sell: the buy orders hold fewer items than you have (only `filled` are counted) */
   filled?: number;
@@ -66,19 +73,23 @@ export function rawOptions(ctx: CalcCtx, id: string, qty: number): SellOption[] 
   }
   const ns = catalog.items[id]?.npcSell;
   if (ns != null && ns > 0) push({ method: 'npc', net: ns * qty, hours: 0 });
-  const ah = catalog.items[id]?.auctionable ? ctx.ah?.(id) : null;
-  if (ah && ah.price > 0) push({ method: 'ah', net: ahNet(ah.price, ctx.derpy) * qty, hours: null });
+  const ah = saleQuotes(ctx, id, { venues: ['ah'] })[0];
+  if (ah) push({ method: 'ah', net: ah.net * qty, hours: hoursAt(qty, ah.rate) });
   return out;
 }
+
+/** Hours to sell `qty` at `rate` units/hour; 0 for an unlimited (NPC) rate, null without a rate. */
+const hoursAt = (qty: number, rate: number): number | null => (rate === Infinity ? 0 : rate > 0 ? qty / rate : null);
 
 /** Every way to sell `qty` of `id`, best first. */
 export function sellOptions(ctx: CalcCtx, id: string, qty: number): SellResult {
   const options = rawOptions(ctx, id, qty);
   // leftover items after whole crafts: sold at the best raw price per item (insta-sell priced for the full stack)
-  const rawUnit = options.reduce((m, o) => Math.max(m, o.method === 'insta' && o.filled != null ? 0 : o.perItem), 0);
+  const rawBest = options.reduce<SellOption | null>((m, o) => (o.method === 'insta' && o.filled != null ? m : !m || o.perItem > m.perItem ? o : m), null);
+  const rawUnit = rawBest?.perItem ?? 0;
 
   const g = chainGraph(ctx.catalog);
-  const pricer = createCraftPricer(ctx);
+  const pricer = getPricer(ctx);
   const seen = new Set<string>();
   for (const ladder of g.ladders) {
     const i = ladder.indexOf(id);
@@ -94,16 +105,23 @@ export function sellOptions(ctx: CalcCtx, id: string, qty: number): SellResult {
       const made = Math.floor(qty / needFrom + 1e-9);
       if (made < 1) continue;
       const sideCost = row.lines.reduce((s, l) => (l.id === id ? s : s + l.total), 0);
+      const toId = path.at(-1)!;
+      // the crafted quantity sold at once (an insta-sell walks the book for all of it); the move is priced, so the
+      // top tier has a venue
+      const sale = bestSale(ctx, toId, { qty: made })!;
       const used = made * needFrom;
       const leftover = qty - used;
-      const net = made * (row.value - sideCost) + leftover * rawUnit;
+      const net = made * (sale.net - sideCost) + leftover * rawUnit;
       if (!(net > 0)) continue;
+      const saleHours = sale.venue === 'bazaar' && ctx.settings.sellMode === 'insta' ? 0 : hoursAt(made, sale.rate);
+      // the leftover sells by the best raw method meanwhile
+      const leftHours = leftover > 0 && rawBest ? (rawBest.hours == null ? null : (rawBest.hours * leftover) / qty) : 0;
       options.push({
         method: 'craft',
         net,
         perItem: net / qty,
-        hours: null,
-        craft: { path, toId: path.at(-1)!, need: needFrom, made, used, leftover, sideCost, row },
+        hours: saleHours == null || leftHours == null ? null : Math.max(saleHours, leftHours),
+        craft: { path, toId, need: needFrom, made, used, leftover, sideCost, row, venue: sale.venue, saleNet: sale.net },
       });
     }
   }

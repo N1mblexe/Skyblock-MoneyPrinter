@@ -29,5 +29,8 @@ export const sell = {
   craftLine_one: '{path}: {made} craft from {used} items, {left} left over sold raw',
   craftLine_other: '{path}: {made} crafts from {used} items, {left} left over sold raw',
   craftSides: 'buys side ingredients for {cost}',
+  craftSold_bazaar: 'sold on the bazaar at {price} each after tax',
+  craftSold_ah: 'listed on the AH at {price} each after fees',
+  craftSold_npc: 'sold to an NPC at {price} each',
   timeOffer: 'Sell offers fill at your share of the weekly volume (Settings).',
 };
