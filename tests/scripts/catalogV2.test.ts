@@ -6,6 +6,7 @@ import {
   buildKatSteps,
   buildShops,
   enchantBase,
+  extractGeorge,
   extractPetLeveling,
   extractShardMeta,
   itemApiFlags,
@@ -382,5 +383,19 @@ describe('pets', () => {
     expect(names).toEqual({ OCELOT: 'Ocelot', TYRANNOSAURUS: 'T-Rex' });
     expect(Object.keys(names)).toEqual(['OCELOT', 'TYRANNOSAURUS']);
     expect(petDisplayNames([], null)).toEqual({});
+  });
+});
+
+describe('George', () => {
+  it('extractGeorge keeps TYPE;0-5 keys with a positive price, sorted, and reports the rest', () => {
+    const r = extractGeorge({
+      license1: 'x',
+      prices: { OCELOT: 1, 'OCELOT;4': 50000, 'BEE;0': 100, 'PHOENIX;7': 1e6, 'BAT;2': 0, 'WOLF;3': '5', 'lower;1': 9, 'ENDER_DRAGON;4': 5e6 },
+    });
+    expect(r.george).toEqual({ 'BEE;0': 100, 'ENDER_DRAGON;4': 5e6, 'OCELOT;4': 50000 });
+    expect(Object.keys(r.george)).toEqual(['BEE;0', 'ENDER_DRAGON;4', 'OCELOT;4']);
+    expect(r.dropped).toEqual(['OCELOT', 'PHOENIX;7', 'BAT;2', 'WOLF;3', 'lower;1']);
+    expect(extractGeorge(undefined)).toEqual({ george: {}, dropped: [] });
+    expect(extractGeorge({ prices: [1, 2] }).george).toEqual({});
   });
 });

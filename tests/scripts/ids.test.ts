@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { deriveName, neuToBazaarId, parseNeuStack, stripFormatting } from '../../src/domain/ids.ts';
-import { extractNpcOffers, extractRecipes } from '../../scripts/lib/neu.ts';
+import { deriveName, neuItemId, neuToBazaarId, parseNeuStack, stripFormatting } from '../../src/domain/ids.ts';
+import { extractNpcOffers, extractRecipes, extractShopRecipes } from '../../scripts/lib/neu.ts';
 
 describe('parseNeuStack', () => {
   it.each([
@@ -41,12 +41,48 @@ describe('neuToBazaarId', () => {
     ['NOT_ON_BAZAAR;3', undefined, 'ENCHANTMENT_NOT_ON_BAZAAR_3'],
     // pets keep their NEU id
     ['AMMONITE;4', '§7[Lvl {LVL}] §6Ammonite', 'AMMONITE;4'],
+    // runes and potions keep their NEU id, with or without a display name
+    ['BITE_RUNE;1', undefined, 'BITE_RUNE;1'],
+    ['AXE_FADING_BLUE_RUNE;3', '§a◆ Fading Blue Rune III', 'AXE_FADING_BLUE_RUNE;3'],
+    ['POTION_ABSORPTION;1', undefined, 'POTION_ABSORPTION;1'],
+    ['POTION_DUNGEON;4', '§fDungeon IV Potion', 'POTION_DUNGEON;4'],
+    ['POTION_AWKWARD', undefined, 'POTION_AWKWARD'],
   ])('%s', (id, dn, want) => {
     expect(neuToBazaarId(id, bz, dn)).toBe(want);
   });
   it('works with an empty bazaar set', () => {
     expect(neuToBazaarId('ULTIMATE_WISE;1', new Set())).toBe('ENCHANTMENT_ULTIMATE_WISE_1');
     expect(neuToBazaarId('INK_SACK-4', new Set())).toBe('INK_SACK:4');
+  });
+});
+
+describe('neuItemId (NEU ItemResolutionQuery rules for RUNE / POTION)', () => {
+  it.each<[string, Record<string, unknown>, string]>([
+    ['RUNE', { runes: { BITE: 1 } }, 'BITE_RUNE;1'],
+    ['RUNE', { runes: { axe_fading_blue: 3 } }, 'AXE_FADING_BLUE_RUNE;3'],
+    ['UNIQUE_RUNE', { runes: { GRAND_SEARING: 3 } }, 'GRAND_SEARING_RUNE;3'],
+    // not exactly one rune with an integer level -> the id as is
+    ['RUNE', {}, 'RUNE'],
+    ['RUNE', { runes: {} }, 'RUNE'],
+    ['RUNE', { runes: { BITE: 1, ZOMBIE_SLASH: 2 } }, 'RUNE'],
+    ['RUNE', { runes: { BITE: '1' } }, 'RUNE'],
+    ['RUNE', { runes: [1] }, 'RUNE'],
+    ['POTION', { potion: 'absorption', potion_level: 1, potion_type: 'POTION' }, 'POTION_ABSORPTION;1'],
+    // potion_name wins over potion, spaces become '_'
+    ['POTION', { potion_name: 'True Resistance', potion: 'true_defense', potion_level: 4 }, 'POTION_TRUE_RESISTANCE;4'],
+    ['POTION', { potion: 'dungeon' }, 'POTION_DUNGEON;0'],
+    ['POTION', { potion_type: 'AWKWARD', last_potion_ingredient: 'NETHER_STALK' }, 'POTION_AWKWARD'],
+    ['POTION', {}, 'WATER_BOTTLE'],
+    // other ids unchanged, even with rune / potion fields
+    ['ENCHANTED_BOOK', { runes: { BITE: 1 } }, 'ENCHANTED_BOOK'],
+    ['HYPERION', { potion: 'x', potion_level: 1 }, 'HYPERION'],
+  ])('%s %j -> %s', (id, extra, want) => {
+    expect(neuItemId(id, extra)).toBe(want);
+  });
+  it('gives the ids the catalog keeps', () => {
+    const bz = new Set<string>();
+    for (const [id, extra] of [['RUNE', { runes: { BITE: 1 } }], ['POTION', { potion: 'dungeon', potion_level: 4 }]] as const)
+      expect(neuToBazaarId(neuItemId(id, extra), bz)).toBe(neuItemId(id, extra));
   });
 });
 
@@ -59,6 +95,10 @@ describe('deriveName', () => {
     ['LOG:1', 'Log (1)'],
     ['ENCHANTED_GOLD', 'Enchanted Gold'],
     ['ESSENCE_DRAGON', 'Dragon Essence'],
+    ['BITE_RUNE;1', 'Bite Rune I'],
+    ['AXE_FADING_BLUE_RUNE;3', 'Axe Fading Blue Rune III'],
+    ['POTION_ABSORPTION;1', 'Absorption I Potion'],
+    ['POTION_TRUE_RESISTANCE;12', 'True Resistance 12 Potion'],
   ])('%s -> %s', (id, want) => {
     expect(deriveName(id)).toBe(want);
   });
@@ -95,5 +135,38 @@ describe('NEU extraction', () => {
       ],
     });
     expect(offers.map((o) => [o.result, o.coins / o.qty])).toEqual([['ROTTEN_FLESH', 8], ['BONE', 8]]);
+  });
+  it('reads multi-cost npc_shop offers and trades as shop recipes', () => {
+    const rs = extractShopRecipes({
+      internalname: 'ALCHEMIST_NPC',
+      recipes: [
+        // coin-only: an nb offer, not a shop recipe
+        { type: 'npc_shop', cost: ['SKYBLOCK_COIN:8.0'], result: 'ROTTEN_FLESH:1' },
+        // items + coins, items only
+        { type: 'npc_shop', cost: ['SKYBLOCK_COIN:10.0', 'GOLD_INGOT:2'], result: 'STRING:3' },
+        { type: 'npc_shop', cost: ['ENCHANTED_EMERALD:6'], result: 'WOOD_SINGULARITY' },
+        // another currency, or a bad stack: skipped
+        { type: 'npc_shop', cost: ['SKYBLOCK_BIT:100', 'GOLD_INGOT:1'], result: 'X' },
+        { type: 'npc_shop', cost: ['SKYBLOCK_COPPER:20'], result: 'Y' },
+        { type: 'npc_shop', cost: ['GOLD_INGOT:1', ''], result: 'Z' },
+        { type: 'npc_shop', cost: [], result: 'Z' },
+        { type: 'npc_shop', cost: ['GOLD_INGOT:1'] },
+        // trades: one cost stack; a min/max cost range uses the max
+        { type: 'trade', cost: 'EMERALD:10', result: 'ZOMBIE_TALISMAN' },
+        { type: 'trade', cost: 'LOG-1', min: 65, max: 76, result: 'EMERALD' },
+        { type: 'trade', cost: ['ENDER_PEARL:2'], result: 'EMERALD:2' },
+        { type: 'trade', cost: 'SKYBLOCK_GOLD_MEDAL:1', result: 'W' },
+        { type: 'trade', cost: 'EMERALD:1' },
+        { type: 'crafting', A1: 'STICK:1' },
+      ],
+    });
+    expect(rs).toEqual([
+      { shop: 'ALCHEMIST_NPC', output: 'STRING', count: 3, inputs: [{ id: 'SKYBLOCK_COIN', qty: 10 }, { id: 'GOLD_INGOT', qty: 2 }] },
+      { shop: 'ALCHEMIST_NPC', output: 'WOOD_SINGULARITY', count: 1, inputs: [{ id: 'ENCHANTED_EMERALD', qty: 6 }] },
+      { shop: 'trade', output: 'ZOMBIE_TALISMAN', count: 1, inputs: [{ id: 'EMERALD', qty: 10 }] },
+      { shop: 'trade', output: 'EMERALD', count: 1, inputs: [{ id: 'LOG-1', qty: 76 }] },
+      { shop: 'trade', output: 'EMERALD', count: 2, inputs: [{ id: 'ENDER_PEARL', qty: 2 }] },
+    ]);
+    expect(extractShopRecipes({ internalname: 'EMPTY' })).toEqual([]);
   });
 });

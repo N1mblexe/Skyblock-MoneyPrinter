@@ -117,6 +117,26 @@ describe('catalogFromFile v2', () => {
     expect(cat.bookRule('ENCHANTMENT_SHARPNESS_5')).toBeNull();
   });
 
+  it('parses shop recipes (with their shop id) and George prices', () => {
+    const c = catalogFromFile({
+      ...f2,
+      recipes: [
+        { o: 'WOOD_SINGULARITY', c: 1, i: [['ENCHANTED_EMERALD', 6]], k: 'shop', s: 'trade' },
+        { o: 'STRING', c: 3, i: [['GOLD_INGOT', 2], ['SKYBLOCK_COIN', 10]], k: 'shop', s: 'ALCHEMIST_NPC' },
+        { o: 'BONE', c: 1, i: [['GOLD_INGOT', 1]], k: 'craft', s: 'IGNORED' },
+      ],
+      george: { 'OCELOT;4': 50000, 'BEE;0': 100, 'BAD;1': -1, 'WORSE;2': '5' as any },
+    });
+    expect(c.recipes.map((r) => [r.output, r.kind, r.shop])).toEqual([
+      ['WOOD_SINGULARITY', 'shop', 'trade'],
+      ['STRING', 'shop', 'ALCHEMIST_NPC'],
+      ['BONE', 'craft', undefined],
+    ]);
+    expect(c.byInput.get('SKYBLOCK_COIN')!.map((r) => r.output)).toEqual(['STRING']);
+    expect(c.george).toEqual({ 'OCELOT;4': 50000, 'BEE;0': 100 });
+    expect(catalogFromFile({ ...f2, george: undefined }).george).toEqual({});
+  });
+
   it('tolerates non-array shops / non-object books', () => {
     const c = catalogFromFile({ ...f2, shops: 'x' as any, books: [] as any, itemsApiUpdated: -1 });
     expect(c.shops).toEqual([]);
@@ -265,5 +285,23 @@ describe('generated public/data/catalog.json', () => {
     expect([...cat.untradeable].sort()).toEqual(['CRYSTAL_HOLLOWS_SACK', 'DWARVEN_MINES_SACK', 'FLOWER_SACK', 'LARGE_DUNGEON_SACK', 'RUNE_SACK']);
     for (const id of cat.untradeable) expect(cat.items[id]!.auctionable).toBeUndefined();
     expect(cat.items.ABICASE_REZAR!.auctionable).toBe(true);
+  });
+
+  it('has shop recipes, AH crafts and George prices', () => {
+    const shop = cat.recipes.filter((r) => r.kind === 'shop');
+    expect(shop.length).toBeGreaterThanOrEqual(60);
+    expect(shop.some((r) => r.shop === 'trade')).toBe(true);
+    for (const r of shop) {
+      expect(r.shop).toBeTruthy();
+      // sellable or auctionable, or a sub-craft of an included recipe (SILKY_LICHEN for SILK_EDGE_SWORD)
+      const out = cat.items[r.output];
+      expect(out?.bazaar || (out?.npcSell ?? 0) > 0 || out?.auctionable || cat.byInput.has(r.output)).toBeTruthy();
+      expect(r.inputs.some((i) => i.id !== r.output)).toBe(true);
+    }
+    const ahCrafts = cat.recipes.filter((r) => r.kind === 'craft' && !cat.items[r.output]?.bazaar && cat.items[r.output]?.auctionable);
+    expect(ahCrafts.length).toBeGreaterThanOrEqual(400);
+    expect(Object.keys(cat.george).length).toBeGreaterThanOrEqual(100);
+    expect(cat.george['ENDER_DRAGON;4']).toBeGreaterThan(0);
+    expect(Object.keys(cat.george).every((k) => /^[A-Z0-9_]+;[0-5]$/.test(k))).toBe(true);
   });
 });

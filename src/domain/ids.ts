@@ -77,10 +77,44 @@ function matchShard(name: string, bazaarIds: ReadonlySet<string>): string | null
   return contain.length === 1 ? contain[0]![0] : null;
 }
 
+const RUNE_ID = /^[A-Z0-9_]+_RUNE;\d+$/;
+const POTION_ID = /^POTION_[A-Z0-9_]+;\d+$/;
+const isRecord = (v: unknown): v is Readonly<Record<string, unknown>> => !!v && typeof v === 'object' && !Array.isArray(v);
+const nbtInt = (v: unknown): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null);
+const nbtStr = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * NEU internal id of an item from its ExtraAttributes `id` and compound (the AH scan's NBT, or any plain object), for
+ * the ids whose SkyBlock id is shared by many items. Same rules as NEU's ItemResolutionQuery:
+ *  - RUNE / UNIQUE_RUNE with exactly one entry in `runes` -> `<NAME>_RUNE;<LVL>`, e.g. {runes:{BITE:1}} -> BITE_RUNE;1
+ *    (no single integer level -> the id as is);
+ *  - POTION -> `POTION_<NAME>;<LVL>` with NAME from `potion_name` (spaces -> '_'), else `potion`, LVL = `potion_level`
+ *    (0 when missing), e.g. {potion:'absorption', potion_level:1} -> POTION_ABSORPTION;1; with neither, `potion_type`
+ *    -> `POTION_<TYPE>` (POTION_AWKWARD); with nothing -> WATER_BOTTLE;
+ *  - any other id unchanged.
+ * The catalog keeps these ids too (neuToBazaarId leaves `X_RUNE;N` and `POTION_X;N` alone).
+ */
+export function neuItemId(id: string, extra: Readonly<Record<string, unknown>>): string {
+  if (id === 'RUNE' || id === 'UNIQUE_RUNE') {
+    const runes = extra.runes;
+    if (!isRecord(runes)) return id;
+    const keys = Object.keys(runes);
+    const lvl = keys.length === 1 ? nbtInt(runes[keys[0]!]) : null;
+    return lvl === null || !keys[0]!.trim() ? id : `${keys[0]!.trim().toUpperCase()}_RUNE;${lvl}`;
+  }
+  if (id === 'POTION') {
+    const name = nbtStr(extra.potion_name).replace(/ /g, '_') || nbtStr(extra.potion);
+    if (name) return `POTION_${name.toUpperCase()};${nbtInt(extra.potion_level) ?? 0}`;
+    const type = nbtStr(extra.potion_type);
+    return type ? `POTION_${type.toUpperCase()}` : 'WATER_BOTTLE';
+  }
+  return id;
+}
+
 /**
  * Map a NEU internal id to the bazaar product id when one applies:
  *  1. already in bazaarIds -> as is
- *  2. "X;N": ATTRIBUTE_SHARD_* -> "SHARD_" + UPPER_SNAKE(displayName minus " Shard") (fuzzy-matched against
+ *  2. "X;N": runes `X_RUNE;N` and potions `POTION_X;N` (neuItemId) -> as is; ATTRIBUTE_SHARD_* -> "SHARD_" + UPPER_SNAKE(displayName minus " Shard") (fuzzy-matched against
  *     bazaar SHARD_* ids); else "ENCHANTMENT_X_N" (unless it is not a bazaar id and displayName says it is not an
  *     enchanted book, e.g. pets "AMMONITE;4" -> kept as is)
  *  3. "A-N" -> "A:N"
@@ -92,6 +126,8 @@ export function neuToBazaarId(neuId: string, bazaarIds: ReadonlySet<string>, dis
   const semi = /^(.+);(\d+)$/.exec(id);
   if (semi) {
     const base = semi[1]!;
+    // runes and potions (neuItemId shapes) are never enchanted books
+    if (RUNE_ID.test(id) || POTION_ID.test(id)) return id;
     if (base.startsWith('ATTRIBUTE_SHARD_')) {
       const dn = displayName ? stripFormatting(displayName).replace(/\s+Shard$/i, '') : '';
       const name = upperSnake(dn);
@@ -110,23 +146,28 @@ export function neuToBazaarId(neuId: string, bazaarIds: ReadonlySet<string>, dis
 }
 
 const ROMAN = ['', 'I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
+const roman = (n: number) => ROMAN[n] ?? String(n);
 const title = (s: string) => s.toLowerCase().split('_').filter(Boolean).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(' ');
 
 /**
  * Human-readable fallback name. Package A may refine, but must keep these cases:
  *  ENCHANTMENT_LIFE_STEAL_2 -> "Life Steal II", ENCHANTMENT_ULTIMATE_WISE_1 -> "Ultimate Wise I",
  *  SHARD_BLUE_JAY -> "Blue Jay Shard", LOG:1 -> "Log (1)", ENCHANTED_GOLD -> "Enchanted Gold".
- * Refinements: ESSENCE_DRAGON -> "Dragon Essence"; empty id -> "?".
+ * Refinements: ESSENCE_DRAGON -> "Dragon Essence"; BITE_RUNE;1 -> "Bite Rune I"; POTION_ABSORPTION;1 ->
+ * "Absorption I Potion"; empty id -> "?".
  */
 export function deriveName(id: string): string {
   const colon = /^(.+):(\d+)$/.exec(id);
   if (colon) return `${deriveName(colon[1]!)} (${colon[2]})`;
   const ench = /^ENCHANTMENT_(.+)_(\d+)$/.exec(id);
   if (ench) {
-    const n = Number(ench[2]);
-    return `${title(ench[1]!)} ${ROMAN[n] ?? n}`;
+    return `${title(ench[1]!)} ${roman(Number(ench[2]))}`;
   }
   if (id.startsWith('SHARD_')) return `${title(id.slice(6))} Shard`;
+  const rune = /^(.+)_RUNE;(\d+)$/.exec(id);
+  if (rune) return `${title(rune[1]!)} Rune ${roman(Number(rune[2]))}`;
+  const potion = /^POTION_(.+);(\d+)$/.exec(id);
+  if (potion) return `${title(potion[1]!)} ${roman(Number(potion[2]))} Potion`;
   if (id.startsWith('ESSENCE_') && id.length > 8) return `${title(id.slice(8))} Essence`;
   return title(id) || id || '?';
 }
