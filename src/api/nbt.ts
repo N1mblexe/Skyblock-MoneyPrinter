@@ -1,4 +1,6 @@
-// Minimal Java NBT reader (big-endian, tag types 0-12) + Hypixel item_bytes helpers. Owner: market-apis package.
+// Minimal Java NBT reader (big-endian, tag types 0-12) + Hypixel item_bytes helpers. Owner: s1/ahdata.
+import { gunzipSync } from 'fflate';
+import { stripFormatting } from '../domain/ids.ts';
 
 /** Plain JS value of an NBT tag. Longs become numbers (precision loss above 2^53 is fine for our use). */
 export type NbtValue = number | string | NbtValue[] | NbtCompound | Int8Array | Int32Array | number[];
@@ -6,14 +8,53 @@ export interface NbtCompound {
   [key: string]: NbtValue;
 }
 
+/** readNbt options. */
+export interface ReadNbtOptions {
+  /**
+   * Tags read past without building their values: `name` skips a tag of that name at any depth, `parent.child` only a
+   * `child` directly inside a compound named `parent` (so `display.Lore` keeps `display.Name`). Skipped bytes are still
+   * bounds-checked.
+   */
+  skip?: readonly string[];
+}
+
 const TAG = { END: 0, BYTE: 1, SHORT: 2, INT: 3, LONG: 4, FLOAT: 5, DOUBLE: 6, BYTE_ARRAY: 7, STRING: 8, LIST: 9, COMPOUND: 10, INT_ARRAY: 11, LONG_ARRAY: 12 } as const;
+/** payload width of the fixed-size tag types (0 for the others) */
+const WIDTH: readonly number[] = [0, 1, 2, 4, 8, 4, 8, 0, 0, 0, 0, 0, 0];
+const MAX_DEPTH = 512;
 
 const utf8 = new TextDecoder('utf-8');
+
+interface SkipRules {
+  any: ReadonlySet<string>;
+  inside: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
+function skipRules(skip: readonly string[] | undefined): SkipRules | null {
+  if (!skip?.length) return null;
+  const any = new Set<string>();
+  const inside = new Map<string, Set<string>>();
+  for (const s of skip) {
+    const dot = s.indexOf('.');
+    if (dot < 0) {
+      any.add(s);
+      continue;
+    }
+    const parent = s.slice(0, dot);
+    const set = inside.get(parent) ?? new Set<string>();
+    set.add(s.slice(dot + 1));
+    inside.set(parent, set);
+  }
+  return { any, inside };
+}
 
 class Reader {
   private pos = 0;
   private readonly view: DataView;
-  constructor(private readonly buf: Uint8Array) {
+  constructor(
+    private readonly buf: Uint8Array,
+    private readonly rules: SkipRules | null = null,
+  ) {
     this.view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
   }
 
@@ -51,6 +92,16 @@ class Reader {
   str(): string {
     const len = this.u16();
     const p = this.need(len);
+    // Tag names and most values are short ASCII: build those directly (each TextDecoder call has a fixed cost).
+    if (len <= 32) {
+      let s = '';
+      for (let i = p; i < p + len; i++) {
+        const c = this.buf[i]!;
+        if (c >= 0x80) return utf8.decode(this.buf.subarray(p, p + len));
+        s += String.fromCharCode(c);
+      }
+      return s;
+    }
     // Java "modified UTF-8" differs only for NUL and supplementary chars; plain UTF-8 is close enough here.
     return utf8.decode(this.buf.subarray(p, p + len));
   }
@@ -60,8 +111,54 @@ class Reader {
     return n;
   }
 
-  payload(type: number, depth: number): NbtValue {
-    if (depth > 512) throw new Error('NBT: nesting too deep');
+  private skipped(rules: SkipRules, parent: string, name: string): boolean {
+    return rules.any.has(name) || rules.inside.get(parent)?.has(name) === true;
+  }
+
+  /** Read past one payload of `type` without building it. */
+  skip(type: number, depth: number): void {
+    if (depth > MAX_DEPTH) throw new Error('NBT: nesting too deep');
+    const w = WIDTH[type] ?? 0;
+    if (w) {
+      this.need(w);
+      return;
+    }
+    switch (type) {
+      case TAG.BYTE_ARRAY:
+        this.need(this.len());
+        return;
+      case TAG.STRING:
+        this.need(this.u16());
+        return;
+      case TAG.LIST: {
+        const t = this.u8();
+        const n = this.len();
+        const tw = WIDTH[t] ?? 0;
+        if (tw) this.need(n * tw);
+        else for (let i = 0; i < n; i++) this.skip(t, depth + 1);
+        return;
+      }
+      case TAG.COMPOUND:
+        for (;;) {
+          const t = this.u8();
+          if (t === TAG.END) return;
+          this.need(this.u16());
+          this.skip(t, depth + 1);
+        }
+      case TAG.INT_ARRAY:
+        this.need(this.len() * 4);
+        return;
+      case TAG.LONG_ARRAY:
+        this.need(this.len() * 8);
+        return;
+      default:
+        throw new Error(`NBT: unknown tag type ${type}`);
+    }
+  }
+
+  /** `name` is the tag's own name ('' for list elements and the root), for the `parent.child` skip rules. */
+  payload(type: number, depth: number, name: string): NbtValue {
+    if (depth > MAX_DEPTH) throw new Error('NBT: nesting too deep');
     switch (type) {
       case TAG.BYTE:
         return this.i8();
@@ -86,16 +183,18 @@ class Reader {
         const t = this.u8();
         const n = this.len();
         const out: NbtValue[] = [];
-        for (let i = 0; i < n; i++) out.push(this.payload(t, depth + 1));
+        for (let i = 0; i < n; i++) out.push(this.payload(t, depth + 1, ''));
         return out;
       }
       case TAG.COMPOUND: {
         const out: NbtCompound = {};
+        const rules = this.rules;
         for (;;) {
           const t = this.u8();
           if (t === TAG.END) return out;
-          const name = this.str();
-          out[name] = this.payload(t, depth + 1);
+          const key = this.str();
+          if (rules && this.skipped(rules, name, key)) this.skip(t, depth + 1);
+          else out[key] = this.payload(t, depth + 1, key);
         }
       }
       case TAG.INT_ARRAY: {
@@ -116,15 +215,23 @@ class Reader {
   }
 }
 
-/** Parse uncompressed NBT. Returns the root compound's payload (its name is dropped); an empty root (TAG_End) gives {}. */
-export function readNbt(bytes: Uint8Array): NbtCompound {
-  const r = new Reader(bytes);
+/**
+ * Parse uncompressed NBT. Returns the root compound's payload (its name is dropped); an empty root (TAG_End) gives {}.
+ * `opts.skip` reads past the named tags without building them (see ReadNbtOptions).
+ */
+export function readNbt(bytes: Uint8Array, opts?: ReadNbtOptions): NbtCompound {
+  const r = new Reader(bytes, skipRules(opts?.skip));
   const t = r.u8();
   if (t === TAG.END) return {};
   if (t !== TAG.COMPOUND) throw new Error(`NBT: root must be a compound, got tag ${t}`);
   r.str();
-  return r.payload(TAG.COMPOUND, 0) as NbtCompound;
+  return r.payload(TAG.COMPOUND, 0, '') as NbtCompound;
 }
+
+/** What the AH scan reads past: display (listings are named by item_name) and SkullOwner (texture blobs). */
+export const SCAN_SKIP: readonly string[] = ['display', 'SkullOwner'];
+/** What the sales feed reads past: it needs display.Name (pet levels) but not the Lore or the textures. */
+export const SALES_SKIP: readonly string[] = ['display.Lore', 'SkullOwner'];
 
 /** Decode standard base64 to bytes (atob exists in browsers, workers and Node >= 16). */
 export function base64ToBytes(b64: string): Uint8Array {
@@ -134,32 +241,59 @@ export function base64ToBytes(b64: string): Uint8Array {
   return out;
 }
 
-/** Gunzip with DecompressionStream (browsers, workers and Node >= 18 share this one code path). */
+/** Gunzip synchronously with fflate (one call per item: no stream, Blob or promise per auction). */
+export function gunzipBytes(bytes: Uint8Array): Uint8Array {
+  return gunzipSync(bytes);
+}
+
+/** Async wrapper of gunzipBytes, for callers that await (rejects instead of throwing). */
 export async function gunzip(bytes: Uint8Array): Promise<Uint8Array> {
-  const stream = new Blob([bytes as BlobPart]).stream().pipeThrough(new DecompressionStream('gzip'));
-  return new Uint8Array(await new Response(stream).arrayBuffer());
+  return gunzipBytes(bytes);
 }
 
 const isCompound = (v: NbtValue | undefined): v is NbtCompound =>
   typeof v === 'object' && v !== null && !Array.isArray(v) && !ArrayBuffer.isView(v);
 
-/** Decode an auction's item_bytes (base64 gzipped NBT) to the root compound `{i: [item, ...]}`. */
-export async function decodeItemBytesRoot(b64: string): Promise<NbtCompound> {
-  return readNbt(await gunzip(base64ToBytes(b64)));
+/** Decode an auction's item_bytes (base64 gzipped NBT) to the root compound `{i: [item, ...]}`, synchronously. */
+export function decodeRoot(b64: string, opts?: ReadNbtOptions): NbtCompound {
+  return readNbt(gunzipBytes(base64ToBytes(b64)), opts);
 }
+
+/** Async decodeRoot (rejects instead of throwing). */
+export async function decodeItemBytesRoot(b64: string, opts?: ReadNbtOptions): Promise<NbtCompound> {
+  return decodeRoot(b64, opts);
+}
+
+const firstItem = (root: NbtCompound): NbtCompound | null => {
+  const list = root.i;
+  const item = Array.isArray(list) ? list[0] : undefined;
+  return isCompound(item) ? item : null;
+};
 
 /** First item's `tag.ExtraAttributes` of a decoded item_bytes root, or null. */
 export function extraAttributes(root: NbtCompound): NbtCompound | null {
-  const list = root.i;
-  const item = Array.isArray(list) ? list[0] : undefined;
-  const tag = isCompound(item) ? item.tag : undefined;
+  const tag = firstItem(root)?.tag;
   const ea = isCompound(tag) ? tag.ExtraAttributes : undefined;
   return isCompound(ea) ? ea : null;
 }
 
 /** base64 -> gunzip -> NBT -> `i[0].tag.ExtraAttributes` (null when the item has none). */
-export async function decodeItemBytes(b64: string): Promise<NbtCompound | null> {
-  return extraAttributes(await decodeItemBytesRoot(b64));
+export async function decodeItemBytes(b64: string, opts?: ReadNbtOptions): Promise<NbtCompound | null> {
+  return extraAttributes(decodeRoot(b64, opts));
+}
+
+/** Stack size of a decoded item_bytes root: `i[0].Count`, 1 when missing or not a positive integer. */
+export function itemCount(root: NbtCompound): number {
+  const c = firstItem(root)?.Count;
+  return typeof c === 'number' && Number.isInteger(c) && c > 0 ? c : 1;
+}
+
+/** `i[0].tag.display.Name` of a decoded item_bytes root with § codes stripped, or '' (e.g. "[Lvl 100] Ender Dragon"). */
+export function itemName(root: NbtCompound): string {
+  const tag = firstItem(root)?.tag;
+  const display = isCompound(tag) ? tag.display : undefined;
+  const name = isCompound(display) ? display.Name : undefined;
+  return typeof name === 'string' ? stripFormatting(name) : '';
 }
 
 /** Rarity order used by NEU pet ids `TYPE;INDEX` (COMMON=0 ... MYTHIC=5). */
@@ -221,12 +355,45 @@ function petFields(info: Record<string, unknown> | null): PetInfo | null {
   };
 }
 
+const nbtInt = (v: NbtValue | undefined): number | null => (typeof v === 'number' && Number.isInteger(v) ? v : null);
+const nbtStr = (v: NbtValue | undefined): string => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * NEU's internal id for the SkyBlock ids many items share (RUNE / UNIQUE_RUNE / POTION), as NEU's ItemResolutionQuery
+ * builds it; any other id unchanged:
+ *  - RUNE / UNIQUE_RUNE with exactly one `runes` entry with an integer level -> `<NAME>_RUNE;<LVL>` (BITE_RUNE;1),
+ *    else the id as is;
+ *  - POTION -> `POTION_<NAME>;<LVL>` with NAME from `potion_name` (spaces -> '_'), else `potion`, and LVL =
+ *    `potion_level` (0 when missing); with neither, `potion_type` -> `POTION_<TYPE>` (POTION_AWKWARD); with nothing,
+ *    WATER_BOTTLE.
+ * TEMPORARY local copy of src/domain/ids.ts `neuItemId` (added by s1/catalog in the same wave, which the catalog uses
+ * for its ids): after the merge this should call that one instead.
+ */
+export function neuItemIdForScan(id: string, ea: NbtCompound): string {
+  if (id === 'RUNE' || id === 'UNIQUE_RUNE') {
+    const runes = ea.runes;
+    if (!isCompound(runes)) return id;
+    const keys = Object.keys(runes);
+    const lvl = keys.length === 1 ? nbtInt(runes[keys[0]!]) : null;
+    return lvl === null || !keys[0]!.trim() ? id : `${keys[0]!.trim().toUpperCase()}_RUNE;${lvl}`;
+  }
+  if (id === 'POTION') {
+    const name = nbtStr(ea.potion_name).replace(/ /g, '_') || nbtStr(ea.potion);
+    if (name) return `POTION_${name.toUpperCase()};${nbtInt(ea.potion_level) ?? 0}`;
+    const type = nbtStr(ea.potion_type);
+    return type ? `POTION_${type.toUpperCase()}` : 'WATER_BOTTLE';
+  }
+  return id;
+}
+
 /**
  * SkyBlock id of an item, normalized to match catalog / bazaar ids:
  *  - PET: NEU style `TYPE;RARITYINDEX` from petInfo (COMMON=0 ... MYTHIC=5), e.g. `ENDER_DRAGON;4`, the same shape the
  *    catalog keeps for pets (`AMMONITE;4`). petInfo.tier is the pet's own tier: a Tier Boost held item raises only the
  *    displayed rarity, so a boosted EPIC dragon stays `ENDER_DRAGON;3`. Unknown tier -> `TYPE`; unreadable petInfo -> `PET`.
  *  - ENCHANTED_BOOK with exactly one enchant: `ENCHANTMENT_<NAME>_<LVL>` (bazaar id shape, e.g. ENCHANTMENT_ULTIMATE_WISE_5)
+ *  - RUNE / UNIQUE_RUNE / POTION: NEU's ids (neuItemIdForScan), e.g. `MUSIC_RUNE;3`, `POTION_CRITICAL;4`,
+ *    `POTION_AWKWARD`, `WATER_BOTTLE`
  *  - otherwise ExtraAttributes.id as is (null when missing)
  * Accepts either the decoded item_bytes root (`{i:[...]}`) or an ExtraAttributes compound.
  */
@@ -245,17 +412,25 @@ export function itemFromNbt(root: NbtCompound | null): { id: string | null; pet:
   if (!ea) return none;
   const id = ea.id;
   if (typeof id !== 'string' || !id) return none;
-  if (id === 'PET') {
-    const info = parsePetInfo(ea.petInfo);
-    return { id: petId(info) ?? id, pet: petFields(info) };
-  }
-  if (id === 'ENCHANTED_BOOK') {
-    const ench = ea.enchantments;
-    if (isCompound(ench)) {
-      const keys = Object.keys(ench);
-      const lvl = ench[keys[0]!];
-      if (keys.length === 1 && typeof lvl === 'number') return { id: `ENCHANTMENT_${keys[0]!.toUpperCase()}_${lvl}`, pet: null };
+  switch (id) {
+    case 'PET': {
+      const info = parsePetInfo(ea.petInfo);
+      return { id: petId(info) ?? id, pet: petFields(info) };
     }
+    case 'ENCHANTED_BOOK': {
+      const ench = ea.enchantments;
+      if (isCompound(ench)) {
+        const keys = Object.keys(ench);
+        const lvl = ench[keys[0]!];
+        if (keys.length === 1 && typeof lvl === 'number') return { id: `ENCHANTMENT_${keys[0]!.toUpperCase()}_${lvl}`, pet: null };
+      }
+      return { id, pet: null };
+    }
+    case 'RUNE':
+    case 'UNIQUE_RUNE':
+    case 'POTION':
+      return { id: neuItemIdForScan(id, ea), pet: null };
+    default:
+      return { id, pet: null };
   }
-  return { id, pet: null };
 }
