@@ -121,6 +121,7 @@ export const npc: Messages['npc'] = {
   step_shopBuy: '{shop} dükkanında {cost} {cur} öde, {out}× {item} al.',
   step_shopSellBz: 'Bazaar’da sat: vergi sonrası toplam ≈ {value} coin.',
   step_shopSellNpc: 'NPC’ye sat: toplam {value} coin.',
+  step_shopSellAh: 'Müzayede evinde sat: ücretler sonrası toplam ≈ {value} coin.',
   step_shopRate: 'Sonuç: 1 {cur} ≈ {n} coin.',
   shopUnknown: 'bilinmeyen dükkan',
 

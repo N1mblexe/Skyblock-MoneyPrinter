@@ -22,7 +22,7 @@ import { computeBookCombines } from '../src/domain/books.ts';
 import { computeAhFlips } from '../src/domain/ahFlips.ts';
 import { computeBitsRows } from '../src/domain/bits.ts';
 import { bestPerLadder, computeChains } from '../src/domain/chains.ts';
-import { computeKatFlips } from '../src/domain/kat.ts';
+import { computeKatFlips, KAT_DERIVED_SKIP } from '../src/domain/kat.ts';
 import { AHFLIP_SCHEMA, filterAhFlips, type AhFlipQuery } from '../src/ui/views/ahflip/model.ts';
 import { BITS_SCHEMA, filterBitsRows, type BitsQuery } from '../src/ui/views/bits/model.ts';
 import { filterKat, KAT_SCHEMA, type KatQuery } from '../src/ui/views/kat/model.ts';
@@ -152,9 +152,9 @@ async function computeExpected(): Promise<Expected> {
     catalog,
   ).rows.length;
 
-  // Kat page defaults: no skip items, settings.taming (60: no rows dropped), both bands, min profit 100k, unpriced and
+  // Kat page defaults: skip items when they pay, settings.taming (60: no rows dropped), both bands, min profit 100k, unpriced and
   // suspect hidden
-  const katAll = computeKatFlips(ctx, { skip: 'none', taming: settings.taming });
+  const katAll = computeKatFlips(ctx, { skip: KAT_DERIVED_SKIP, taming: settings.taming });
   const kq = defaults<KatQuery>(KAT_SCHEMA);
   const katCount = (suspect: boolean) =>
     filterKat(

@@ -211,7 +211,11 @@ export function createNpcView(): View {
   function valueCell(r: ShopRow): string {
     if (r.value == null) return '—';
     const badge =
-      r.valueSource === 'npc' ? sourceBadge('npc') : `<span class="badge src-bazaar">${esc(t('common.src_bazaar'))}</span>`;
+      r.valueSource === 'npc'
+        ? sourceBadge('npc')
+        : r.valueSource === 'ah'
+          ? `<span class="badge">${esc(t('common.src_ah'))}</span>`
+          : `<span class="badge src-bazaar">${esc(t('common.src_bazaar'))}</span>`;
     return `<span class="npc-price">${esc(fmtCoins(r.value))}</span> ${badge}`;
   }
 

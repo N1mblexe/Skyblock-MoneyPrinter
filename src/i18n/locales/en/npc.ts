@@ -119,6 +119,7 @@ export const npc = {
   step_shopBuy: 'At {shop}, pay {cost} {cur} for {out}× {item}.',
   step_shopSellBz: 'Sell on the bazaar: ≈ {value} coins in total after tax.',
   step_shopSellNpc: 'Sell to an NPC: {value} coins in total.',
+  step_shopSellAh: 'List on the auction house: ≈ {value} coins in total after fees.',
   step_shopRate: 'Result: 1 {cur} ≈ {n} coins.',
   shopUnknown: 'unknown shop',
 

@@ -137,7 +137,9 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   // ---- shell + views
   let current: View | null = null;
   const navigate = (r: Route) => router.navigate(r);
-  const shell = mountShell(root, { store, refresh, navigate, manualLoad, history, toast, scanAh: () => void ah.scanNow() });
+  // the sales poller is created below; the Data section only calls these on user action, after bootstrap
+  const salesStore = { info: () => ahSales.info(), clear: () => ahSales.clear() };
+  const shell = mountShell(root, { store, refresh, navigate, manualLoad, history, toast, scanAh: () => void ah.scanNow(), ahSales: salesStore });
   const setQuery = (patch: Record<string, string | undefined>) => {
     const cur = router.current();
     const query: Record<string, string> = { ...cur.query };

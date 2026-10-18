@@ -6,7 +6,7 @@ import { computeChains } from '../domain/chains.ts';
 import { computeCrafts } from '../domain/craft.ts';
 import { computeFlips } from '../domain/flip.ts';
 import { computeFusion } from '../domain/fusion.ts';
-import { computeKatFlips, katScanReady } from '../domain/kat.ts';
+import { computeKatFlips, KAT_DERIVED_SKIP, katScanReady } from '../domain/kat.ts';
 import { createMarketCore } from '../domain/market.ts';
 import { computeNpcFlips } from '../domain/npc.ts';
 import { toOpportunities } from '../domain/optimizer.ts';
@@ -76,7 +76,7 @@ type StatsAll = ReturnType<HistoryRepo['statsAll']>;
  *  | crafts, chains         | core key + throughput                                        |
  *  | kat                    | calcCtx() (core key + all calc settings), taming, scan version |
  *  | shops                  | core key                                                     |
- *  | ahFlips                | AH scan + catalog + ahEnabled                                |
+ *  | ahFlips                | AH scan + sales + catalog + ahEnabled, conservative, Derpy   |
  *  | opportunities          | the six row sets above + calcCtx()                           |
  *  | marketStats            | taxRate (history.marketStats, memoized there per record/minute) |
  *
@@ -202,22 +202,27 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     crafts: () => withAh('crafts', [], computeCrafts),
     chains: (start = 'bazaar') => withAh(`chains:${start}`, [], (c) => computeChains(c, start)),
     shops: () => withAh('shops', [], computeShopRows, true),
-    // the Kat page's defaults: no skip items. settings.taming is not in CALC_SETTINGS (it only drops rows), so the
+    // the Kat page's defaults: skip items when they pay (KAT_DERIVED_SKIP). settings.taming is not in CALC_SETTINGS (it only drops rows), so the
     // Kat results and the opportunities built from them are memoized per Taming level
     kat: () => {
       const c = current();
       if (!c) return [];
       const { ah, settings } = store.get();
       const taming = settings.taming;
-      return memo('kat', [c, ah, taming], () => (katScanReady(ah) ? computeKatFlips(c, { skip: 'none', taming }) : []));
+      return memo('kat', [c, ah, taming], () => (katScanReady(ah) ? computeKatFlips(c, { skip: KAT_DERIVED_SKIP, taming }) : []));
     },
-    // AH flips read nothing else from the context
+    // AH flips read the scan, sales, Derpy and conservatism, nothing else from the context
     ahFlips: () => {
       const s = store.get();
       const b = marketCtx(s);
       if (!b) return [];
-      return memo('ahFlips', [s.ah, b.catalog, s.settings.ahEnabled], () =>
-        s.ah && s.settings.ahEnabled ? computeAhFlips(s.ah, b.catalog) : [],
+      const derpy = isDerpy(s.election);
+      const sales = s.ahSales;
+      const conservative = s.settings.conservative;
+      return memo('ahFlips', [s.ah, sales, b.catalog, s.settings.ahEnabled, conservative, derpy], () =>
+        s.ah && s.settings.ahEnabled
+          ? computeAhFlips(s.ah, b.catalog, { derpy, conservative, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) })
+          : [],
       );
     },
     opportunities: () => {

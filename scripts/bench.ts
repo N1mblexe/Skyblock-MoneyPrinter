@@ -13,7 +13,7 @@ import { computeBookCombines } from '../src/domain/books.ts';
 import { computeChains } from '../src/domain/chains.ts';
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
-import { computeKatFlips } from '../src/domain/kat.ts';
+import { computeKatFlips, KAT_DERIVED_SKIP } from '../src/domain/kat.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
 import { allocate, toOpportunities } from '../src/domain/optimizer.ts';
 import { computeShopRows } from '../src/domain/shops.ts';
@@ -59,7 +59,7 @@ const steps: Record<string, (ctx: CalcCtx) => unknown> = {
   books: computeBookCombines,
   npc: computeNpcFlips,
   shops: computeShopRows,
-  kat: (ctx) => computeKatFlips(ctx, { skip: 'none', taming: ctx.settings.taming }),
+  kat: (ctx) => computeKatFlips(ctx, { skip: KAT_DERIVED_SKIP, taming: ctx.settings.taming }),
   bits: (ctx) => computeBitsRows(ctx, { multiplier: 1 }),
   ahFlips: () => computeAhFlips(ah, catalog),
 };

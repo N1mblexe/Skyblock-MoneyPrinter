@@ -149,13 +149,14 @@ describe('Kat view', () => {
 
   it('filters: band, max hours, max capital, search, unpriced', async () => {
     ready();
-    mount({ band: 'max' });
+    // without skip items: under the default (skip when it pays) Kat Flowers bring OCELOT;3>4 under the hour limits
+    mount({ band: 'max', skip: 'none' });
     await flush();
     expect(keys().every((k) => k.endsWith(':max'))).toBe(true);
-    view.update!({ id: 'kat', query: { maxHours: '50' } });
+    view.update!({ id: 'kat', query: { skip: 'none', maxHours: '50' } });
     await flush();
     expect(new Set(keys())).toEqual(new Set(['OCELOT;4>5:any', 'OCELOT;4>5:max']));
-    view.update!({ id: 'kat', query: { maxCapital: '5000000' } });
+    view.update!({ id: 'kat', query: { skip: 'none', maxCapital: '5000000' } });
     await flush();
     expect(keys()).toEqual(['OCELOT;3>4:max']);
     view.update!({ id: 'kat', query: { q: 'bee', unpriced: '1' } });
@@ -208,7 +209,7 @@ describe('Kat view', () => {
 
   it('the skip toggle buys Kat Flowers and shortens the wait', async () => {
     ready();
-    mount({ maxHours: '20' });
+    mount({ maxHours: '20', skip: 'none' });
     await flush();
     expect(keys()).not.toContain('OCELOT;3>4:max');
     skipSeg('flowers');

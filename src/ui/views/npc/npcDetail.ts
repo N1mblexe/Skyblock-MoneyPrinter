@@ -111,7 +111,8 @@ export function shopDetailHtml(r: ShopRow, c: Ctx): string {
     t('npc.step_shopBuy', { shop, cost: fmtInt(r.costQty), cur, out: fmtInt(r.outQty), item: r.name }),
   ];
   if (r.value != null) {
-    steps.push(t(r.valueSource === 'npc' ? 'npc.step_shopSellNpc' : 'npc.step_shopSellBz', { value: fmtCoins(r.value) }));
+    const sellStep = r.valueSource === 'npc' ? 'npc.step_shopSellNpc' : r.valueSource === 'ah' ? 'npc.step_shopSellAh' : 'npc.step_shopSellBz';
+    steps.push(t(sellStep, { value: fmtCoins(r.value) }));
     if (r.coinsPerCurrency != null) steps.push(t('npc.step_shopRate', { cur, n: fmtCoins(r.coinsPerCurrency) }));
   }
   const src =
@@ -119,7 +120,9 @@ export function shopDetailHtml(r: ShopRow, c: Ctx): string {
       ? sourceBadge('npc')
       : r.valueSource === 'bazaar'
         ? `<span class="badge src-bazaar">${esc(t('common.src_bazaar'))}</span>`
-        : '—';
+        : r.valueSource === 'ah'
+          ? `<span class="badge">${esc(t('common.src_ah'))}</span>`
+          : '—';
   const nums: [string, string][] = [
     [t('npc.col_cost'), `${esc(fmtInt(r.costQty))} ${esc(cur)}`],
     [t('npc.col_outQty'), esc(fmtInt(r.outQty))],
