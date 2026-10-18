@@ -4,8 +4,9 @@
 // sourcing of side ingredients, output valuation, insta refinement, order slots and risk match the Craft view.
 import { CHAIN } from '../config.ts';
 import type { CalcCtx, Catalog, ChainRow, CraftRow, Recipe } from '../types/contracts.ts';
-import { createCraftPricer, type CraftPricer } from './craft.ts';
-import { afterTax, buySide, sellQuote } from './pricing.ts';
+import { getPricer, type CraftPricer } from './craft.ts';
+import { coreOf } from './market.ts';
+import { saleQuotes } from './sale.ts';
 
 /** One chain step: `recipe` turns `mainQty` × `from` (plus side inputs) into `recipe.outCount` × `to`. */
 export interface ChainStep {
@@ -118,7 +119,7 @@ export function priceMove(
  */
 export function computeChains(ctx: CalcCtx, start: ChainStart = 'bazaar'): ChainRow[] {
   const g = chainGraph(ctx.catalog);
-  const pricer = createCraftPricer(ctx);
+  const pricer = getPricer(ctx);
   const moves = new Map<string, { path: string[]; ladders: string[] }>();
   for (const ladder of g.ladders) {
     const lk = ladder.join('>');
@@ -156,7 +157,7 @@ export interface LadderTier {
   name: string;
   /** units of the start tier inside one unit of this tier (1 for the start) */
   need: number;
-  /** price to buy one unit now (cost mode), null when not buyable */
+  /** price to buy one unit now (cost mode, or the NPC shop when cheaper), null when not buyable */
   buyUnit: number | null;
   /** what one unit sells for after tax (sell mode; NPC sell when higher), null when unsellable */
   sellNet: number | null;
@@ -166,24 +167,21 @@ export interface LadderTier {
 
 /** Each tier of `ladder` seen from the tier at `fromIndex`: unit prices and the move that ends there. */
 export function ladderDetail(ctx: CalcCtx, ladder: readonly string[], fromIndex: number, start: ChainStart = 'bazaar'): LadderTier[] {
-  const { snap, catalog, settings } = ctx;
-  const g = chainGraph(catalog);
-  const pricer = createCraftPricer(ctx);
+  const g = chainGraph(ctx.catalog);
+  const pricer = getPricer(ctx);
+  const core = coreOf(ctx);
   return ladder.map((id, i) => {
-    const p = snap.products[id];
-    const npcSell = catalog.items[id]?.npcSell;
-    const bq = p ? buySide(p, settings.costMode, settings.share, undefined, npcSell)?.quote : null;
-    const npcBuy = catalog.items[id]?.npcBuy;
-    const buys = [bq && Number.isFinite(bq.price) && bq.price > 0 ? bq.price : null, npcBuy != null && npcBuy > 0 ? npcBuy : null].filter((x): x is number => x != null);
-    const sq = p ? sellQuote(p, settings.sellMode) : null;
-    const sells = [sq && Number.isFinite(sq.price) ? afterTax(sq.price, settings.taxRate) : null, npcSell != null && npcSell > 0 ? npcSell : null].filter((x): x is number => x != null);
+    const bq = core.buy(id)?.quote;
+    const npc = core.npcBuy(id);
+    const buys = [bq && Number.isFinite(bq.price) && bq.price > 0 ? bq.price : null, npc?.price ?? null].filter((x): x is number => x != null);
+    const sale = saleQuotes(ctx, id, { venues: ['bazaar', 'npc'] })[0];
     const priced = i > fromIndex ? priceMove(pricer, g, ladder.slice(fromIndex, i + 1), start) : null;
     return {
       id,
-      name: catalog.name(id),
+      name: ctx.catalog.name(id),
       need: priced ? priced.needFrom : i === fromIndex ? 1 : 0,
       buyUnit: buys.length ? Math.min(...buys) : null,
-      sellNet: sells.length ? Math.max(...sells) : null,
+      sellNet: sale ? sale.net : null,
       move: priced?.row ?? null,
     };
   });

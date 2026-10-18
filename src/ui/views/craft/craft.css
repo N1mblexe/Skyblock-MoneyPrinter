@@ -102,12 +102,19 @@
   color: var(--warn);
   box-shadow: inset 0 0 0 1px var(--warn);
 }
+.craft-view .badge.craft-shop {
+  background: var(--info-soft);
+  color: var(--info);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
 .craft-view .badge.craft-off {
   background: transparent;
   color: var(--muted);
   box-shadow: inset 0 0 0 1px var(--line);
 }
 .craft-why-npcLimit,
+.craft-why-ahSales,
 .craft-why-slots,
 .craft-why-forge {
   color: var(--info);

@@ -17,8 +17,22 @@ import {
 } from '../../kit/index.ts';
 import './craft.css';
 import { createChainsPane } from './chainsPane.ts';
-import { filterCrafts, migrateLegacyPrefs, prefsKeyFor, relabel, SCHEMA, tabOf, tabsHtml, type CraftQuery, type CraftTab, type MarketFilter, type RecipeKind } from './helpers.ts';
-import { craftColumns, craftDetail, watchButton, type RenderEnv } from './render.ts';
+import {
+  filterCrafts,
+  kindsOf,
+  migrateLegacyPrefs,
+  prefsKeyFor,
+  relabel,
+  SCHEMA,
+  tabOf,
+  tabsHtml,
+  type CraftQuery,
+  type CraftTab,
+  type MarketFilter,
+  type RecipeKind,
+  type SourceFilter,
+} from './helpers.ts';
+import { ahEnv, craftColumns, craftDetail, watchButton, type RenderEnv } from './render.ts';
 
 const NOTES = ['note1', 'note2', 'note3', 'note4'] as const;
 
@@ -100,8 +114,7 @@ export function createRecipesPane(kind: RecipeKind): View {
     catalog: () => ctx?.store.get().catalog ?? null,
     settings: () => ctx!.store.get().settings,
     product: (id) => ctx?.store.get().snapshot?.products[id],
-    ah: (id) => ctx?.derived.calcCtx()?.ah?.(id) ?? null,
-    derpy: () => ctx?.derived.calcCtx()?.derpy ?? false,
+    ...ahEnv(() => ctx?.derived.calcCtx()),
     recipe(key) {
       const cat = ctx?.store.get().catalog;
       if (!cat) return undefined;
@@ -167,7 +180,8 @@ export function createRecipesPane(kind: RecipeKind): View {
     tools.hidden = false;
 
     const v = qs.get();
-    const all = ctx.derived.crafts().filter((r) => r.recipe.kind === kind);
+    const kinds = kindsOf(kind, v.src as SourceFilter);
+    const all = ctx.derived.crafts().filter((r) => kinds.has(r.recipe.kind));
     const res = filterCrafts(
       all,
       {
@@ -175,7 +189,7 @@ export function createRecipesPane(kind: RecipeKind): View {
         minVol: v.minVol,
         minMargin: v.minMargin,
         minPph: v.minPph,
-        kind,
+        kind: 'all', // `all` holds the pane's kinds already
         market: v.market as MarketFilter,
         showUnpriced: v.unpriced,
         hideSuspect: s.settings.hideSuspicious && !v.suspect,
@@ -222,6 +236,20 @@ export function createRecipesPane(kind: RecipeKind): View {
       bar = createFilterBar(
         [
           { kind: 'search', key: 'q', label: () => t('craft.search'), placeholder: () => t('craft.searchPh') },
+          ...(kind === 'craft'
+            ? [
+                {
+                  kind: 'segment' as const,
+                  key: 'src' as const,
+                  label: () => t('craft.srcFilter'),
+                  options: [
+                    { value: 'craft', label: () => t('craft.srcCrafts') },
+                    { value: 'shop', label: () => t('craft.srcShop') },
+                    { value: 'all', label: () => t('craft.srcBoth') },
+                  ],
+                },
+              ]
+            : []),
           {
             kind: 'segment',
             key: 'market',
@@ -311,7 +339,8 @@ export function createRecipesPane(kind: RecipeKind): View {
             s.catalogError !== prev.catalogError ||
             s.settings !== prev.settings ||
             s.historyTick !== prev.historyTick ||
-            s.ah !== prev.ah
+            s.ah !== prev.ah ||
+            s.ahSales !== prev.ahSales
           ) {
             schedule();
           }

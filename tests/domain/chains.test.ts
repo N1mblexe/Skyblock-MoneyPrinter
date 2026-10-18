@@ -95,8 +95,8 @@ describe('computeChains', () => {
     expect(r.profit).toBeCloseTo(r.value - r.cost, 6);
     // B costs 400.1 to buy but 160 * 1.1 = 176 to craft: the B>C>D move still buys B
     expect(line(by.get('B>C>D')!.row, 'B')).toMatchObject({ qty: 8, source: 'order' });
-    // the same row priced by craft rules would sub-craft B
-    const crafted = createCraftPricer(c()).price({ key: 't', output: 'D', outCount: 1, kind: 'craft', inputs: [{ id: 'B', qty: 8 }] });
+    // the same row priced by craft rules would sub-craft B (capital binds, so the cheapest source is kept)
+    const crafted = createCraftPricer({ ...c(), settings: { ...c().settings, capital: 1000 } }).price({ key: 't', output: 'D', outCount: 1, kind: 'craft', inputs: [{ id: 'B', qty: 8 }] });
     expect(crafted.lines[0]!.source).toBe('craft');
   });
 
@@ -133,11 +133,20 @@ describe('first-tier source', () => {
     expect(r.lines.find((l) => l.id === 'A')).toMatchObject({ unit: 1.1, source: 'order' });
   });
 
-  it("'cheapest' takes the NPC price and its daily limit", () => {
+  it("'cheapest' takes the NPC price and its daily limit, topped up from the bazaar when that earns more", () => {
     const r = computeChains(cc(), 'cheapest').find((x) => x.key === 'A>B>C>D')!.row;
-    expect(r.lines.find((l) => l.id === 'A')).toMatchObject({ unit: 0.5, source: 'npc' });
-    expect(r.tp.limitedBy).toBe('npcLimit');
-    expect(ladderDetail(cc(), ['A', 'B', 'C', 'D'], 0, 'cheapest')[3]!.move!.lines[0]!.source).toBe('npc');
+    // 1,280 A per craft: the NPC limit alone (26.7/h) makes 0.02 crafts/h, so the bazaar fills the rest
+    const a = r.lines.find((l) => l.id === 'A')!;
+    expect(a.source).toBe('mix');
+    expect(a.leaves![0]).toMatchObject({ source: 'npc', unit: 0.5, res: 'A:npc' });
+    expect(a.unit).toBeGreaterThan(0.5);
+    expect(a.unit).toBeLessThan(1.1);
+    // capital binds: the cheapest source (the NPC) and its limit
+    const capped = { ...cc(), settings: { ...cc().settings, capital: 500, cycleHours: 168 } };
+    const n = computeChains(capped, 'cheapest').find((x) => x.key === 'A>B>C>D')!.row;
+    expect(n.lines.find((l) => l.id === 'A')).toMatchObject({ unit: 0.5, source: 'npc' });
+    expect(ladderDetail(capped, ['A', 'B', 'C', 'D'], 0, 'cheapest')[3]!.move!.lines[0]!.source).toBe('npc');
+    expect(ladderDetail(cc(), ['A', 'B', 'C', 'D'], 0, 'cheapest')[0]!.buyUnit).toBe(0.5);
   });
 });
 

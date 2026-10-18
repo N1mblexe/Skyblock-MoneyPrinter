@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { rawOptions, sellOptions } from '../../src/domain/sell.ts';
-import { afterTax } from '../../src/domain/pricing.ts';
+import { AH_SALES } from '../../src/config.ts';
+import { afterTax, ahNet } from '../../src/domain/pricing.ts';
+import { bestSale } from '../../src/domain/sale.ts';
 import type { CatalogFile, Product } from '../../src/types/contracts.ts';
 import { buildCatalog, catalogFile, ctx, makeProduct, snap } from './helpers.ts';
 
@@ -69,5 +71,76 @@ describe('sellOptions', () => {
     const r = sellOptions(c(), 'A', 500);
     expect(r.options.some((o) => o.craft?.toId === 'D')).toBe(false);
     expect(r.options.some((o) => o.craft?.toId === 'B')).toBe(true);
+  });
+});
+
+describe('sale venues and hours', () => {
+  it('AH: listed under the lowest BIN after fees, hours from the AH sales rate', () => {
+    const ahCat = buildCatalog(file);
+    ahCat.items.C!.auctionable = true;
+    const cx = { ...c(), catalog: ahCat, ah: (id: string) => (id === 'C' ? { price: 5000, count: 4 } : null) };
+    const ah = rawOptions(cx, 'C', 10).find((o) => o.method === 'ah')!;
+    expect(ah.net).toBeCloseTo(10 * ahNet(4999), 9);
+    expect(ah.hours).toBeCloseTo(10 / AH_SALES.defaultPerHour, 9);
+    // not auctionable: no AH option
+    expect(rawOptions({ ...cx, catalog: cat }, 'C', 10).some((o) => o.method === 'ah')).toBe(false);
+  });
+
+  it('crafted items are valued for the crafted quantity at their best venue, with hours to sell them', () => {
+    const r = sellOptions(c(), 'A', 3000);
+    const d = r.options.find((o) => o.craft?.toId === 'D')!;
+    const sale = bestSale(c(), 'D', { qty: 2 })!;
+    expect(d.craft).toMatchObject({ venue: 'bazaar', saleNet: sale.net });
+    expect(d.net).toBeCloseTo(2 * (sale.net - d.craft!.sideCost) + 440 * Math.max(...rawOptions(c(), 'A', 3000).filter((o) => o.filled == null).map((o) => o.perItem)), 6);
+    // a sell offer takes 2 / rate hours; the leftover sells by the best raw method meanwhile
+    expect(d.hours).toBeGreaterThanOrEqual(2 / sale.rate - 1e-9);
+    // insta-selling the crafted items is immediate
+    const insta = sellOptions({ ...c(), settings: { ...c().settings, sellMode: 'insta' } }, 'A', 2560).options.find((o) => o.craft?.toId === 'D')!;
+    expect(insta.hours).toBe(0);
+    expect(insta.craft!.leftover).toBe(0);
+  });
+
+  it('crafted items sold to an NPC are immediate; a leftover with unknown hours makes the option unknown', () => {
+    const npcCat = buildCatalog({ ...file, items: { ...file.items, D: { n: 'Delta', bz: 1, ns: 50_000 } } });
+    const d = sellOptions({ ...c(), catalog: npcCat }, 'A', 2560).options.find((o) => o.craft?.toId === 'D')!;
+    expect(d.craft).toMatchObject({ venue: 'npc', saleNet: 50_000, leftover: 0 });
+    expect(d.hours).toBe(0);
+    // A's best raw sale is a sell offer that never fills (no insta-buys): its hours are unknown
+    const dead = { ...s, products: { ...s.products, A: makeProduct({ id: 'A', bids: lvl(1), asks: lvl(1.2), instaBuysWeek: 0, instaSellsWeek: 5_000_000 }) } };
+    const cat2 = buildCatalog({ ...file, items: { ...file.items, A: { n: 'Alpha', bz: 1 } } });
+    const left = sellOptions({ ...c(), snap: dead, catalog: cat2 }, 'A', 3000).options.find((o) => o.craft?.toId === 'D')!;
+    expect(left.hours).toBeNull();
+  });
+});
+
+describe('edge cases', () => {
+  it('raw options: off-bazaar items, empty books, an AH with no sales', () => {
+    const ahCat = buildCatalog({ ...file, items: { ...file.items, S: { n: 'Side', nb: 10, ns: 4 } } });
+    ahCat.items.S!.auctionable = true;
+    const sales = () => ({ n: 0, items: 0, median: 0, perHour: 0, coverageHours: 10, last: 0 });
+    const cx = { ...c(), catalog: ahCat, ah: (id: string) => (id === 'S' ? { price: 50, count: 3 } : null), ahSales: sales };
+    const by = new Map(rawOptions(cx, 'S', 5).map((o) => [o.method, o]));
+    expect([...by.keys()].sort()).toEqual(['ah', 'npc']);
+    expect(by.get('ah')!.hours).toBeNull(); // measured: nothing sells
+    const empty = { ...s, products: { ...s.products, A: makeProduct({ id: 'A', bids: [], asks: [], bid: null, ask: null }) } };
+    expect(rawOptions({ ...c(), snap: empty }, 'A', 10).map((o) => o.method)).toEqual(['npc']);
+  });
+
+  it('crafting up: shared moves once, unpriced and losing moves skipped, a partial insta-sell not used for leftovers', () => {
+    const branched: CatalogFile = {
+      ...file,
+      items: { ...file.items, E: { n: 'Eps', bz: 1 }, F: { n: 'Fee', bz: 1 }, T: { n: 'T' }, G: { n: 'Gee', nb: 1e9 } },
+      recipes: [...file.recipes, { o: 'E', c: 1, i: [['C', 4], ['G', 1]], k: 'craft' }, { o: 'F', c: 1, i: [['C', 4], ['T', 1]], k: 'craft' }],
+    };
+    const thinA = prod('A', 1, 1.2, 100);
+    const sn = { ...s, products: { ...s.products, A: thinA, E: prod('E', 10, 20), F: prod('F', 9000, 10_000) } };
+    const r = sellOptions({ ...c(), snap: sn, catalog: buildCatalog(branched) }, 'A', 3000);
+    const crafts = r.options.filter((o) => o.method === 'craft').map((o) => o.craft!.toId);
+    expect(crafts.filter((x) => x === 'C')).toHaveLength(1); // A>B>C lies on three ladders
+    expect(crafts).not.toContain('F'); // T has no price
+    expect(crafts).not.toContain('E'); // its side ingredient costs more than everything is worth
+    const d = r.options.find((o) => o.craft?.toId === 'D')!;
+    const offer = r.options.find((o) => o.method === 'offer')!;
+    expect(d.net).toBeCloseTo(2 * (d.craft!.saleNet - d.craft!.sideCost) + 440 * offer.perItem, 6);
   });
 });

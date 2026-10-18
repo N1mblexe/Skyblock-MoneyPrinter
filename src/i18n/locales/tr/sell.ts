@@ -31,5 +31,8 @@ export const sell: Messages['sell'] = {
   craftLine_one: '{path}: {used} üründen {made} craft, artan {left} ürün ham satılır',
   craftLine_other: '{path}: {used} üründen {made} craft, artan {left} ürün ham satılır',
   craftSides: '{cost} tutarında yan malzeme alır',
+  craftSold_bazaar: 'bazaarda vergi sonrası adet {price}',
+  craftSold_ah: 'müzayedede ücretler sonrası adet {price}',
+  craftSold_npc: 'NPC’ye adet {price}',
   timeOffer: 'Satış teklifleri haftalık hacimdeki payınla dolar (Ayarlar).',
 };
