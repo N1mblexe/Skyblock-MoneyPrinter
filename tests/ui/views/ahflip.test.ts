@@ -137,7 +137,8 @@ describe('AH flips view', () => {
 
   it('sell time: measured AH sales, else a marked guess; the detail explains a stack and the median cap', async () => {
     const ah: AhSnapshot = { ...AH, v: 4, lowestBin: { GOD_POTION_2: { price: 1_000_000, next: 1_400_000, count: 8, stack: 2, uuid: 'def' }, HYPERION: AH.lowestBin.HYPERION! } };
-    const stat = { n: 9, items: 9, median: 1_300_000, perHour: 4, coverageHours: 6, last: 0 };
+    // 80 sold per hour, your share (0.05) 4/h: the stack of 2 sells in half an hour
+    const stat = { n: 9, items: 9, median: 1_300_000, perHour: 80, coverageHours: 6, last: 0 };
     store.set({
       catalog,
       ah,
@@ -154,7 +155,7 @@ describe('AH flips view', () => {
     const panel = q('.kit-panel');
     expect(panel.textContent).toContain(t('ahflip.d_stackNote', { n: '2', total: fmtCoins(2_000_000) }));
     expect(panel.textContent).toContain(t('ahflip.d_medianCap', { ref: fmtCoins(1_399_999) }));
-    expect(panel.textContent).toContain(t('ahflip.perHour', { n: fmtNum(4, 2) }));
+    expect(panel.textContent).toContain(t('ahflip.perHour', { n: fmtNum(80, 2) }));
     q<HTMLElement>('.ahf-table tbody tr[data-key="ah:HYPERION"]').click();
     expect(panel.textContent).toContain(t('ahflip.d_noSales'));
   });

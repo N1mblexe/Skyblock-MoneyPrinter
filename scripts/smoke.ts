@@ -193,7 +193,7 @@ function countsFor(settings: Settings, i: Inputs): Counts {
   ).rows.length;
 
   // AH flips page defaults (relist and George modes), with the options derived and the page pass
-  const ahFlips = computeAhFlips(ah, catalog, { derpy, conservative: settings.conservative, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) });
+  const ahFlips = computeAhFlips(ah, catalog, { derpy, conservative: settings.conservative, share: settings.share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) });
   const george = computeGeorgeFlips(ah, catalog, { cycleHours: settings.cycleHours });
   const afq = defaults<AhFlipQuery>(AHFLIP_SCHEMA);
   const ahFlipCount = (rows: AhFlipRow[], minProfit = afq.minProfit) =>

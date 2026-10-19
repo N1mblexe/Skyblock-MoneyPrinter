@@ -67,7 +67,7 @@ const steps: Record<string, (c: Ctxs) => unknown> = {
   shops: (c) => computeShopRows(c.full),
   kat: (c) => computeKatFlips(c.full, { skip: KAT_DERIVED_SKIP, taming: settings.taming }),
   bits: (c) => computeBitsRows(c.full),
-  ahFlips: () => computeAhFlips(ah, catalog, { conservative: settings.conservative, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) }),
+  ahFlips: () => computeAhFlips(ah, catalog, { conservative: settings.conservative, share: settings.share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) }),
   george: () => computeGeorgeFlips(ah, catalog, { cycleHours: settings.cycleHours }),
 };
 

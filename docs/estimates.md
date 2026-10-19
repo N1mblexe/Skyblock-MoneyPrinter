@@ -151,7 +151,7 @@ Crafts, chains, Bits, Shops and Sell or craft? sell an item through one rule (`s
 | venue | net per item | rate | risk |
 |---|---|---|---|
 | bazaar | sell quote in your sell mode (conservatism applied), after tax | your sell rate | the item's sell-side risk |
-| AH | listed one coin under the lowest BIN (`AH_FLIP.undercut = 1`) and, with conservatism on, at no more than the median sold price; after the AH fees | measured sales per hour × share, else `AH_SALES.defaultPerHour = 0.25` (`limitedBy = ahSales`) | `AH_THIN`, `AH_GAP`, `AH_VARIANT` |
+| AH | listed one coin under the lowest BIN (`AH_FLIP.undercut = 1`) and, with conservatism on, at no more than the median sold price; after the AH fees | `ahRate` (see AH sales) (`limitedBy = ahSales`) | `AH_THIN`, `AH_GAP`, `AH_VARIANT` |
 | NPC | NPC sell price | unlimited | none |
 
 The AH venue is offered only for auctionable items: the catalog says so, or the item is unknown to the catalog and not a bazaar product. The best net wins; ties keep bazaar, then AH, then NPC. Kat and AH flips use their own sale rules (below).
@@ -166,7 +166,7 @@ Recipes come in three kinds: `craft`, `forge` and `shop`. A shop recipe is an NP
 |---|---|---|
 | bazaar | buy quote in your cost mode (a buy order at the ask is an insta-buy) | your fill rate |
 | NPC shop | NPC buy price | instant, capped at `npcDailyLimit / 24` per hour |
-| AH | VWAP over the scan's per-item prices for the quantity; auctionable items only | instant, capped at the AH sales rate (measured, else `AH_SALES.defaultPerHour = 0.25`); the listings seen cap one batch |
+| AH | VWAP over the scan's per-item prices for the quantity; auctionable items only | instant, capped at `ahRate` (see AH sales); the listings seen cap one batch |
 | mix | the NPC up to its limit, the bazaar for the rest, split `cap / (cap + bazaar rate)` | the two rates added |
 | sub-recipe | `Σ qty × input cost / outCount` over a craft, forge or shop recipe | the slowest input's rate; a forge sub-recipe adds its forge time, a shop trade draws on its NPC limit |
 | coins (`SKYBLOCK_COIN`) | 1 coin | unlimited |
@@ -241,7 +241,16 @@ What actually sold comes from `/v2/skyblock/auctions_ended` (`src/api/ahSales.ts
 - **Coverage** is the time the feed has actually seen: each new response adds the minute before its `lastUpdated`, and overlapping windows merge. Gaps (the app closed, polls missed) don't count.
 - The sales are kept for 7 days (`AH_SALES.windowMs`), in IndexedDB (`bazaar-masasi-ahsales`): one record per id with its newest 64 sales (`AH_SALES.maxPrices`) and hourly counts.
 
-Per id the feed gives the sales `n` and items sold in the window, the `median` per-item price of the stored sales, and `perHour = items / coverage hours`. Below `AH_SALES.minCoverageHours = 2` h of coverage the stats are ignored everywhere: AH rates fall back to `AH_SALES.defaultPerHour = 0.25` items per hour (Kat to `KAT.defaultSellHours = 1` h). The median caps a list price only with conservatism on and at least `AH_SALES.minSales = 3` sales.
+Per id the feed gives the sales `n` and items sold in the window, the `median` per-item price of the stored sales, and `perHour = items / coverage hours`. Below `AH_SALES.minCoverageHours = 2` h of coverage the stats are ignored everywhere: AH rates fall back to `AH_SALES.defaultPerHour = 0.25` items per hour (Kat to `KAT.defaultSellHours = 1` h).
+
+Every AH rate (selling, buying, Kat, AH flips) is your part of the market, `ahRate` in `market.ts`:
+
+```
+ahRate = AH_SALES.defaultPerHour                              without measured sales
+       = max(perHour × share, min(perHour, defaultPerHour))  with them (0 when nothing sold)
+```
+
+Listed one coin under the lowest BIN you are first in line for the next sale, so a measured market is never slower than an unmeasured one unless it really sells less than the default; a busy one gives you your share. The median caps a list price only with conservatism on and at least `AH_SALES.minSales = 3` sales.
 
 The status pill shows the coverage, the item page has an AH sales panel (median sold, sales per hour, coverage), and Settings → Data shows the store's size with a Clear button.
 
@@ -254,8 +263,8 @@ The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) has two modes.
 ```
 profit per item = ahNet(sellAt × stack) / stack − lowest
 margin          = profit / lowest
-sellHours       = stack / sales per hour   (measured, else AH_SALES.defaultPerHour = 0.25)
-profit/hour     = profit per item × sales per hour
+sellHours       = stack / ahRate   (measured sales, else AH_SALES.defaultPerHour = 0.25)
+profit/hour     = profit per item × ahRate
 ```
 
 Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter is 5). Plain ids and max-level pet keys (`@MAX`, one level per key) are flipped; level-band keys are not. Because one id covers every copy of an item, two flags warn about variants: `AH_VARIANT` for gear and tools (`AH_FLIP.variantCategories`) and for pets other than `@MAX` keys, and `AH_GAP` when the second price is more than `AH_FLIP.gapRatio = 3` times the lowest. Both together make a row suspect, hidden while "Hide suspicious" is on. Without measured sales the sell time is shown as a guess (`~`).
@@ -298,7 +307,7 @@ Items sold in the bits shop cost `min(market price, bits per item × cookieCostP
 2. else the level band `PET;j@L49` / `@L89` / `@L99` when the end level is known (scan v4),
 3. else the plain `PET;j`.
 
-The pet is listed one coin under that key's lowest BIN (`AH_FLIP.undercut`) and, with conservatism on, at no more than its median sold price (at least `AH_SALES.minSales = 3` sales). It sells in `1 / sales per hour` of that key, else `KAT.defaultSellHours = 1` h. The sale pays the AH fees (`ahNet`, ×4 claim tax under Derpy).
+The pet is listed one coin under that key's lowest BIN (`AH_FLIP.undercut`) and, with conservatism on, at no more than its median sold price (at least `AH_SALES.minSales = 3` sales). It sells in `1 / ahRate` of that key's measured sales, else `KAT.defaultSellHours = 1` h. The sale pays the AH fees (`ahNet`, ×4 claim tax under Derpy).
 
 **George floor.** When George pays more for `PET;j` than the AH sale nets, the pet goes to George: his price, no fees, no wait.
 

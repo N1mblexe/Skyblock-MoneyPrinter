@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ahRate } from '../../src/domain/market.ts';
 import { initialState } from '../../src/state/appState.ts';
 import { CALC_SETTINGS, calcSettingsKey, createDerived, georgeFlips, MARKET_SETTINGS, THROUGHPUT_SETTINGS } from '../../src/state/derived.ts';
 import { createStore } from '../../src/state/store.ts';
@@ -181,15 +182,15 @@ describe('createDerived', () => {
     const ah = { fetchedAt: 0, lastUpdated: 0, lowestBin: { HYPERION: { price: 5e8, count: 3 } } };
     const { store, d, history } = setup({ ah, ahSales: sales(2) });
     const core = d.calcCtx()!.core!;
-    expect(core.ahBuy('HYPERION')).toMatchObject({ price: 5e8, rate: 2, count: 3 });
+    expect(core.ahBuy('HYPERION')).toMatchObject({ price: 5e8, rate: ahRate(2, store.get().settings.share), count: 3 });
     d.calcCtx()!.stats!('X');
     store.set({ ah: { ...ah, lowestBin: { HYPERION: { price: 4e8, count: 1 } } } });
     const next = d.calcCtx()!.core!;
     expect(next).not.toBe(core);
     expect(next.ahBuy('HYPERION')).toMatchObject({ price: 4e8, count: 1 });
     expect(core.ahBuy('HYPERION')).toMatchObject({ price: 5e8, count: 3 }); // an old core keeps its own data
-    store.set({ ahSales: sales(5) });
-    expect(d.calcCtx()!.core!.ahBuy('HYPERION')).toMatchObject({ rate: 5 });
+    store.set({ ahSales: sales(200) });
+    expect(d.calcCtx()!.core!.ahBuy('HYPERION')).toMatchObject({ rate: ahRate(200, store.get().settings.share) });
     patch(store, { ahEnabled: false });
     expect(d.calcCtx()!.core!.ahBuy('HYPERION')).toBeNull();
     d.calcCtx()!.stats!('X');
