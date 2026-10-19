@@ -200,4 +200,16 @@ describe('market alerts in the runner', () => {
     expect(store.get().oppAlerts[0]!.hits.map((h) => [h.key, h.kind])).toEqual([['kat:TESTPET;3>4:any', 'kat']]);
     stop();
   });
+
+  it('AH and George flips feed market rules as kind ahflip', () => {
+    const ah = { v: 4, fetchedAt: 0, lastUpdated: 0, lowestBin: { HYPERION: { price: 1e8, next: 3e8, count: 5 }, 'BEE;1': { price: 100, count: 3 } } };
+    const { store, stop } = setup({ alerts: [], catalog: { ...catalog, george: { 'BEE;1': 500 } }, ah });
+    store.set({ oppAlerts: [{ key: 'm', scope: ['ahflip'], metric: 'profit', value: 100, maxRisk: 'caution', enabled: true, seen: [], hits: [] }] });
+    store.set({ snapshot: snapAt(T0) });
+    expect(store.get().oppAlerts[0]!.hits.map((h) => [h.key, h.kind]).sort()).toEqual([
+      ['ahflip:ah:HYPERION', 'ahflip'],
+      ['ahflip:george:BEE;1', 'ahflip'],
+    ]);
+    stop();
+  });
 });

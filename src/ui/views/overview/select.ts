@@ -1,7 +1,8 @@
 // Pure selectors behind the overview cards (lists are already memoized upstream in ctx.derived).
-import { OPTIMIZER, STATS } from '../../../config.ts';
-import { allocate } from '../../../domain/optimizer.ts';
+import { STATS } from '../../../config.ts';
+import { allocate, type AllocateOptions } from '../../../domain/optimizer.ts';
 import type { BookRow, CraftRow, FlipRow, MarketStat, Opportunity, PlanResult, Settings, Snapshot } from '../../../types/contracts.ts';
+import { filterKinds, PLAN_SCHEMA, planOptions as planPageOptions, type PlanQuery } from '../plan/model.ts';
 
 export type MoverWindow = '1h' | '24h';
 
@@ -80,12 +81,20 @@ export function mostConsistent(rows: readonly FlipRow[], stats: ReadonlyMap<stri
   return out.sort((a, b) => b.score - a.score || (a.row.id < b.row.id ? -1 : 1)).slice(0, n);
 }
 
-/** Allocation options the overview uses (same as the planner's defaults). */
-export function planOptions(s: Settings): Parameters<typeof allocate>[1] {
-  return { capital: s.capital, slots: s.orderSlots, maxShare: OPTIMIZER.maxShareOfCapitalPerItem, excludeSuspect: OPTIMIZER.excludeSuspect };
+/** The Plan page's inputs with an empty URL: its default kinds (AH flips left out), settings capital and slots. */
+const PLAN_DEFAULTS = Object.fromEntries(Object.entries(PLAN_SCHEMA).map(([k, f]) => [k, f.def])) as unknown as PlanQuery;
+
+/** Allocation options the overview uses (the planner's defaults); `caps` = the shared markets' capacities. */
+export function planOptions(s: Settings, caps?: Readonly<Record<string, number>>): AllocateOptions {
+  return planPageOptions(PLAN_DEFAULTS, s, caps);
 }
 
-/** Plan for the current opportunities and settings. */
-export function planSummary(opps: readonly Opportunity[], s: Settings): PlanResult {
-  return allocate(opps, planOptions(s));
+/** The opportunities the planner includes by default. */
+export function planOpps(opps: readonly Opportunity[]): readonly Opportunity[] {
+  return filterKinds(opps, PLAN_DEFAULTS);
+}
+
+/** Plan for the current opportunities and settings, as the Plan page shows it with an empty URL. */
+export function planSummary(opps: readonly Opportunity[], s: Settings, caps?: Readonly<Record<string, number>>): PlanResult {
+  return allocate(planOpps(opps), planOptions(s, caps));
 }

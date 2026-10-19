@@ -4,6 +4,7 @@ import { parseOppRule } from '../../src/storage/local.ts';
 import type { OppAlertRule } from '../../src/types/contracts.ts';
 import { computeFlips } from '../../src/domain/flip.ts';
 import { computeCrafts } from '../../src/domain/craft.ts';
+import type { AhFlipRow } from '../../src/domain/ahFlips.ts';
 import type { KatRow } from '../../src/domain/kat.ts';
 import { ctx } from './helpers.ts';
 
@@ -65,6 +66,17 @@ describe('market alerts', () => {
     ]);
     expect(oppMatches(rule({ scope: ['kat'], metric: 'profit', value: 50_000 }), cs)).toHaveLength(2);
     expect(oppMatches(rule({ metric: 'profit', value: 50_000 }), cs)).toHaveLength(0); // flips only
+  });
+
+  it('AH and George flips are candidates of kind ahflip', () => {
+    const r = (key: string) => ({ key, id: key.split(':')[1]!, name: 'Bee', profitPerHour: 50, profit: 400, margin: 4, risk: risk('ok') }) as unknown as AhFlipRow;
+    const cs = oppCandidates({ flips: [], crafts: [], chains: [], books: [], npc: [], kat: [], ahFlips: [r('ah:HYPERION'), r('george:BEE;1')] });
+    expect(cs.map((x) => [x.key, x.kind, x.id])).toEqual([
+      ['ahflip:ah:HYPERION', 'ahflip', 'HYPERION'],
+      ['ahflip:george:BEE;1', 'ahflip', 'BEE;1'],
+    ]);
+    expect(oppMatches(rule({ scope: ['ahflip'], metric: 'profit', value: 100 }), cs)).toHaveLength(2);
+    expect(parseOppRule({ key: 'a', scope: ['ahflip'], metric: 'profit', value: 1 })!.scope).toEqual(['ahflip']);
   });
 
   it('stored rules: invalid fields dropped, defaults filled', () => {

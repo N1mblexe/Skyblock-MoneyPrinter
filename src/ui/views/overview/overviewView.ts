@@ -2,14 +2,16 @@
 import { AH_SALES, LS_VIEWPREFS, OPTIMIZER, STATS } from '../../../config.ts';
 import { msgText, onLangChange, t } from '../../../i18n/index.ts';
 import { isPetMaxKey } from '../../../domain/ahFlips.ts';
-import type { AppState, PlanResult, Route, View, ViewContext } from '../../../types/contracts.ts';
+import { createPlanClient, type PlanClient } from '../../../state/planClient.ts';
+import type { AppState, Opportunity, PlanResult, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
 import { fmtAge, fmtCoins, fmtCompact, fmtInt, fmtNum, fmtPct } from '../../format.ts';
 import { bindQueryState, type QuerySchema, type QueryState, type QueryValues } from '../../kit/index.ts';
 import { sparklineSvg } from '../../sparkline.ts';
+import { planCaps } from '../plan/model.ts';
 import { logMessage } from '../watch/alertText.ts';
 import './overview.css';
-import { mostConsistent, movers, planSummary, topBooks, topCrafts, topFlips, type Mover, type MoverWindow } from './select.ts';
+import { mostConsistent, movers, planOpps, planOptions, topBooks, topCrafts, topFlips, type Mover, type MoverWindow } from './select.ts';
 
 const SCHEMA = {
   mw: { kind: 'enum', def: '1h', values: ['1h', '24h'] },
@@ -65,7 +67,9 @@ export function createOverviewView(): View {
   const cardEls = new Map<CardKey, CardEls>();
   /** last body HTML per card */
   const bodyHtml = new Map<CardKey, string>();
-  let planMemo: { opps: unknown; capital: number; slots: number; plan: PlanResult } | null = null;
+  /** the plan shown (null until the first one is in) and the inputs it was asked for */
+  let planMemo: { opps: readonly Opportunity[]; capital: number; slots: number; plan: PlanResult | null } | null = null;
+  let client: PlanClient | null = null;
   let segBtns: HTMLButtonElement[] = [];
   let segGroup: HTMLElement;
   let els: { title: HTMLElement; intro: HTMLElement; banner: HTMLElement };
@@ -81,11 +85,23 @@ export function createOverviewView(): View {
     return null;
   }
 
-  function plan(): PlanResult {
+  /**
+   * The planner's default plan, from the plan worker: null while the first one computes (a newer one replaces the
+   * shown plan when it is in, and the card re-renders).
+   */
+  function plan(): PlanResult | null {
     const s = st();
     const opps = ctx.derived.opportunities();
-    if (!planMemo || planMemo.opps !== opps || planMemo.capital !== s.settings.capital || planMemo.slots !== s.settings.orderSlots) {
-      planMemo = { opps, capital: s.settings.capital, slots: s.settings.orderSlots, plan: planSummary(opps, s.settings) };
+    const { capital, orderSlots: slots } = s.settings;
+    if (!planMemo || planMemo.opps !== opps || planMemo.capital !== capital || planMemo.slots !== slots) {
+      const req = (planMemo = { opps, capital, slots, plan: planMemo?.plan ?? null });
+      let sync = true;
+      client?.request(planOpps(opps), planOptions(s.settings, planCaps(ctx.derived.calcCtx(), opps)), (res) => {
+        if (planMemo !== req) return;
+        req.plan = res;
+        if (!sync) schedule();
+      });
+      sync = false;
     }
     return planMemo.plan;
   }
@@ -205,6 +221,7 @@ export function createOverviewView(): View {
         if (nr) return nr;
         const p = plan();
         const s = st().settings;
+        if (!p) return empty(t('plan.computing'));
         if (!p.allocations.length) return empty(t('overview.e_plan'));
         const top = [...p.allocations].sort((a, b) => b.profitPerHour - a.profitPerHour).slice(0, 3);
         return (
@@ -399,6 +416,7 @@ export function createOverviewView(): View {
       root = el;
       ctx = c;
       planMemo = null;
+      client = createPlanClient();
       cardEls.clear();
       bodyHtml.clear();
       qs = bindQueryState(SCHEMA, route, ctx.setQuery, LS_VIEWPREFS + 'overview');
@@ -455,6 +473,8 @@ export function createOverviewView(): View {
     },
     unmount() {
       for (const fn of cleanups.splice(0)) fn();
+      client?.dispose();
+      client = null;
       cardEls.clear();
       bodyHtml.clear();
       segBtns = [];
