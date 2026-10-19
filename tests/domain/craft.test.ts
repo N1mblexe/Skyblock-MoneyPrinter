@@ -475,8 +475,8 @@ describe('computeCrafts sources, sale venues and planner inputs', () => {
     expect(r.lines[0]!.craftsPerHour).toBeCloseTo(AH_SALES.defaultPerHour / 2, 12);
     expect(r.tp.limitedBy).toBe('ahSales');
     expect(r.risk.flags).toEqual([]);
-    // measured sales: 50/h -> 25 crafts/h, but the 3 listings seen hold 1.5 crafts per batch; 2 crafts walk all 3
-    const sales = (id: string): AhSalesStat | null => (id === 'RARE' ? { n: 60, items: 60, median: 110, perHour: 50, coverageHours: 10, last: 0 } : null);
+    // measured sales: 1000/h x 0.05 share = 50/h -> 25 crafts/h, but the 3 listings seen hold 1.5 crafts per batch; 2 crafts walk all 3
+    const sales = (id: string): AhSalesStat | null => (id === 'RARE' ? { n: 60, items: 60, median: 110, perHour: 1000, coverageHours: 10, last: 0 } : null);
     const fast = run({}, { ahSales: sales }).get('TOP#0')!;
     expect(fast.tp).toMatchObject({ limitedBy: 'depth', batchQty: 1.5 });
     expect(fast.lines[0]!.unit).toBeCloseTo((100 + 120 + 200) / 3, 9);

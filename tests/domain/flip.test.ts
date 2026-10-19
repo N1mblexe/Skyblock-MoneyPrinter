@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { computeFlips, planFlip } from '../../src/domain/flip.ts';
+import { coreOf } from '../../src/domain/market.ts';
 import type { CalcCtx } from '../../src/types/contracts.ts';
 import { ctx, makeProduct, P, stats } from './helpers.ts';
 
@@ -120,6 +121,10 @@ describe('computeFlips', () => {
     expect(r.cons!.buyRef).toBe(302.1);
     expect(r.buyAt).toBe(303.1);
     expect(byId.get('ENCHANTED_MELON')!.cons).toBeUndefined();
+  });
+
+  it('risk is checked on the sides a flip uses (a profitable flip always buys by order)', () => {
+    expect(byId.get('ENCHANTED_MELON')!.risk).toEqual(coreOf(ctx()).risk('ENCHANTED_MELON', { buy: 'order', sell: 'offer' }));
   });
 
   it('uses stats for risk when provided', () => {

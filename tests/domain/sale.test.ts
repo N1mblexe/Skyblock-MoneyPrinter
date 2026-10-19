@@ -119,9 +119,10 @@ describe('saleQuotes: AH', () => {
     expect(saleQuotes(sctx(), 'UNKNOWN')[0]!.next).toBeUndefined();
   });
 
-  it('the measured sales rate x share once coverage reaches AH_SALES.minCoverageHours', () => {
+  it('the measured sales rate x share (at least the next sale) once coverage reaches AH_SALES.minCoverageHours', () => {
     const rate = (s: AhSalesStat | null) => saleQuotes(sctx({}, { ahSales: () => s }), 'SWORDY')[0]!.rate;
-    expect(rate(sales())).toBeCloseTo(2 * baseSettings.share, 12);
+    expect(rate(sales())).toBe(Math.min(2, AH_SALES.defaultPerHour));
+    expect(rate(sales({ perHour: 100 }))).toBeCloseTo(100 * baseSettings.share, 12);
     expect(rate(sales({ perHour: null }))).toBe(AH_SALES.defaultPerHour);
     expect(rate(sales({ coverageHours: AH_SALES.minCoverageHours - 1 }))).toBe(AH_SALES.defaultPerHour);
     expect(rate(null)).toBe(AH_SALES.defaultPerHour);

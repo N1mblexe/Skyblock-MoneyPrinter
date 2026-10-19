@@ -7,6 +7,7 @@ import { AH, AH_FLIP, AH_SALES } from '../config.ts';
 import type { AhPrice, AhSalesStat, AhSnapshot, Catalog, PlanInputs, ProfitSegment, RiskReport } from '../types/contracts.ts';
 import { ahListingFee, ahNet } from './pricing.ts';
 import { reportFromFlags } from './risk.ts';
+import { ahRate } from './market.ts';
 import { ahFlags } from './sale.ts';
 
 /** 'ah': relist on the AH under the second-lowest BIN; 'george': sell to George. */
@@ -82,6 +83,8 @@ export interface AhFlipOptions {
   sales?: (id: string) => AhSalesStat | null;
   /** settings.conservative: relist at no more than the median sold price (once AH_SALES.minSales sales are seen) */
   conservative?: boolean;
+  /** settings.share: your part of the measured sales (ahRate); 1 when absent */
+  share?: number;
 }
 
 /** salesOf's rule without a context: a stat counts once the feed has covered AH_SALES.minCoverageHours. */
@@ -96,8 +99,8 @@ const nameOf = (id: string, a: AhPrice, catalog: Catalog, pet: boolean): string 
 /**
  * Profitable lowest → second-lowest BIN flips of a scan (needs scan v2: next prices). Prices are per item (scan v4
  * divides stacks); you buy the cheapest listing whole and relist it, so the fees are taken on the stack. Plain ids and
- * `@MAX` keys are flipped; level-band keys (`@L49` ...) are skipped. The sale takes stack / (measured sales per hour,
- * else AH_SALES.defaultPerHour) hours: as the lowest BIN you sell to the next buyer.
+ * `@MAX` keys are flipped; level-band keys (`@L49` ...) are skipped. The sale takes stack / ahRate(measured sales per hour,
+ * share) hours: as the lowest BIN you sell to the next buyer.
  */
 export function computeAhFlips(ah: AhSnapshot, catalog: Catalog, o: AhFlipOptions = {}): AhFlipRow[] {
   const rows: AhFlipRow[] = [];
@@ -122,7 +125,7 @@ export function computeAhFlips(ah: AhSnapshot, catalog: Catalog, o: AhFlipOption
     const flags = ahFlags(a, catalog, id);
     if (pet && !maxLevel && !flags.includes('AH_VARIANT')) flags.push('AH_VARIANT');
     const perHour = sales?.perHour != null && sales.perHour > 0 ? sales.perHour : null;
-    const rate = perHour ?? AH_SALES.defaultPerHour;
+    const rate = ahRate(perHour, o.share ?? 1);
     const sellHours = stack / rate;
     const listingFee = ahListingFee(sellAt * stack) / stack;
     const row: AhFlipRow = {
