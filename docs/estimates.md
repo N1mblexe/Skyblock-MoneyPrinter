@@ -414,44 +414,110 @@ Fusion fees: the fee per fusion (`FUSION_FEE_COINS`) is added to each fusion's c
 
 ## Planner (optimizer)
 
-The planner chooses how many units of each opportunity to run per cycle.
+The planner (`allocate` in `src/domain/optimizer.ts`) chooses how many units of each opportunity to run per cycle.
 
-**Inputs.** Profitable flips, priced crafts, craft chain moves, book combines, NPC flips and Kat upgrade runs. Fusion, shop and bits rows are not included. For each one:
+**Inputs.** `toOpportunities` turns rows into opportunities:
 
-- `unitCost` = buy cost per unit, doubled under the pipelined fill model (not when one leg is instant, such as an NPC sale or a Kat run's BIN buy);
-- `maxUnits` = the batch size the market allows, with the capital bound removed. If a row's batch was limited by capital, it is scaled back up to `batchQty / fillHours × cycleHours`;
-- profit per hour per allocated unit = `profitPerUnit × unitsPerHour / maxUnits`, linear up to `maxUnits`;
-- slots = the order slots used at `maxUnits`. This is fixed per pick, even if fewer units are allocated.
+- flips, priced crafts and forges (shop trades count as crafts), craft chain moves, book combines, NPC flips, Kat upgrade runs;
+- AH relist flips and George flips as kind `ahflip`. That kind is off by default (`AH_FLIP.plannerDefault`), and the Plan page can switch it on;
+- fusion, NPC shop rows and bits offers are not included.
 
-A Kat run is one unit: `unitCost` = buy + upgrade cost, `maxUnits = 1`, `unitsPerHour = 1 / hours`, no order slots, and it counts as AH-sold (the planner's AH toggle leaves it out).
+Each opportunity takes its row's planner inputs as they are (`row.plan`, see Throughput):
 
-**Objective.** Maximize total profit per hour.
+- `unitCost`: the coins tied up per unit (doubled under pipelined, except for an instant leg);
+- `maxUnits`: the most units per cycle the markets allow, with capital and slots unbounded;
+- `unitsPerHour`;
+- `profitPerUnit`;
+- the order units of each order leg;
+- the markets it draws on (`uses`);
+- for a row with an insta leg or a George flip, a concave profit curve (`segments`).
+
+Profit per hour of an allocated unit is `profitPerUnit × unitsPerHour / maxUnits`. A curve is integrated piece by piece. A curve that turns unprofitable is cut at its last profitable segment, and `maxUnits` ends there.
+
+A Kat run is one unit:
+
+- `unitCost` = buy + upgrade cost, `maxUnits = 1`, `unitsPerHour = 1 / hours`, no order slots;
+- it counts as AH-sold, as do AH-valued crafts and AH relist flips. The Plan page's AH toggle leaves AH-sold opportunities out.
+
+**Objective.** Maximize `Σ profit/hour × riskWeight[level] − attention × positions`:
+
+- `OPTIMIZER.riskWeight`: ok 1, caution 0.8, suspect 0.5;
+- `attention`: coins per hour charged per open position. The default is `OPTIMIZER.attentionPerPosition = 0`, and the Plan page has an input for it. A higher value favours fewer, bigger positions.
+
+The plan reports the unweighted profit per hour.
 
 **Constraints.**
 
 - total capital ≤ capital (0 = unlimited);
-- total order slots ≤ order slots;
+- order slots ≤ order slots, counted at the allocated units: each order leg takes `ceil(u × k / MAX_ORDER_UNITS)`, where `k` is its order units per unit;
+- each shared market's draw (`Σ units × perUnit` over every pick that uses it) ≤ its capacity per cycle (`resourceCaps`):
+
+  | market | capacity per cycle |
+  |---|---|
+  | `X:bid` | X's insta-sells per hour × share × trend × `cycleHours` (it fills your buy orders and takes your insta-sells) |
+  | `X:ask` | X's insta-buys per hour × share × trend × `cycleHours` |
+  | `X:npc` | `npcDailyLimit / 24 × cycleHours` |
+  | `forge` | `forgeSlots × cycleHours` (slot-hours) |
+
+  The trend is the side's volume trend clamped to `CONSERVATIVE.trendClamp`. It applies only with `conservative` on and at least `CONSERVATIVE.minPoints` history points; otherwise it is 1. So a flip and a craft that both buy X by order share X's insta-sell flow instead of each counting all of it.
 - capital in one item id ≤ `maxShare × capital`, where `maxShare` defaults to `OPTIMIZER.maxShareOfCapitalPerItem = 0.5`;
-- at most one opportunity per item id, and at most one Kat run in total: Kat holds one pet, so every Kat opportunity shares one group (`Opportunity.group = 'kat'`), which the allocator treats like an id;
-- suspect rows are excluded unless you turn that off (`OPTIMIZER.excludeSuspect = true`).
+- at most one opportunity per item id, and at most one Kat run in total. Kat holds one pet, so every Kat opportunity shares one group (`group = 'kat'`), which the allocator treats like an id;
+- suspect opportunities are left out unless you turn that off (`OPTIMIZER.excludeSuspect = true`).
 
-The planner page can override capital, slots and max share, and choose which kinds to include.
+The Plan page can override capital, slots, max share and the attention cost, and choose which kinds to include. Each row's "why" names the limit that stopped it growing:
 
-**Algorithm.** Every candidate set is filled greedily by profit per hour per coin, in whole units, with the last pick taking whatever capital is left. The sets come from three starts:
+- `volume`: `maxUnits`;
+- `share`: the per-item cap;
+- `market`: a market shared with other picks is drawn to its capacity, and the row names it;
+- `slots`;
+- `capital`.
 
-1. density greedy: add candidates in order of profit per hour per coin;
-2. standalone greedy: add the 200 candidates with the highest profit per hour if each had the whole budget to itself;
-3. Lagrangian: price capital at λ coins per hour per coin for 33 values of λ (0 and 32 densities spread across the candidates). For each λ, pick the best one-per-id set under the slot limit by dynamic programming (a group knapsack over slots).
+**Algorithm.**
 
-Each start is then improved by local search: add one or swap one for one, drop one and refill, then swap one and refill. The search works on a pool of the top 200 candidates by density and the top 200 by standalone value, and stops after 3,000,000 steps. The best result wins. Ties are broken by key, so the result is deterministic.
+- *Pieces.* Each opportunity's segments become pieces, with profit per unit non-increasing along them (sub-candidates). A pick never takes a later, cheaper piece before an earlier one.
+- *fill(set).* Fills one candidate set:
+  1. Every member reserves the slots of one unit.
+  2. The pieces take integer units in order of weighted profit per hour per coin.
+  3. When a shared market is over-asked by the members at their caps, the pieces go by weighted profit per hour per *priced* unit instead. Each short constraint (that market, and capital when it is short too) is priced at demand / supply², per unit drawn, so the market goes to whoever earns most from it.
+  4. Each piece takes what capital, its markets and the spare slots allow.
+
+  A pick that no longer fits whole shrinks to what fits instead of dropping out.
+- *Three starts.*
+  1. Density greedy: whole picks in order of profit per hour per coin.
+  2. Standalone-value greedy: the 200 candidates worth most with the whole budget to themselves.
+  3. Lagrangian: price capital at λ coins per hour per coin. Each candidate is worth its pieces that still pay (`profit/h − λ × unitCost > 0`), less the attention cost. The best slot-feasible one-per-group set is a group knapsack over the one-unit slots. λ is bisected over `OPTIMIZER.lambdaIters = 40` steps until the set's capital demand meets the capital, and every distinct set found is evaluated with fill(). λ = 0 when capital never binds.
+- *Local search per start.* Moves, cheapest first: best-improvement add or one-for-one swap; drop one and refill; swap one and refill. The refills cover one-for-many exchanges. The search works on a pool of the top 200 candidates by density and the top 200 by standalone value. Its budget is `min(700,000, 50,000 + 500 × n)` fill steps for `n` candidates, split evenly over the starts; a start that converges early leaves the rest to the later ones.
+
+The best score wins. Ties are broken by key, so the result is deterministic and does not depend on the input order.
+
+**Where it runs.** The Plan page and the Overview's plan summary run `allocate` in a Web Worker (`src/state/planWorker.ts`, driven by `src/state/planClient.ts`):
+
+- one request is in flight at a time;
+- a newer request replaces one that is waiting, and stale answers are dropped;
+- the opportunities array is posted to the worker only when it changes;
+- without a Worker (tests, old browsers), or after a worker error, plans run inline.
 
 **Quality, as tested** (`tests/domain/optimizer.test.ts`):
 
-- On 200 seeded random instances, the plan is always feasible and reaches at least 0.9 × the brute-force optimum.
+- On 200 seeded random instances the plan is always feasible and reaches at least 0.9 × the brute-force optimum.
+- On 150 instances with shared markets, slots counted at the units and an attention cost, it reaches at least 0.9 × the exact optimum.
+- A flip and a craft on the same market together stay within its capacity.
+- A pick shrinks to the slots left rather than dropping out.
+- Concave curves fill their cheaper slices first.
 - It is exact when slots are unlimited, `maxShare = 1`, ids are distinct and every unit costs the same.
-- Grouped picks (Kat) never break the one-per-group rule, and with unlimited capital and slots the plan matches brute force.
+- Grouped picks (Kat) never break the one-per-group rule and match brute force on small instances.
+- 3,000 opportunities over 400 shared markets plan in under 3 s.
 
 With different unit costs the integer problem is NP-hard, so 0.9 is the bound the tests guarantee there.
+
+**Effect on the fixtures** (`npm run bench -- --report`, default settings):
+
+| plan | before round s | now, shared-market capacities ignored | now |
+|---|---|---|---|
+| 5M capital | 6,119,407/h, 8 positions | 7,233,707/h, 15 positions | 6,445,662/h, 9 positions |
+| 1e9 capital | 14,545,720/h, 13 positions | 17,733,388/h, 27 positions | 15,617,813/h, 26 positions |
+
+The shared-market capacities take about 11 % off the plan, because picks no longer each count the whole of a market they share.
 
 ## Market stats
 

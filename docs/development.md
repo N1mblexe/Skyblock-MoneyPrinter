@@ -23,9 +23,9 @@ If live fetching fails, there are two fallbacks:
 | `npm run coverage` | Tests with v8 coverage. Thresholds: `src/domain` 95 % lines and 90 % branches; `src/{storage,state,api,ui/kit}` 85 % lines |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run data` | Rebuilds `public/data/catalog.json` from the NEU repo, the Hypixel items API, the bazaar product list and `scripts/data/book-rules.json`. `npm run data -- --offline` reads only the cache and fetches nothing |
-| `npm run bench` | Times every `compute*` function, `toOpportunities` and `allocate` on the smoke fixtures (full bazaar, the real catalog, the fixture AH page) with default settings, and prints the median of 7 runs in ms. `-- --runs N` changes the run count, `-- --report` also prints the top 10 flips, crafts, books and NPC flips and the plan's profit per hour at the default capital and at 1e9 (to compare a model change before and after), `-- --json out.json` saves both |
-| `npm run sanity` | Runs the domain layer against the live bazaar and the generated catalog, and checks the results. `npm run sanity -- --offline` reads the cached bazaar instead |
-| `npm run smoke` | Headless browser test of the built app (run `npm run build` first). It serves fixture data by default; `npm run smoke -- --live` uses the real API. It finds Chromium through `CHROME_PATH` or Playwright's cached browser |
+| `npm run bench` | Times every `compute*` function, `toOpportunities`, `resourceCaps` and `allocate` on the smoke fixtures (full bazaar, the real catalog, the fixture AH page and sales feed) with default settings, on the same contexts `src/state/derived.ts` builds (a fresh market core per run), and prints the median of 7 runs in ms. `-- --runs N` changes the run count. `-- --report` also prints the top 10 flips, crafts, books and NPC flips, the plan's profit per hour at the default capital and at 1e9 (with and without the shared-market capacities) and a few model facts, to compare a model change before and after. `-- --json out.json` saves both |
+| `npm run sanity` | Runs the domain layer against the live bazaar and the generated catalog, and checks the results: flips, priced crafts and shop trades, finite rates for AH-sold crafts (with the fixture AH page), order slots on book combines, NPC flips, the catalog. `npm run sanity -- --offline` reads the cached bazaar instead |
+| `npm run smoke` | Headless browser test of the built app (run `npm run build` first). It serves fixture data by default; `npm run smoke -- --live` uses the real API. It finds Chromium through `CHROME_PATH` or Playwright's cached browser. Every count and the plan's profit per hour are computed at startup with the domain code on the contexts `derived.ts` builds, so no number in it is hand-picked; it also checks the AH sales feed (requests, status pill, Settings → Data) and that turning `conservative` off without history changes nothing |
 | `npm run screenshots` | Captures the README screenshots into `docs/images/` (run `npm run build` first). Uses the smoke fixtures, English UI, dark and light theme, and example data for the Sell or craft? and Trades pages |
 | `npm run icons` | Renders `public/icons/icon.svg` to the PNG app icons (192, 512, maskable 512, 180 for iOS) |
 | `npm run pwa:check` | Offline check of the installable app: loads the Pages build once, stops the server, reloads (run `GITHUB_PAGES=1 npm run build` first) |
@@ -105,6 +105,26 @@ Each bazaar snapshot is recorded to history first and then stored with one store
 - **throughput settings** (capital, order slots, forge slots, fill model) only re-plan rows on the same core; the craft pricer's ingredient memo lives on the core and is kept too.
 
 Flips, books, NPC flips and fusion read only the bazaar and NPCs, so an AH update doesn't recompute them. Display settings (language, theme, density, notifications, hide suspicious, auto refresh) recompute nothing. `npm run bench` times the compute functions.
+
+## Bench: round s before and after
+
+Here is `npm run bench -- --report` at the start of round s (c870e2a, 556 recipes) and at its end (1,845 recipes), on the same fixtures and default settings. Timings are medians of 15 runs on a loaded machine, so a few ms either way is noise.
+
+| | before | after |
+|---|---|---|
+| flips / books / NPC flips | 9.2 / 5.1 / 5.4 ms | 10.8 / 5.2 / 2.7 ms |
+| crafts / chains | 5.8 / 2.3 ms | 26.9 / 2.8 ms (3.3× the recipes) |
+| toOpportunities (+ resourceCaps, new) | 1.4 ms | 2.8 + 4.8 ms |
+| allocate | 80.5 ms | 69.5 ms |
+| one recompute, all of the above | 111 ms | 128 ms |
+| recomputes per snapshot | 2 (snapshot, then `historyTick`) | 1 |
+| plan at 5M | 6,119,407/h, 8 positions | 6,445,662/h, 9 positions |
+| plan at 1e9 | 14,545,720/h, 13 positions | 15,617,813/h, 26 positions |
+| book combines with order slots | 0 of 224 | 227 of 227 |
+| NPC → bazaar capital per unit under pipelined | 2 × buy | 1 × buy |
+| AH-sold crafts with an infinite rate | 1 of 1 | 0 of 7 (0.25/h until sales are measured) |
+
+Without the shared-market capacities, the plan would be 7,233,707/h at 5M and 17,733,388/h at 1e9 (see Planner in [estimates.md](estimates.md)).
 
 ## Layout
 
