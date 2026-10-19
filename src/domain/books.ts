@@ -55,6 +55,8 @@ export function computeBookCombines(ctx: CalcCtx): BookRow[] {
     leg.rate = s.rate / count;
     if (s.depth != null) leg.depth = s.depth / count;
     leg.units = count;
+    // churn is per input book like the price (buyRef stays per book, as buyAt)
+    if (s.cons?.churn != null) leg.cons = { ...s.cons, churn: s.cons.churn * count };
     return leg;
   };
 

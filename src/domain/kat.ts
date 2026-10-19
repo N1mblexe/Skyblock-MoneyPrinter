@@ -16,7 +16,7 @@ import { reportFromFlags } from './risk.ts';
 /** Rarity names by index (PetLeveling.offsets keys); game data, so not translated. */
 export const KAT_RARITIES = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'] as const;
 
-/** Hours assumed to sell the upgraded pet without measured AH sales (alias of KAT.defaultSellHours). */
+/** Hours assumed to sell the upgraded pet without measured AH sales, 1 / AH_SALES.defaultPerHour (alias of KAT.defaultSellHours). */
 export const KAT_TRADE_HOURS = KAT.defaultSellHours;
 
 /** AH scan version Kat rows need (pet `exp` and the `@MAX` keys): the page and derived.kat() both gate on it. */
@@ -115,8 +115,9 @@ export interface KatRow {
   /** what the sale leaves after the AH listing fee and claim tax (George: his price) */
   sellNet: number;
   sellCount: number;
-  /** hours to sell: 1 / measured sales per hour of sellKey, else KAT.defaultSellHours; 0 for George */
+  /** hours to sell: 1 / ahRate of sellKey's measured sales, else KAT.defaultSellHours; 0 for George */
   sellHours: number;
+  /** sellKey's measured AH sales per hour (0: none sold, so no AH sale); null while unmeasured */
   salesPerHour: number | null;
   /** George's price for the upgraded pet, null when he has none */
   george: number | null;
@@ -387,8 +388,10 @@ interface Sale {
 /**
  * The sale of a pet at `level` and rarity `to`: the most specific AH key listed (`@MAX` at max level, else the scan v4
  * level band when the level is known, else the plain key), listed AH_FLIP.undercut under its lowest BIN and, with
- * conservatism on, at no more than the median sold; it takes 1 / (measured sales per hour) hours, else
- * KAT.defaultSellHours. George's price floors it: when he pays more than the AH nets, the pet goes to him at once.
+ * conservatism on, at no more than the median sold; it takes 1 / ahRate hours (measured sales, else
+ * AH_SALES.defaultPerHour: KAT.defaultSellHours). A key that sold nothing over the coverage has no AH sale (price 0:
+ * unpriced unless George buys it). George's price floors it: when he pays more than the AH nets, the pet goes to him
+ * at once.
  */
 function saleOf(ctx: CalcCtx, x: RowInput, maxLevel: number): Sale {
   const ah = ctx.ah!;
@@ -408,8 +411,10 @@ function saleOf(ctx: CalcCtx, x: RowInput, maxLevel: number): Sale {
     }
   }
   const sales = salesOf(ctx, sellKey);
-  const perHour = sales?.perHour != null && sales.perHour > 0 ? sales.perHour : null;
-  let price = listing && listing.price > 0 ? Math.max(0, listing.price - AH_FLIP.undercut) : 0;
+  const perHour = sales?.perHour ?? null;
+  const rate = ahRate(perHour, ctx.settings.share);
+  // measured 0: the pet doesn't sell on the AH
+  let price = listing && listing.price > 0 && rate > 0 ? Math.max(0, listing.price - AH_FLIP.undercut) : 0;
   let ref: number | undefined;
   if (price > 0 && ctx.settings.conservative && sales && sales.n >= AH_SALES.minSales && sales.median > 0 && sales.median < price) {
     ref = price;
@@ -420,7 +425,7 @@ function saleOf(ctx: CalcCtx, x: RowInput, maxLevel: number): Sale {
   const net = price > 0 ? ahNet(price, ctx.derpy) : 0;
   const base = { sellKey, count: listing?.count ?? 0, salesPerHour: perHour, george };
   if (george != null && george > net) return { ...base, venue: 'george', price: george, net: george, hours: 0, listing: null };
-  const sale: Sale = { ...base, venue: 'ah', price, net, hours: perHour != null ? 1 / ahRate(perHour, ctx.settings.share) : KAT.defaultSellHours, listing: price > 0 ? listing : null };
+  const sale: Sale = { ...base, venue: 'ah', price, net, hours: rate > 0 ? 1 / rate : 0, listing: price > 0 ? listing : null };
   if (ref != null) sale.ref = ref;
   return sale;
 }

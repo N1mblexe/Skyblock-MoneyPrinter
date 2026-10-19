@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { AH_FLIP, KAT } from '../../src/config.ts';
+import { AH_FLIP, AH_SALES, KAT } from '../../src/config.ts';
 import {
   computeKatFlips,
   expForLevel,
@@ -453,6 +453,20 @@ describe('computeKatFlips', () => {
     expect(byKey(run({ ...base, sales: { 'OCELOT;4': stat({ perHour: null }) } }), 'OCELOT;3>4:max').sellHours).toBe(KAT.defaultSellHours);
     const thin = byKey(run({ ...base, sales: { 'OCELOT;4': stat({ coverageHours: 1 }) } , settings: cons }), 'OCELOT;3>4:max');
     expect(thin).toMatchObject({ sell: 5_999_999, sellHours: KAT.defaultSellHours, salesPerHour: null });
+    // the unmeasured sale is the next sale at the default rate, as ahRate
+    expect(KAT.defaultSellHours).toBe(1 / AH_SALES.defaultPerHour);
+    expect(KAT_TRADE_HOURS).toBe(KAT.defaultSellHours);
+  });
+
+  it('a sell key that sold nothing over the coverage has no AH sale: unpriced, unless George buys it', () => {
+    const none: AhSalesStat = { n: 0, items: 0, median: 0, perHour: 0, coverageHours: 6, last: 0 };
+    const r = byKey(run({ ...base, sales: { 'OCELOT;4': none } }), 'OCELOT;3>4:max');
+    expect(r).toMatchObject({ sellVenue: 'ah', sell: 0, sellNet: 0, salesPerHour: 0, profit: 0, profitPerHour: 0 });
+    expect(r.unpriced).toEqual(['OCELOT;4']);
+    expect(r.plan.profitPerUnit).toBe(0);
+    for (const k of ['hours', 'sellHours', 'profitPerHour'] as const) expect(Number.isFinite(r[k])).toBe(true);
+    const g = byKey(run({ ...base, sales: { 'OCELOT;4': none }, george: { 'OCELOT;4': 4_000_000 } }), 'OCELOT;3>4:max');
+    expect(g).toMatchObject({ sellVenue: 'george', sell: 4_000_000, sellHours: 0, unpriced: [] });
   });
 
   it("George's price floors the sale: sold to him at once, any level", () => {

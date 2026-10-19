@@ -11,7 +11,7 @@ import { chainGraph, priceMove } from './chains.ts';
 import { sideAdjust } from './conservative.ts';
 import { getPricer } from './craft.ts';
 import { afterTax, sellSide } from './pricing.ts';
-import { bestSale, saleQuotes, type SaleVenue } from './sale.ts';
+import { saleQuotes, type SaleVenue } from './sale.ts';
 
 export type SellMethod = 'insta' | 'offer' | 'npc' | 'ah' | 'craft';
 
@@ -83,8 +83,9 @@ export function rawOptions(ctx: CalcCtx, id: string, qty: number): SellOption[] 
   }
   const ns = catalog.items[id]?.npcSell;
   if (ns != null && ns > 0) push({ method: 'npc', net: ns * qty, hours: 0 });
+  // an AH that sold none over the coverage (rate 0) is no option
   const ah = saleQuotes(ctx, id, { venues: ['ah'] })[0];
-  if (ah) push({ method: 'ah', net: ah.net * qty, hours: hoursAt(qty, ah.rate) });
+  if (ah && ah.rate > 0) push({ method: 'ah', net: ah.net * qty, hours: hoursAt(qty, ah.rate) });
   return out;
 }
 
@@ -116,9 +117,10 @@ export function sellOptions(ctx: CalcCtx, id: string, qty: number): SellResult {
       if (made < 1) continue;
       const sideCost = row.lines.reduce((s, l) => (l.id === id ? s : s + l.total), 0);
       const toId = path.at(-1)!;
-      // the crafted quantity sold at once (an insta-sell walks the book for all of it); the move is priced, so the
-      // top tier has a venue
-      const sale = bestSale(ctx, toId, { qty: made })!;
+      // the crafted quantity sold at once (an insta-sell walks the book for all of it) at the best venue that sells
+      // (not an AH that sold none). Chain steps are crafts of bazaar items: every venue, as the pricer valued it
+      const sale = saleQuotes(ctx, toId, { qty: made }).find((q) => q.rate > 0);
+      if (!sale) continue;
       const used = made * needFrom;
       const leftover = qty - used;
       const net = made * (sale.net - sideCost) + leftover * rawUnit;

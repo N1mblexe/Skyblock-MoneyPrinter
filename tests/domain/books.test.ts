@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { BOOK, MAX_ORDER_UNITS } from '../../src/config.ts';
+import { BOOK, CONSERVATIVE, MAX_ORDER_UNITS } from '../../src/config.ts';
 import { computeBookCombines, parseBookId } from '../../src/domain/books.ts';
 import { effShare } from '../../src/domain/pricing.ts';
 import { assessRisk, combineRisk, INGREDIENT_FLAGS, reportFromFlags } from '../../src/domain/risk.ts';
-import type { BookRule, CalcCtx, Catalog, Product, Snapshot } from '../../src/types/contracts.ts';
+import type { BookRule, CalcCtx, Catalog, MarketStat, Product, Snapshot } from '../../src/types/contracts.ts';
 import { baseSettings, catalog, ctx, makeProduct, stats, type ProductOverrides } from './helpers.ts';
 
 const lvl = (price: number, amount = 5000, orders = 10) => ({ price, amount, orders });
@@ -172,6 +172,31 @@ describe('computeBookCombines', () => {
     expect(big.tp.limitedBy).toBe('slots');
     expect(big.tp.slots).toBeLessThanOrEqual(3);
     expect(big.tp.batchQty * big.count).toBeLessThanOrEqual(2 * MAX_ORDER_UNITS + 1e-6);
+  });
+
+  it('conservatism: the input churn counts per output book, like the input price; buyRef stays per book', () => {
+    // history agrees with the snapshot; only the input's bids move (one re-list per hour)
+    const hist = { stats: (id: string) => stats({ medianBid: snap.products[id]!.bid!, medianAsk: snap.products[id]!.ask! }) };
+    const moves = (id: string): MarketStat => ({
+      id,
+      n: 20,
+      change1h: null,
+      change24h: null,
+      volatility: null,
+      spreadMedian: null,
+      consistency: null,
+      buyVolTrend: null,
+      sellVolTrend: null,
+      bidMovesPerHour: id.startsWith(T) && id !== `${T}_5` ? 1 : 0,
+    });
+    const r = computeBookCombines(bctx({ conservative: true }, { ...hist, market: moves })).find((x) => x.id === `${T}_5`)!;
+    const input = snap.products[r.inputId]!;
+    const order = Math.round((input.bid! + 0.1) * 10) / 10;
+    const churn = Math.max(0.1, CONSERVATIVE.relistStep * order);
+    expect(r.count).toBeGreaterThan(1);
+    expect(r.buyAt).toBeCloseTo(order + churn, 9);
+    expect(r.cost).toBeCloseTo(r.count * (order + churn), 9);
+    expect(r.cons).toEqual({ buyRef: order, churn: expect.closeTo(r.count * churn, 9) });
   });
 
   it('skips inputs that cannot be priced', () => {

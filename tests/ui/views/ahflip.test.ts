@@ -150,14 +150,21 @@ describe('AH flips view', () => {
     const god = q('.ahf-table tbody tr[data-key="ah:GOD_POTION_2"]');
     expect(god.textContent).toContain(fmtHours(0.5));
     expect(god.querySelector('[data-ahf-stack]')).not.toBeNull();
-    expect(q('.ahf-table tbody tr[data-key="ah:HYPERION"]').textContent).toContain(`~${fmtHours(4)}`);
+    // HYPERION sold nothing over the 6 h covered: it doesn't sell
+    expect(q('.ahf-table tbody tr[data-key="ah:HYPERION"]').textContent).toContain(fmtHours(Infinity));
     god.click();
     const panel = q('.kit-panel');
     expect(panel.textContent).toContain(t('ahflip.d_stackNote', { n: '2', total: fmtCoins(2_000_000) }));
     expect(panel.textContent).toContain(t('ahflip.d_medianCap', { ref: fmtCoins(1_399_999) }));
     expect(panel.textContent).toContain(t('ahflip.perHour', { n: fmtNum(80, 2) }));
     q<HTMLElement>('.ahf-table tbody tr[data-key="ah:HYPERION"]').click();
-    expect(panel.textContent).toContain(t('ahflip.d_noSales'));
+    expect(panel.textContent).toContain(t('ahflip.perHour', { n: fmtNum(0, 2) }));
+    // too little coverage: no measured sales, the sell time a marked guess
+    store.set({ ahSales: { v: 1, updatedAt: 0, coverageHours: 1, byId: { GOD_POTION_2: { ...stat, coverageHours: 1 } } } });
+    await flush();
+    expect(q('.ahf-table tbody tr[data-key="ah:HYPERION"]').textContent).toContain(`~${fmtHours(4)}`);
+    q<HTMLElement>('.ahf-table tbody tr[data-key="ah:HYPERION"]').click();
+    expect(q('.kit-panel').textContent).toContain(t('ahflip.d_noSales'));
   });
 
   it('George mode: pets below his price, sold at once; the listing filter does not apply', async () => {

@@ -9,7 +9,7 @@ import { createStore } from '../../../src/state/store.ts';
 import type { AhSalesSnapshot, AhSnapshot, AppState, Catalog, CatalogFile, CraftRow, Settings, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { createCraftView } from '../../../src/ui/views/craft/craftView.ts';
 import { createForgeView } from '../../../src/ui/views/forge/forgeView.ts';
-import { filterChains, filterCrafts, migrateLegacyPrefs, ownFlipMargin, slippage } from '../../../src/ui/views/craft/helpers.ts';
+import { filterChains, filterCrafts, fmtRate, migrateLegacyPrefs, ownFlipMargin, slippage } from '../../../src/ui/views/craft/helpers.ts';
 import { bestPerLadder } from '../../../src/domain/chains.ts';
 
 import bazaarJson from '../../fixtures/bazaar.json';
@@ -439,11 +439,11 @@ describe('craft view', () => {
     await flush();
     expect(keys()).toEqual(expect.arrayContaining([ringKey, tokenKey]));
 
-    // an AH-bought ingredient: listings and the assumed sales rate
+    // an AH-bought ingredient: listings and its sales rate, measured 0 (the feed covered 12 h and saw none sold)
     panel = openRow(ringKey);
     const ing = panel.querySelector('tr.craft-l-in')!;
     expect(ing.querySelector('.badge.src-ah')).not.toBeNull();
-    expect(ing.textContent).toContain(t('craft.ahRateAssumed', { n: '' }).slice(0, 10));
+    expect(ing.textContent).toContain(t('craft.ahRateMeasured', { n: fmtRate(0), h: fmtRate(12) }));
 
     // NPC + bazaar: an NPC-capped ingredient topped up from the bazaar
     const mixRow = ctx.derived.crafts().find((r) => r.unpriced.length === 0 && r.lines.some((l) => l.source === 'mix'));

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { AH_SALES } from '../../src/config.ts';
 import { ahRate } from '../../src/domain/market.ts';
 import { initialState } from '../../src/state/appState.ts';
 import { CALC_SETTINGS, calcSettingsKey, createDerived, georgeFlips, MARKET_SETTINGS, THROUGHPUT_SETTINGS } from '../../src/state/derived.ts';
@@ -200,7 +201,8 @@ describe('createDerived', () => {
   it('ctx.ahSales follows store.ahSales while ahEnabled; a sales update recomputes crafts, not flips', () => {
     const { store, d } = setup({ ahSales: sales(2) });
     expect(d.calcCtx()!.ahSales!('HYPERION')!.perHour).toBe(2);
-    expect(d.calcCtx()!.ahSales!('NOPE')).toBeNull();
+    // the feed covered 3 h: an id it doesn't hold sold nothing
+    expect(d.calcCtx()!.ahSales!('NOPE')).toEqual({ n: 0, items: 0, median: 0, perHour: 0, coverageHours: 3, last: 0 });
     const r = { flips: d.flips(), crafts: d.crafts() };
     store.set({ ahSales: sales(3) });
     expect(d.calcCtx()!.ahSales!('HYPERION')!.perHour).toBe(3);
@@ -211,6 +213,9 @@ describe('createDerived', () => {
     patch(store, { ahEnabled: true });
     store.set({ ahSales: null });
     expect(d.calcCtx()!.ahSales).toBeUndefined();
+    // below AH_SALES.minCoverageHours an absent id is no data
+    store.set({ ahSales: { ...sales(2), coverageHours: AH_SALES.minCoverageHours - 1 } });
+    expect(d.calcCtx()!.ahSales!('NOPE')).toBeNull();
   });
 
   it('ahFlips: memoized on the AH scan, catalog and ahEnabled', () => {
@@ -238,9 +243,12 @@ describe('createDerived', () => {
     const [row] = d.ahFlips();
     expect(row).toMatchObject({ key: 'ah:HYPERION', sellAt: 2e8, sellRef: 3e8 - 1, salesPerHour: 2 });
     expect(d.ahFlips()).toBe(d.ahFlips());
-    expect(d.calcCtx()!.ahSales!('NOPE')).toBeNull();
-    // an id the feed has not seen
+    expect(d.calcCtx()!.ahSales!('NOPE')!.perHour).toBe(0);
+    // an id that sold nothing over the 3 h covered: measured 0, the flip doesn't sell
     store.set({ ah: { ...ah, lowestBin: { ...ah.lowestBin, TERMINATOR: { price: 1e8, next: 3e8, count: 5 } } } });
+    expect(d.ahFlips().find((r) => r.id === 'TERMINATOR')).toMatchObject({ salesPerHour: 0, profitPerHour: 0, sellHours: Infinity });
+    // too little coverage: unmeasured, the default rate
+    store.set({ ahSales: { ...feed, coverageHours: 1 } });
     expect(d.ahFlips().find((r) => r.id === 'TERMINATOR')!.salesPerHour).toBeNull();
     patch(store, { conservative: false });
     expect(d.ahFlips().find((r) => r.id === 'HYPERION')!.sellRef).toBeUndefined();

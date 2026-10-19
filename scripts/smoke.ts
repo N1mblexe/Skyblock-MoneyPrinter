@@ -27,6 +27,7 @@ import { bestPerLadder, computeChains } from '../src/domain/chains.ts';
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeKatFlips, KAT_DERIVED_SKIP } from '../src/domain/kat.ts';
+import { salesLookup } from '../src/domain/market.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
 import { allocate, resourceCaps, toOpportunities } from '../src/domain/optimizer.ts';
 import { matchesQuery, resolveUserInput } from '../src/domain/search.ts';
@@ -193,7 +194,7 @@ function countsFor(settings: Settings, i: Inputs): Counts {
   ).rows.length;
 
   // AH flips page defaults (relist and George modes), with the options derived and the page pass
-  const ahFlips = computeAhFlips(ah, catalog, { derpy, conservative: settings.conservative, share: settings.share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) });
+  const ahFlips = computeAhFlips(ah, catalog, { derpy, conservative: settings.conservative, share: settings.share, ...(sales ? { sales: salesLookup(sales) } : {}) });
   const george = computeGeorgeFlips(ah, catalog, { cycleHours: settings.cycleHours });
   const afq = defaults<AhFlipQuery>(AHFLIP_SCHEMA);
   const ahFlipCount = (rows: AhFlipRow[], minProfit = afq.minProfit) =>

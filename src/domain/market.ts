@@ -3,7 +3,7 @@
 // The core reads only the market settings (taxRate, share, costMode, sellMode, npcDailyLimit, conservative,
 // cycleHours), never capital, orderSlots or fillModel, so one core can serve every throughput setting.
 import { AH_SALES } from '../config.ts';
-import type { AhSalesStat, CalcCtx, ConsInfo, CostMode, RiskReport, SellMode } from '../types/contracts.ts';
+import type { AhSalesSnapshot, AhSalesStat, CalcCtx, ConsInfo, CostMode, RiskReport, SellMode } from '../types/contracts.ts';
 import { walkBook } from './book.ts';
 import { sideAdjust } from './conservative.ts';
 import { afterTax, buySide, effShare, npcBuyRate, sellSide, sideRes, type Leg, type SideInfo } from './pricing.ts';
@@ -35,6 +35,8 @@ export interface AhLeg {
   rate: number;
   /** BIN listings seen */
   count: number;
+  /** listings one batch can buy: the kept prices (scan v4), else every listing seen */
+  depth: number;
 }
 
 export interface MarketCore {
@@ -52,6 +54,16 @@ export interface MarketCore {
 }
 
 const cores = new WeakMap<CalcCtx, MarketCore>();
+
+/**
+ * The ctx.ahSales accessor of a sales summary. The summary only holds ids that sold, so once the feed has covered
+ * AH_SALES.minCoverageHours an id it doesn't hold sold nothing: a zero stat (perHour 0, median 0), not "no data".
+ */
+export function salesLookup(s: AhSalesSnapshot): (id: string) => AhSalesStat | null {
+  const covered = s.coverageHours >= AH_SALES.minCoverageHours;
+  const none: AhSalesStat = { n: 0, items: 0, median: 0, perHour: 0, coverageHours: s.coverageHours, last: 0 };
+  return (id) => s.byId[id] ?? (covered ? none : null);
+}
 
 /** The id's realized AH sales, or null while the feed has covered less than AH_SALES.minCoverageHours. */
 export function salesOf(ctx: CalcCtx, id: string): AhSalesStat | null {
@@ -113,9 +125,10 @@ export function createMarketCore(ctx: CalcCtx): MarketCore {
 
   /**
    * Apply sideAdjust to a snapshot side: price moved (and churn added against you), rate scaled by the volume trend
-   * and, when competitors weighted by amount outnumber the orders, by the smaller share; cons recorded.
+   * and, when competitors weighted by amount outnumber the orders, by the smaller share; cons recorded. A buy order
+   * whose adjusted price (churn included) reaches the ask is an insta-buy: re-quoted (`qty`) and adjusted as one.
    */
-  const adjust = (id: string, side: 'buy' | 'sell', s: SideInfo): CoreSide => {
+  const adjust = (id: string, side: 'buy' | 'sell', s: SideInfo, qty?: number): CoreSide => {
     if (!settings.conservative) return s;
     const p = snap.products[id]!;
     // a buy order capped at the ask is an insta-buy
@@ -123,6 +136,14 @@ export function createMarketCore(ctx: CalcCtx): MarketCore {
     const a = sideAdjust(side, p, s.quote.price, ctx.stats?.(id) ?? null, ctx.market?.(id) ?? null, side === 'buy' ? mode : settings);
     if (!a) return s;
     const price = side === 'buy' ? a.price + a.churn : Math.max(0, a.price - a.churn);
+    if (side === 'buy' && s.quote.source === 'order' && p.ask != null && Number.isFinite(p.ask) && price >= p.ask) {
+      const insta = buySide(p, 'insta', settings.share, qty);
+      if (insta) {
+        const out = adjust(id, 'buy', { ...insta, quote: { ...insta.quote, clamped: 'ask' } });
+        // the move is from the snapshot's order price
+        return out.quote.price !== s.quote.price ? { ...out, cons: { ...out.cons, buyRef: s.quote.price } } : out;
+      }
+    }
     const cons: ConsInfo = {};
     if (price !== s.quote.price) cons[side === 'buy' ? 'buyRef' : 'sellRef'] = s.quote.price;
     if (a.rateMul !== 1) cons.rateMul = a.rateMul;
@@ -147,7 +168,7 @@ export function createMarketCore(ctx: CalcCtx): MarketCore {
       if (hit !== undefined) return hit;
       const p = snap.products[id];
       const s = p ? buySide(p, settings.costMode, settings.share, qty, catalog.items[id]?.npcSell) : null;
-      return buyMemo.set(id, k, s && adjust(id, 'buy', s));
+      return buyMemo.set(id, k, s && adjust(id, 'buy', s, qty));
     },
     sell(id, qty) {
       const k = qtyKey(qty);
@@ -174,9 +195,10 @@ export function createMarketCore(ctx: CalcCtx): MarketCore {
       if (hit !== undefined) return hit;
       const a = ctx.ah?.(id);
       if (!a || !(a.price > 0)) return ahMemo.set(id, k, null);
-      // one listing per kept price (per item, ascending)
+      // one listing per kept price (per item, ascending): a batch can only buy the listings whose price is known
       const w = a.prices?.length ? walkBook(a.prices.map((price) => ({ price, amount: 1, orders: 1 })), qty ?? 1) : null;
-      return ahMemo.set(id, k, { price: w?.avgPrice ?? a.price, rate: ahRate(salesOf(ctx, id)?.perHour, settings.share), count: a.count });
+      const depth = a.prices?.length ? a.prices.length : a.count;
+      return ahMemo.set(id, k, { price: w?.avgPrice ?? a.price, rate: ahRate(salesOf(ctx, id)?.perHour, settings.share), count: a.count, depth });
     },
   };
 }

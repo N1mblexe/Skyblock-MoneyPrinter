@@ -207,8 +207,8 @@ export const KAT = {
   maxTaming: 60,
   /** fewer BIN listings than this on either side adds a thin-market flag */
   minCount: AH.minCount,
-  /** hours assumed to sell the upgraded pet without a measured AH sales rate */
-  defaultSellHours: 1,
+  /** hours assumed to sell the upgraded pet without a measured AH sales rate: the next sale at AH_SALES.defaultPerHour */
+  defaultSellHours: 1 / AH_SALES.defaultPerHour,
 } as const;
 
 /**

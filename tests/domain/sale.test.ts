@@ -126,6 +126,10 @@ describe('saleQuotes: AH', () => {
     expect(rate(sales({ perHour: null }))).toBe(AH_SALES.defaultPerHour);
     expect(rate(sales({ coverageHours: AH_SALES.minCoverageHours - 1 }))).toBe(AH_SALES.defaultPerHour);
     expect(rate(null)).toBe(AH_SALES.defaultPerHour);
+    // nothing sold over the coverage (salesLookup's zero stat): rate 0, and no median cap
+    const none: AhSalesStat = { n: 0, items: 0, median: 0, perHour: 0, coverageHours: 3, last: 0 };
+    const dead = saleQuotes(sctx({ conservative: true }, { ahSales: () => none }), 'SWORDY', { venues: ['ah'] })[0]!;
+    expect(dead).toMatchObject({ rate: 0, gross: 999 });
   });
 
   it('conservatism lists at no more than the median sold price, given enough sales and coverage', () => {
@@ -166,5 +170,9 @@ describe('saleQuotes: ordering and venues', () => {
     expect(bestSale(sctx(), 'B')!.venue).toBe('bazaar');
     expect(bestSale(sctx(), 'SWORDY')!.venue).toBe('ah');
     expect(bestSale(sctx(), 'NOWHERE')).toBeNull();
+    // an AH that sold nothing over the coverage comes after every venue that sells
+    const none = () => ({ n: 0, items: 0, median: 0, perHour: 0, coverageHours: 3, last: 0 });
+    expect(saleQuotes(sctx({}, { ahSales: none }), 'SWORDY').map((q) => q.venue)).toEqual(['npc', 'ah']);
+    expect(bestSale(sctx({}, { ahSales: none }), 'SWORDY', { venues: ['ah'] })).toMatchObject({ venue: 'ah', rate: 0 });
   });
 });
