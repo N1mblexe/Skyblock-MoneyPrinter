@@ -146,6 +146,22 @@ describe('plan client', () => {
     w.onerror!(new Event('error'));
   });
 
+  it('a postMessage that throws (e.g. DataCloneError) answers inline and leaves the client usable', () => {
+    const { w, make, client } = setup();
+    w.postMessage = () => {
+      throw new DOMException('could not be cloned', 'DataCloneError');
+    };
+    const done = vi.fn();
+    client.request(OPPS, opts(100), done);
+    expect(done).toHaveBeenCalledWith(allocate(OPPS, opts(100)));
+    expect(w.terminated).toBe(true);
+    expect(client.busy()).toBe(false);
+    client.request(OPPS, opts(50), done);
+    expect(done).toHaveBeenLastCalledWith(allocate(OPPS, opts(50)));
+    expect(done).toHaveBeenCalledTimes(2);
+    expect(make).toHaveBeenCalledTimes(1);
+  });
+
   it('dispose terminates the worker and drops answers still in flight', () => {
     const { w, client } = setup();
     const done = vi.fn();

@@ -3,8 +3,8 @@
 //
 // One request in flight at a time. A request made while one is in flight waits, and a newer one replaces it (stale
 // requests are dropped and their callbacks never run); the in-flight answer is delivered only when no newer request
-// came in. Without a Worker (tests, old browsers) or after a worker error, plans run inline and the callback runs
-// synchronously.
+// came in. Without a Worker (tests, old browsers) or after a worker error (or a failed postMessage), plans run inline
+// and the callback runs synchronously.
 import { allocate, type AllocateOptions } from '../domain/optimizer.ts';
 import type { Opportunity, PlanResult } from '../types/contracts.ts';
 
@@ -91,7 +91,13 @@ export function createPlanClient(makeWorker: () => Worker | null = defaultWorker
       msg.opps = [...p.opps];
       sent = p.opps;
     }
-    w.postMessage(msg);
+    try {
+      w.postMessage(msg);
+    } catch {
+      // the request can't be posted (e.g. not cloneable): treat it as a broken worker, so this request is answered
+      // inline and later ones don't wait behind a reply that never comes
+      fail();
+    }
   }
 
   function onReply(r: PlanReply): void {

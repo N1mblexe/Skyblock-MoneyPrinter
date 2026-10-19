@@ -227,16 +227,20 @@ export function ingestPage(s: AhSalesState, page: RawEndedPage): (SalesChanges &
   return { put, remove: new Set(), added, skipped };
 }
 
-/** Drop sales, hourly counts and coverage older than `now − AH_SALES.windowMs`; records left empty are removed. */
+/**
+ * Drop sales, hourly counts and coverage older than the cutoff: `now − AH_SALES.windowMs` rounded up to the hour, so
+ * the hourly count straddling it goes as a whole and the coverage is clipped at the same boundary (counts and coverage
+ * span the same time; perHour = items / coverage stays honest). Records left empty are removed.
+ */
 export function pruneState(s: AhSalesState, now: number, into: SalesChanges = { put: new Set(), remove: new Set() }): SalesChanges {
-  const cutoff = now - AH_SALES.windowMs;
+  const cutoff = Math.ceil((now - AH_SALES.windowMs) / HOUR) * HOUR;
   s.windows = s.windows.filter(([, b]) => b > cutoff).map(([a, b]) => [Math.max(a, cutoff), b] as [number, number]);
   for (const [id, r] of s.records) {
     const oldSale = (r.sales[0]?.t ?? Infinity) < cutoff;
-    const oldHour = (r.hours[0]?.[0] ?? Infinity) + HOUR <= cutoff;
+    const oldHour = (r.hours[0]?.[0] ?? Infinity) < cutoff;
     if (!oldSale && !oldHour) continue;
     r.sales = r.sales.filter((x) => x.t >= cutoff);
-    r.hours = r.hours.filter((h) => h[0] + HOUR > cutoff);
+    r.hours = r.hours.filter((h) => h[0] >= cutoff);
     if (!r.hours.length) {
       s.records.delete(id);
       into.put.delete(id);
