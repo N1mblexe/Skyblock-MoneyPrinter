@@ -1,10 +1,11 @@
-// Planner: #/plan. Allocates capital and order slots across opportunities (domain/optimizer allocate()).
-// Inputs live in the URL (bindQueryState); capital / slots / max share fall back to settings / OPTIMIZER.
-// allocate() costs ~80-170 ms on ~3,000 opportunities, so input changes are debounced and results memoized on
-// (opportunities identity, kinds, options).
+// Planner: #/plan. Allocates capital, order slots and shared market volume across opportunities (domain/optimizer
+// allocate()). Inputs live in the URL (bindQueryState); capital / slots / max share / attention fall back to
+// settings / OPTIMIZER. allocate() costs ~50-150 ms on ~3,000 opportunities: it runs in the plan worker
+// (state/planClient.ts), input changes are debounced and results memoized on (opportunities identity, kinds, options).
 import { LS_VIEWPREFS, OPTIMIZER } from '../../../config.ts';
-import { allocate, type AllocateOptions } from '../../../domain/optimizer.ts';
+import type { AllocateOptions } from '../../../domain/optimizer.ts';
 import { msgText, onLangChange } from '../../../i18n/index.ts';
+import { createPlanClient, type PlanClient } from '../../../state/planClient.ts';
 import type { AppState, Opportunity, PlanResult, Route, View, ViewContext } from '../../../types/contracts.ts';
 import { itemCell, riskBadge, riskFlagText } from '../../cells.ts';
 import { esc, h, rafDebounce } from '../../dom.ts';
@@ -20,7 +21,7 @@ import {
   type KitTableHandle,
   type QueryState,
 } from '../../kit/index.ts';
-import { filterKinds, KINDS, PLAN_SCHEMA, planOptions, planRows, sourceHref, type PlanQuery, type PlanRow } from './model.ts';
+import { filterKinds, KINDS, PLAN_SCHEMA, planCaps, planOptions, planRows, sourceHref, type PlanQuery, type PlanRow } from './model.ts';
 import './plan.css';
 
 /** Input debounce before re-running allocate() (ms). */
@@ -49,6 +50,11 @@ export function createPlanView(): View {
   let root: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
   let memo: Memo | null = null;
+  /** the plan requested from the client and not answered yet */
+  let pending: { opps: readonly Opportunity[]; key: string } | null = null;
+  /** the last kind filter (kept so the worker is sent the same array while only the options change) */
+  let filt: { opps: readonly Opportunity[]; key: string; out: readonly Opportunity[] } | null = null;
+  let client: PlanClient | null = null;
   let selected: string | null = null;
   /** rows last handed to the table (skip re-rendering identical results) */
   let shownRows: PlanRow[] | null = null;
@@ -71,12 +77,12 @@ export function createPlanView(): View {
 
   // ---------------------------------------------------------------- compute
   const keyOf = (v: PlanQuery, o: AllocateOptions) =>
-    JSON.stringify([KINDS.map((k) => v[k]), v.ah, o.capital, o.slots, o.maxShare, o.excludeSuspect]);
+    JSON.stringify([KINDS.map((k) => v[k]), v.ah, o.capital, o.slots, o.maxShare, o.excludeSuspect, o.attention]);
 
   function wanted(): { opps: readonly Opportunity[]; v: PlanQuery; opts: AllocateOptions; key: string } {
     const opps = ctx!.derived.opportunities();
     const v = qs.get();
-    const opts = planOptions(v, st().settings);
+    const opts = planOptions(v, st().settings, planCaps(ctx!.derived.calcCtx(), opps));
     return { opps, v, opts, key: keyOf(v, opts) };
   }
 
@@ -85,21 +91,45 @@ export function createPlanView(): View {
     return !memo || memo.opps !== w.opps || memo.key !== w.key;
   };
 
-  function computeNow(): Memo {
+  function filtered(opps: readonly Opportunity[], v: PlanQuery): readonly Opportunity[] {
+    const key = JSON.stringify([KINDS.map((k) => v[k]), v.ah]);
+    if (!filt || filt.opps !== opps || filt.key !== key) filt = { opps, key, out: filterKinds(opps, v) };
+    return filt.out;
+  }
+
+  /**
+   * Ask the plan client for the wanted plan (once per inputs). Returns true when the plan is in `memo` now (inline
+   * client); otherwise `memo` is set, and the view redrawn, when the worker answers.
+   */
+  function compute(): boolean {
     const w = wanted();
-    if (memo && memo.opps === w.opps && memo.key === w.key) return memo;
-    const filtered = filterKinds(w.opps, w.v);
-    const res = allocate(filtered, w.opts);
-    memo = {
-      opps: w.opps,
-      key: w.key,
-      opts: w.opts,
-      filtered,
-      res,
-      rows: planRows(res, w.opts),
-      suspectN: w.opts.excludeSuspect ? filtered.reduce((n, o) => n + (o.risk.level === 'suspect' ? 1 : 0), 0) : 0,
-    };
-    return memo;
+    if (memo && memo.opps === w.opps && memo.key === w.key) {
+      pending = null; // an answer still in flight is for other inputs now
+      return true;
+    }
+    if (pending && pending.opps === w.opps && pending.key === w.key) return false;
+    const req = (pending = { opps: w.opps, key: w.key });
+    const list = filtered(w.opps, w.v);
+    let sync = true;
+    client!.request(list, w.opts, (res) => {
+      if (pending !== req) return;
+      pending = null;
+      memo = {
+        opps: w.opps,
+        key: w.key,
+        opts: w.opts,
+        filtered: list,
+        res,
+        rows: planRows(res, w.opts),
+        suspectN: w.opts.excludeSuspect ? list.reduce((n, o) => n + (o.risk.level === 'suspect' ? 1 : 0), 0) : 0,
+      };
+      if (!sync && ctx) {
+        setComputing(false);
+        draw();
+      }
+    });
+    sync = false;
+    return memo?.key === w.key && memo.opps === w.opps;
   }
 
   function setComputing(on: boolean): void {
@@ -107,16 +137,17 @@ export function createPlanView(): View {
     table?.el.setAttribute('aria-busy', String(on));
   }
 
-  /** Recompute after `delay` ms (input debounce); the "computing" state shows until then. */
+  /** Recompute after `delay` ms (input debounce); the "computing" state shows until the plan is in. */
   function requestCompute(delay: number): void {
     setComputing(true);
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => {
       timer = null;
       if (!ctx) return;
-      computeNow();
-      setComputing(false);
-      draw();
+      if (compute()) {
+        setComputing(false);
+        draw();
+      }
     }, delay);
   }
 
@@ -202,7 +233,12 @@ export function createPlanView(): View {
       return;
     }
     if (timer) return; // results are about to change; keep showing the previous ones
-    const m = memo && !isStale() ? memo : computeNow();
+    if (isStale() && !compute()) setComputing(true); // the worker answers later; keep showing the previous plan
+    const m = memo;
+    if (!m) {
+      summaryEl.hidden = true;
+      return;
+    }
     renderSummary(m);
     renderSuspect(m);
     if (shownRows !== m.rows) {
@@ -227,7 +263,15 @@ export function createPlanView(): View {
   }
 
   function whyLong(r: PlanRow, o: AllocateOptions): string {
-    return t(`whyLong_${whyKey(r)}`, { pct: pctOf(o), n: fmtInt(Math.floor(r.opp.maxUnits)) });
+    return t(`whyLong_${whyKey(r)}`, { pct: pctOf(o), n: fmtInt(Math.floor(r.opp.maxUnits)), res: r.market ? marketName(r.market) : '' });
+  }
+
+  /** "Wheat insta-sells" for `WHEAT:bid` (a ResourceKey). */
+  function marketName(key: string): string {
+    if (key === 'forge') return t('res_forge');
+    const i = key.lastIndexOf(':');
+    const id = key.slice(0, i);
+    return t(`res_${key.slice(i + 1)}`, { name: st().catalog?.name(id) ?? id });
   }
 
   /** A Kat run's volume bound is Kat itself: one pet per upgrade. */
@@ -242,10 +286,9 @@ export function createPlanView(): View {
       `<dl class="kv">${rows.map(([k, v, key]) => `<dt>${esc(k)}</dt><dd data-k="${key}">${v}</dd>`).join('')}</dl>`;
     const o = r.opp;
     const a = r.alloc;
-    const pipelined = st().settings.fillModel === 'pipelined';
-    // Kat runs are never doubled: the AH buy is instant (toOpportunities' capMul)
-    const doubled = pipelined && o.kind !== 'kat';
-    const buyCost = doubled ? o.unitCost / 2 : o.unitCost;
+    // the pipelined overlap is in unitCost already (planInputs): the coins tied up exceed the buy cost when it applied
+    const buyCost = o.buyCost != null && o.buyCost > 0 ? o.buyCost : o.unitCost;
+    const doubled = o.unitCost > buyCost * (1 + 1e-9);
     const flags = o.risk.flags.length
       ? `<ul class="plan-flags">${o.risk.flags.map((f) => `<li><span class="mono small muted">${esc(f)}</span> ${esc(riskFlagText(f))}</li>`).join('')}</ul>`
       : `<p class="note small">${esc(t('dRiskNone'))}</p>`;
@@ -366,6 +409,12 @@ export function createPlanView(): View {
           help: () => t('fromDefault', { v: fmtInt(OPTIMIZER.maxShareOfCapitalPerItem * 100) }),
           suffix: '%',
         },
+        {
+          kind: 'number',
+          key: 'attention',
+          label: () => t('attention'),
+          help: () => `${t('fromDefault', { v: fmtCoins(OPTIMIZER.attentionPerPosition) })}. ${t('attentionHelp')}`,
+        },
         { kind: 'toggle', key: 'suspect', label: () => t('suspect') },
         ...KINDS.map((k) => ({ kind: 'toggle' as const, key: k, label: () => t(KIND_LABEL[k]) })),
         { kind: 'toggle', key: 'ah', label: () => t('includeAh') },
@@ -443,6 +492,7 @@ export function createPlanView(): View {
     id: 'plan',
     mount(el, c, route) {
       ctx = c;
+      client = createPlanClient();
       build(el, c, route);
       relabel();
       draw(); // first plan synchronously
@@ -455,7 +505,9 @@ export function createPlanView(): View {
             s.catalogError !== prev.catalogError ||
             s.settings !== prev.settings ||
             s.historyTick !== prev.historyTick ||
-            s.ah !== prev.ah
+            s.ah !== prev.ah ||
+            s.ahSales !== prev.ahSales ||
+            s.election !== prev.election
           ) {
             schedule();
           }
@@ -475,6 +527,10 @@ export function createPlanView(): View {
     unmount() {
       if (timer) clearTimeout(timer);
       timer = null;
+      client?.dispose();
+      client = null;
+      pending = null;
+      filt = null;
       for (const fn of cleanups.splice(0)) fn();
       panel?.destroy();
       bar?.destroy();

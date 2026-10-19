@@ -8,8 +8,9 @@ import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { Allocation, AppState, Catalog, Opportunity, Route, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
-import { fmtCoins } from '../../../src/ui/format.ts';
-import { filterKinds, PLAN_SCHEMA, planOptions, planRows, sourceHref, whyBound } from '../../../src/ui/views/plan/model.ts';
+import type { PlanReply, PlanRequest } from '../../../src/state/planClient.ts';
+import { fmtCoins, fmtPct } from '../../../src/ui/format.ts';
+import { filterKinds, marketUse, PLAN_SCHEMA, planCaps, planOptions, planRows, sourceHref, whyBound } from '../../../src/ui/views/plan/model.ts';
 import { createPlanView, OPEN_SETTINGS_EVENT, PLAN_DEBOUNCE_MS } from '../../../src/ui/views/plan/planView.ts';
 import bazaarJson from '../../fixtures/bazaar.json';
 import catalogJson from '../../fixtures/catalog.json';
@@ -47,8 +48,9 @@ function expected(query: Record<string, string> = {}) {
       return [k, raw];
     }),
   ) as Parameters<typeof planOptions>[0];
-  const opts = planOptions(v, store.get().settings);
-  return { opts, res: allocate(filterKinds(ctx.derived.opportunities(), v), opts) };
+  const opps = ctx.derived.opportunities();
+  const opts = planOptions(v, store.get().settings, planCaps(ctx.derived.calcCtx(), opps));
+  return { opts, res: allocate(filterKinds(opps, v), opts) };
 }
 
 beforeEach(() => {
@@ -107,10 +109,13 @@ describe('plan view', () => {
   });
 
   it('URL overrides capital, slots and max share', () => {
-    const query = { capital: '200000', slots: '2', share: '30' };
+    const query = { capital: '200000', slots: '2', share: '30', attention: '5000' };
     mount(query);
     const { res, opts } = expected(query);
-    expect(opts).toEqual({ capital: 200_000, slots: 2, maxShare: 0.3, excludeSuspect: OPTIMIZER.excludeSuspect });
+    expect(opts).toEqual({ capital: 200_000, slots: 2, maxShare: 0.3, excludeSuspect: OPTIMIZER.excludeSuspect, attention: 5000, caps: expect.any(Object) });
+    expect(Object.keys(opts.caps!).length).toBeGreaterThan(0);
+    expect(q<HTMLInputElement>('input[data-filter="attention"]').value).toBe('5000');
+    expect(q('[data-testid="plan-pph"]').textContent).toBe(fmtCoins(res.profitPerHour));
     expect(rowKeys()).toEqual(res.allocations.map((a) => a.opp.key));
     expect(res.slotsUsed).toBeLessThanOrEqual(2);
     expect(Number(q('[data-testid="plan-slot-bar"]').getAttribute('aria-valuemax'))).toBe(2);
@@ -196,6 +201,8 @@ describe('plan view', () => {
     const a = (units: number): Allocation => ({ opp, units, capital: units * 10, slots: 2, profitPerHour: units * 0.1 });
     const o = { capital: 10_000, slots: 14, maxShare: 0.5, excludeSuspect: true };
     expect(whyBound(a(100), o)).toBe('volume');
+    // without the whole plan, shared limits are not told apart
+    expect(whyBound(a(30), { ...o, capital: 800, caps: { 'X:bid': 0 } })).toBe('capital');
     expect(whyBound(a(40), { ...o, capital: 800 })).toBe('share'); // 0.5 * 800 / 10 = 40
     expect(whyBound(a(30), { ...o, capital: 800 })).toBe('capital');
     expect(whyBound(a(100), { ...o, capital: 0 })).toBe('volume'); // unlimited capital
@@ -205,8 +212,107 @@ describe('plan view', () => {
     expect(sourceHref({ ...opp, kind: 'npc' })).toBe('#/npc?q=X');
     expect(sourceHref({ ...opp, kind: 'forge' })).toBe('#/forge?q=X');
     expect(sourceHref({ ...opp, kind: 'chain' })).toBe('#/craft?view=chains&q=X');
+    expect(sourceHref({ ...opp, kind: 'ahflip', key: 'ahflip:ah:X' })).toBe('#/ahflip?q=X&minProfit=0');
+    expect(sourceHref({ ...opp, kind: 'ahflip', key: 'ahflip:george:BEE;1', id: 'BEE;1' })).toBe('#/ahflip?mode=george&q=BEE%3B1&minProfit=0');
     // Kat: the page searches pet names, not AH keys
     expect(sourceHref({ ...opp, kind: 'kat', id: 'ENDERMAN;3@MAX', name: 'Enderman' })).toBe('#/kat?q=Enderman&minProfit=0');
+  });
+
+  it('whyBound tells shared markets and slots apart, with the whole plan', () => {
+    const base: Opportunity = {
+      kind: 'flip',
+      key: 'flip:X',
+      id: 'X',
+      name: 'X',
+      unitCost: 10,
+      profitPerUnit: 1,
+      unitsPerHour: 100,
+      maxUnits: 100,
+      slots: 2,
+      orderUnits: [1],
+      uses: [{ key: 'X:bid', perUnit: 2 }],
+      risk: { level: 'ok', score: 0, flags: [] },
+    };
+    const other: Opportunity = { ...base, key: 'craft:Y', id: 'Y', kind: 'craft', uses: [{ key: 'X:bid', perUnit: 1 }], orderUnits: [] };
+    const a: Allocation = { opp: base, units: 40, capital: 400, slots: 1, profitPerHour: 40 };
+    const b: Allocation = { opp: other, units: 20, capital: 200, slots: 0, profitPerHour: 20 };
+    const res = { allocations: [a, b], capitalUsed: 600, slotsUsed: 1, profitPerHour: 60, score: 60 };
+    const o = { capital: 10_000, slots: 14, maxShare: 1, excludeSuspect: true, caps: { 'X:bid': 100 } };
+    expect(marketUse(res)).toEqual(new Map([['X:bid', 100]]));
+    expect(whyBound(a, o, res)).toBe('market');
+    const rows = planRows(res, o);
+    expect(rows.map((r) => [r.bound, r.market])).toEqual([
+      ['market', 'X:bid'],
+      ['market', 'X:bid'],
+    ]);
+    // room left in the market: then the slots (one more unit opens a new order, none left), else capital
+    const roomy = { ...o, caps: { 'X:bid': 1e9 } };
+    const big: Allocation = { ...a, opp: { ...base, maxUnits: 1e6 }, units: 71_680 };
+    const bigRes = { ...res, allocations: [big, b] };
+    expect(whyBound(big, { ...roomy, slots: 1, capital: 1e9 }, bigRes)).toBe('slots');
+    expect(whyBound(big, { ...roomy, capital: 1e9 }, bigRes)).toBe('capital');
+    expect(whyBound(a, roomy, res)).toBe('capital');
+    expect(planRows(res, roomy)[0]!.market).toBeUndefined();
+  });
+
+  it('detail: margin and journal link on the buy cost; the pipelined note only when unitCost exceeds it', () => {
+    const risk = { level: 'ok' as const, score: 0, flags: [] };
+    const doubled: Opportunity = { kind: 'flip', key: 'flip:D', id: 'D', name: 'D', unitCost: 20, buyCost: 10, profitPerUnit: 2, unitsPerHour: 10, maxUnits: 10, slots: 0, risk };
+    const single: Opportunity = { ...doubled, key: 'flip:S', id: 'S', name: 'S', unitCost: 10, buyCost: 10 };
+    ctx = fakeViewCtx(store, fakeHistory(), { t, navigate: vi.fn(), derived: { ...ctx.derived, opportunities: () => [doubled, single] } });
+    mount({ capital: '1000000', share: '100' });
+    const open = (key: string) => q<HTMLElement>(`.plan-view [data-key="${key}"]`).querySelector<HTMLElement>('td')!.click();
+    open('flip:D');
+    expect(q('[data-testid="plan-detail"] dd[data-k="margin"]').textContent).toBe(fmtPct(0.2));
+    expect(q('[data-testid="plan-log"]').getAttribute('href')).toContain('&buy=10&sell=12&');
+    expect(q('[data-testid="plan-detail"]').textContent).toContain(t('plan.dUnitCostPipe'));
+    open('flip:S');
+    expect(q('[data-testid="plan-detail"]').textContent).not.toContain(t('plan.dUnitCostPipe'));
+    expect(q('[data-testid="plan-detail"] dd[data-k="margin"]').textContent).toBe(fmtPct(0.2));
+  });
+
+  it('runs the plan in a worker when there is one: computing until the answer, then the same plan', async () => {
+    class AutoWorker {
+      onmessage: ((e: MessageEvent<PlanReply>) => void) | null = null;
+      onerror: (() => void) | null = null;
+      opps: Opportunity[] = [];
+      postMessage(m: PlanRequest) {
+        const msg = structuredClone(m);
+        setTimeout(() => {
+          if (msg.opps) this.opps = msg.opps;
+          const res = allocate(this.opps, msg.opts);
+          this.onmessage?.({
+            data: {
+              id: msg.id,
+              allocs: res.allocations.map((a) => [this.opps.indexOf(a.opp), a.units, a.capital, a.slots, a.profitPerHour]),
+              capitalUsed: res.capitalUsed,
+              slotsUsed: res.slotsUsed,
+              profitPerHour: res.profitPerHour,
+              score: res.score!,
+            },
+          } as MessageEvent<PlanReply>);
+        }, 5);
+      }
+      terminate() {}
+    }
+    vi.stubGlobal('Worker', AutoWorker);
+    try {
+      mount();
+      expect(q('[data-testid="plan-computing"]').hidden).toBe(false);
+      expect(rowKeys()).toEqual([]);
+      await flush();
+      expect(q('[data-testid="plan-computing"]').hidden).toBe(true);
+      expect(rowKeys()).toEqual(expected().res.allocations.map((a) => a.opp.key));
+      // a change: the previous plan stays until the new one is in
+      const before = rowKeys();
+      view.update!({ id: 'plan', query: { slots: '1' } });
+      await flush(PLAN_DEBOUNCE_MS + 2);
+      expect(rowKeys()).toEqual(before);
+      await settle();
+      expect(rowKeys()).toEqual(expected({ slots: '1' }).res.allocations.map((a) => a.opp.key));
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('filterKinds: kind toggles and the AH-sold toggle', () => {

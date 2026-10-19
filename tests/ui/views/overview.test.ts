@@ -11,7 +11,8 @@ import { createStore } from '../../../src/state/store.ts';
 import type { AppState, BookRow, Catalog, HistoryPoint, MarketStat, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { fmtCoins } from '../../../src/ui/format.ts';
 import { createOverviewView, MOVERS_N, TOP_N } from '../../../src/ui/views/overview/overviewView.ts';
-import { mostConsistent, movers, planOptions, topBooks, topCrafts, topFlips } from '../../../src/ui/views/overview/select.ts';
+import { mostConsistent, movers, planOpps, planOptions, planSummary, topBooks, topCrafts, topFlips } from '../../../src/ui/views/overview/select.ts';
+import { planCaps } from '../../../src/ui/views/plan/model.ts';
 import bazaarJson from '../../fixtures/bazaar.json';
 import catalogJson from '../../fixtures/catalog.json';
 import electionJson from '../../fixtures/election.json';
@@ -200,16 +201,31 @@ describe('overview view', () => {
     expect(r.find((x) => x.textContent!.includes(flips[1]!.name))!.textContent).toContain('%100');
   });
 
-  it('planner summary numbers match allocate()', () => {
+  it('planner summary numbers match allocate() with the Plan page defaults', () => {
     mount({ snapshot: SNAP, catalog: CATALOG });
     const s = store.get().settings;
-    const plan = allocate(ctx.derived.opportunities(), {
+    const opps = ctx.derived.opportunities();
+    const caps = planCaps(ctx.derived.calcCtx(), opps);
+    const plan = allocate(planOpps(opps), {
       capital: s.capital,
       slots: s.orderSlots,
       maxShare: OPTIMIZER.maxShareOfCapitalPerItem,
       excludeSuspect: OPTIMIZER.excludeSuspect,
+      attention: OPTIMIZER.attentionPerPosition,
+      caps,
     });
-    expect(planOptions(s)).toEqual({ capital: s.capital, slots: s.orderSlots, maxShare: OPTIMIZER.maxShareOfCapitalPerItem, excludeSuspect: OPTIMIZER.excludeSuspect });
+    expect(planOptions(s, caps)).toEqual({
+      capital: s.capital,
+      slots: s.orderSlots,
+      maxShare: OPTIMIZER.maxShareOfCapitalPerItem,
+      excludeSuspect: OPTIMIZER.excludeSuspect,
+      attention: OPTIMIZER.attentionPerPosition,
+      caps,
+    });
+    expect(planSummary(opps, s, caps)).toEqual(plan);
+    // the planner's default kinds: AH flips stay out
+    const ahflip = { ...opps[0]!, kind: 'ahflip' as const, key: 'ahflip:ah:X' };
+    expect(planOpps([...opps, ahflip])).not.toContain(ahflip);
     expect(plan.allocations.length).toBeGreaterThan(0);
     const v = (k: string) => Number(body('plan').querySelector(`[data-k="${k}"] [data-v]`)!.getAttribute('data-v'));
     expect(v('pph')).toBeCloseTo(plan.profitPerHour, 6);

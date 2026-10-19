@@ -1,6 +1,6 @@
 // Memoized domain results shared by all views. Owner: s1/state.
 import { catalogFromFile } from '../data/catalog.ts';
-import { computeAhFlips } from '../domain/ahFlips.ts';
+import { computeAhFlips, computeGeorgeFlips, type AhFlipRow } from '../domain/ahFlips.ts';
 import { computeBookCombines } from '../domain/books.ts';
 import { computeChains } from '../domain/chains.ts';
 import { computeCrafts } from '../domain/craft.ts';
@@ -77,7 +77,8 @@ type StatsAll = ReturnType<HistoryRepo['statsAll']>;
  *  | kat                    | calcCtx() (core key + all calc settings), taming, scan version |
  *  | shops                  | core key                                                     |
  *  | ahFlips                | AH scan + sales + catalog + ahEnabled, conservative, Derpy   |
- *  | opportunities          | the six row sets above + calcCtx()                           |
+ *  | George flips           | AH scan + catalog + ahEnabled + cycleHours (georgeFlips)     |
+ *  | opportunities          | the row sets above (AH and George flips as 'ahflip') + calcCtx() |
  *  | marketStats            | taxRate (history.marketStats, memoized there per record/minute) |
  *
  * flips / books / npc / fusion trade the bazaar and NPCs only: they get a context without AH accessors, computed on
@@ -225,17 +226,34 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
           : [],
       );
     },
+    // AH and George flips join as kind 'ahflip' (the planner leaves them out unless asked: AH_FLIP.plannerDefault)
     opportunities: () => {
       const c = current();
       if (!c) return [];
+      const ah = d.ahFlips();
+      const george = georgeFlips(store.get(), c.catalog);
       const rows = { flips: d.flips(), crafts: d.crafts(), chains: d.chains(), books: d.books(), npc: d.npc(), kat: d.kat() };
-      return memo('opps', [c, ...Object.values(rows)], () => toOpportunities(rows, c.settings));
+      return memo('opps', [c, ...Object.values(rows), ah, george], () => toOpportunities({ ...rows, ahFlips: [...ah, ...george] }));
     },
     // history's own memo (a new record or minute): the same map as the pinned sweep's while that is current. Views
     // read it once per render; the rows' ctx.market / ctx.stats stay pinned to the tick they were computed on.
     marketStats: () => history.marketStats(store.get().settings.taxRate),
   };
   return d;
+}
+
+let george: { deps: readonly unknown[]; rows: AhFlipRow[] } | null = null;
+
+/**
+ * George flips of the current AH scan ([] without one or with the AH off), memoized on the scan, the catalog and
+ * cycleHours: the planner and the market alerts share them.
+ */
+export function georgeFlips(s: AppState, catalog: Catalog): AhFlipRow[] {
+  const ah = s.settings.ahEnabled ? s.ah : null;
+  const deps = [ah, catalog, s.settings.cycleHours];
+  if (george && same(george.deps, deps)) return george.rows;
+  george = { deps, rows: ah ? computeGeorgeFlips(ah, catalog, { cycleHours: s.settings.cycleHours }) : [] };
+  return george.rows;
 }
 
 let empty: Catalog | null = null;

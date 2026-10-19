@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { initialState } from '../../src/state/appState.ts';
-import { CALC_SETTINGS, calcSettingsKey, createDerived, MARKET_SETTINGS, THROUGHPUT_SETTINGS } from '../../src/state/derived.ts';
+import { CALC_SETTINGS, calcSettingsKey, createDerived, georgeFlips, MARKET_SETTINGS, THROUGHPUT_SETTINGS } from '../../src/state/derived.ts';
 import { createStore } from '../../src/state/store.ts';
 import type { AhSalesSnapshot, AppState, CalcCtx, MarketStat, PriceStats, Settings } from '../../src/types/contracts.ts';
 import { baseSettings, catalog, snap } from '../domain/helpers.ts';
@@ -226,6 +226,39 @@ describe('createDerived', () => {
     expect(d.ahFlips()).toEqual([]);
     store.set({ snapshot: null });
     expect(d.ahFlips()).toEqual([]);
+  });
+
+  it('ahFlips: the sales feed and conservatism cap the relist price at the median sold', () => {
+    // 2 listings at 1e8 / 3e8 (count 5): relist just under 3e8, or at the 2e8 median sold once sales are in
+    const ah = { v: 4, fetchedAt: 0, lastUpdated: 0, lowestBin: { HYPERION: { price: 1e8, next: 3e8, count: 5 } } };
+    const feed: AhSalesSnapshot = { v: 1, updatedAt: 0, coverageHours: 3, byId: { HYPERION: { n: 5, items: 5, median: 2e8, perHour: 2, coverageHours: 3, last: 0 } } };
+    const { store, d } = setup({ ah, ahSales: feed });
+    patch(store, { conservative: true });
+    const [row] = d.ahFlips();
+    expect(row).toMatchObject({ key: 'ah:HYPERION', sellAt: 2e8, sellRef: 3e8 - 1, salesPerHour: 2 });
+    expect(d.ahFlips()).toBe(d.ahFlips());
+    expect(d.calcCtx()!.ahSales!('NOPE')).toBeNull();
+    // an id the feed has not seen
+    store.set({ ah: { ...ah, lowestBin: { ...ah.lowestBin, TERMINATOR: { price: 1e8, next: 3e8, count: 5 } } } });
+    expect(d.ahFlips().find((r) => r.id === 'TERMINATOR')!.salesPerHour).toBeNull();
+    patch(store, { conservative: false });
+    expect(d.ahFlips().find((r) => r.id === 'HYPERION')!.sellRef).toBeUndefined();
+  });
+
+  it('opportunities: AH and George flips join as kind ahflip; George flips are memoized on scan, catalog and cycle', () => {
+    const ah = { v: 4, fetchedAt: 0, lastUpdated: 0, lowestBin: { HYPERION: { price: 1e8, next: 3e8, count: 5 }, 'BEE;1': { price: 100, count: 3, prices: [100, 200] } } };
+    const cat = { ...catalog, george: { 'BEE;1': 500 } };
+    const { store, d } = setup({ ah, catalog: cat });
+    const keys = d.opportunities().filter((o) => o.kind === 'ahflip').map((o) => o.key);
+    expect(keys).toEqual(['ahflip:ah:HYPERION', 'ahflip:george:BEE;1']);
+    const s = store.get();
+    const g = georgeFlips(s, cat);
+    expect(g).toHaveLength(1);
+    expect(georgeFlips({ ...s }, cat)).toBe(g);
+    expect(georgeFlips({ ...s, settings: { ...s.settings, cycleHours: 2 } }, cat)).not.toBe(g);
+    expect(georgeFlips({ ...s, settings: { ...s.settings, ahEnabled: false } }, cat)).toEqual([]);
+    patch(store, { ahEnabled: false });
+    expect(d.opportunities().some((o) => o.kind === 'ahflip')).toBe(false);
   });
 
   it('stats are read once per historyTick (one statsAll call, pinned)', () => {
