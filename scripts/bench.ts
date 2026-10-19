@@ -17,6 +17,7 @@ import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeKatFlips, KAT_DERIVED_SKIP } from '../src/domain/kat.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
+import { salesLookup } from '../src/domain/market.ts';
 import { allocate, resourceCaps, toOpportunities } from '../src/domain/optimizer.ts';
 import { computeShopRows } from '../src/domain/shops.ts';
 import { defaultSettings } from '../src/state/appState.ts';
@@ -67,7 +68,7 @@ const steps: Record<string, (c: Ctxs) => unknown> = {
   shops: (c) => computeShopRows(c.full),
   kat: (c) => computeKatFlips(c.full, { skip: KAT_DERIVED_SKIP, taming: settings.taming }),
   bits: (c) => computeBitsRows(c.full),
-  ahFlips: () => computeAhFlips(ah, catalog, { conservative: settings.conservative, share: settings.share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) }),
+  ahFlips: () => computeAhFlips(ah, catalog, { conservative: settings.conservative, share: settings.share, ...(sales ? { sales: salesLookup(sales) } : {}) }),
   george: () => computeGeorgeFlips(ah, catalog, { cycleHours: settings.cycleHours }),
 };
 
