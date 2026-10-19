@@ -79,7 +79,7 @@ The batch is the smallest of these bounds, and `limitedBy` records which one won
 | volume | `cycleHours / hFill` | `volume`, or `ahSales` when the binding side is an AH sale |
 | forge | `forgeCap × cycleHours`, with `forgeCap = forgeSlots / forge hours per unit` | `forge` |
 | capital | `floor(capital / (overlap × unitCost))`, overlap 2 for pipelined with two timed legs, else 1 | `capital` |
-| depth | units on the book (insta legs) or AH listings seen (AH purchases) | `depth` |
+| depth | units on the book (insta legs) or the AH listings whose price the scan kept (AH purchases; every listing seen on a scan without kept prices) | `depth` |
 | instant caps | `perHour × cycleHours` for each instant purchase: an NPC shop (`npcDailyLimit / 24`) or the AH (AH sales per hour) | `npcLimit`, `ahSales` |
 | order slots | largest `Q` whose orders fit in `orderSlots` (next section) | `slots` |
 
@@ -133,6 +133,8 @@ The `conservative` setting (on by default, Settings) checks each bazaar quote ag
 | buy order | `max(quote, medianBid + 0.1)`, never above the ask | insta-sell volume trend |
 | insta-buy (or a buy order clamped at the ask) | `max(quote, medianAsk)` | insta-buy volume trend |
 
+A buy order whose adjusted price plus its re-listing cost (below) reaches the ask would fill against the sell offers at once, so it becomes an insta-buy as under Ask clamp: the asks are walked for the quantity, the quote is marked `ask`, no order slot, and the insta-buy row of the table applies to it (`buyRef` keeps the snapshot's order price).
+
 Prices are rounded to 0.1. The trend is the volume trend of the flow that fills the leg (Market stats), clamped to `CONSERVATIVE.trendClamp = [0.5, 1]`: a slowing market lowers your rate, a busy one never raises it.
 
 Orders and offers also pay for the queue:
@@ -154,7 +156,7 @@ Crafts, chains, Bits, Shops and Sell or craft? sell an item through one rule (`s
 | AH | listed one coin under the lowest BIN (`AH_FLIP.undercut = 1`) and, with conservatism on, at no more than the median sold price; after the AH fees | `ahRate` (see AH sales) (`limitedBy = ahSales`) | `AH_THIN`, `AH_GAP`, `AH_VARIANT` |
 | NPC | NPC sell price | unlimited | none |
 
-The AH venue is offered only for auctionable items: the catalog says so, or the item is unknown to the catalog and not a bazaar product. The best net wins; ties keep bazaar, then AH, then NPC. Kat and AH flips use their own sale rules (below).
+The AH venue is offered only for auctionable items: the catalog says so, or the item is unknown to the catalog and not a bazaar product. The best net wins; ties keep bazaar, then AH, then NPC. An AH quote at rate 0 (measured, nothing sold) comes after every venue that sells. Kat and AH flips use their own sale rules (below).
 
 ## Crafts, forges and shop trades
 
@@ -166,7 +168,7 @@ Recipes come in three kinds: `craft`, `forge` and `shop`. A shop recipe is an NP
 |---|---|---|
 | bazaar | buy quote in your cost mode (a buy order at the ask is an insta-buy) | your fill rate |
 | NPC shop | NPC buy price | instant, capped at `npcDailyLimit / 24` per hour |
-| AH | VWAP over the scan's per-item prices for the quantity; auctionable items only | instant, capped at `ahRate` (see AH sales); the listings seen cap one batch |
+| AH | VWAP over the scan's per-item prices for the quantity; auctionable items only | instant, capped at `ahRate` (see AH sales); the kept prices (at most `AH.keepPrices = 8` listings; the listing count on a scan without them) cap one batch, so a batch is never priced at more listings than it can buy; `AH_THIN` still reads the listing count |
 | mix | the NPC up to its limit, the bazaar for the rest, split `cap / (cap + bazaar rate)` | the two rates added |
 | sub-recipe | `Σ qty × input cost / outCount` over a craft, forge or shop recipe | the slowest input's rate; a forge sub-recipe adds its forge time, a shop trade draws on its NPC limit |
 | coins (`SKYBLOCK_COIN`) | 1 coin | unlimited |
@@ -241,7 +243,7 @@ What actually sold comes from `/v2/skyblock/auctions_ended` (`src/api/ahSales.ts
 - **Coverage** is the time the feed has actually seen: each new response adds the minute before its `lastUpdated`, and overlapping windows merge. Gaps (the app closed, polls missed) don't count.
 - The sales are kept for 7 days (`AH_SALES.windowMs`), in IndexedDB (`bazaar-masasi-ahsales`): one record per id with its newest 64 sales (`AH_SALES.maxPrices`) and hourly counts.
 
-Per id the feed gives the sales `n` and items sold in the window, the `median` per-item price of the stored sales, and `perHour = items / coverage hours`. Below `AH_SALES.minCoverageHours = 2` h of coverage the stats are ignored everywhere: AH rates fall back to `AH_SALES.defaultPerHour = 0.25` items per hour (Kat to `KAT.defaultSellHours = 1` h).
+Per id the feed gives the sales `n` and items sold in the window, the `median` per-item price of the stored sales, and `perHour = items / coverage hours`. Below `AH_SALES.minCoverageHours = 2` h of coverage the stats are ignored everywhere: AH rates fall back to `AH_SALES.defaultPerHour = 0.25` items per hour (Kat's sale to `KAT.defaultSellHours = 1 / 0.25 = 4` h). From that coverage on, an id the feed holds no sale of sold nothing: it reads as `n = 0`, `median = 0`, `perHour = 0` (`salesLookup` in `market.ts`, used by every calc context and the AH flips page), not as unmeasured.
 
 Every AH rate (selling, buying, Kat, AH flips) is your part of the market, `ahRate` in `market.ts`:
 
@@ -251,6 +253,8 @@ ahRate = AH_SALES.defaultPerHour                              without measured s
 ```
 
 Listed one coin under the lowest BIN you are first in line for the next sale, so a measured market is never slower than an unmeasured one unless it really sells less than the default; a busy one gives you your share. The median caps a list price only with conservatism on and at least `AH_SALES.minSales = 3` sales.
+
+A measured 0 means the item doesn't sell (or can't be bought) on the AH: a craft leg or output there gets no rate (0 profit per hour, left out by the planner), Best sale puts that AH quote after every venue that sells, Sell or craft? drops it, an AH flip shows `∞` sell time and 0 profit per hour, and a Kat sale there has no AH price (George's, else unpriced).
 
 The status pill shows the coverage, the item page has an AH sales panel (median sold, sales per hour, coverage), and Settings → Data shows the store's size with a Clear button.
 
@@ -307,7 +311,7 @@ Items sold in the bits shop cost `min(market price, bits per item × cookieCostP
 2. else the level band `PET;j@L49` / `@L89` / `@L99` when the end level is known (scan v4),
 3. else the plain `PET;j`.
 
-The pet is listed one coin under that key's lowest BIN (`AH_FLIP.undercut`) and, with conservatism on, at no more than its median sold price (at least `AH_SALES.minSales = 3` sales). It sells in `1 / ahRate` of that key's measured sales, else `KAT.defaultSellHours = 1` h. The sale pays the AH fees (`ahNet`, ×4 claim tax under Derpy).
+The pet is listed one coin under that key's lowest BIN (`AH_FLIP.undercut`) and, with conservatism on, at no more than its median sold price (at least `AH_SALES.minSales = 3` sales). It sells in `1 / ahRate` hours (see AH sales): your share of that key's measured sales, at least the next sale, else `1 / AH_SALES.defaultPerHour = 4` h (`KAT.defaultSellHours`). A key that sold nothing over the coverage has no AH sale: the pet goes to George when he buys it, else the row is unpriced (its sell key listed). The sale pays the AH fees (`ahNet`, ×4 claim tax under Derpy).
 
 **George floor.** When George pays more for `PET;j` than the AH sale nets, the pet goes to George: his price, no fees, no wait.
 
@@ -330,11 +334,11 @@ The **Sell or craft?** page (`#/sell`, `src/domain/sell.ts`) values items you al
 | insta-sell | walk the buy orders for `qty` (VWAP), after bazaar tax; if the book holds fewer, only the filled part counts and the row says so | now |
 | sell offer | `(ask − 0.1)` after tax × qty | qty / your sell rate (your share of weekly volume) |
 | NPC | NPC sell price × qty | now |
-| AH | the AH venue of Best sale × qty: one coin under the lowest BIN (median-capped with conservatism), after the AH fees; auctionable items with a scanned price | qty / the AH sales rate |
+| AH | the AH venue of Best sale × qty: one coin under the lowest BIN (median-capped with conservatism), after the AH fees; auctionable items with a scanned price, not when the item sold nothing over the coverage | qty / the AH sales rate |
 
 The insta-sell and sell-offer options read the snapshot as it is.
 
-**Craft up:** for every chain ladder (see Craft chains) that contains the item, every higher tier is an option. Your items are free inputs; side ingredients are bought at their cheapest source (the craft pricer); only whole crafts count (`made = floor(qty / need)`). The crafted items are sold together at their best venue (Best sale for `made` units: an insta-sell walks the book for all of them), and leftover items at the best raw price per item. `net = made × (value of one crafted item − its side-ingredient cost) + leftover × best raw price`; its time is the longer of the crafted sale and the leftover sale. Options are listed best first; the page total adds each item's best option.
+**Craft up:** for every chain ladder (see Craft chains) that contains the item, every higher tier is an option. Your items are free inputs; side ingredients are bought at their cheapest source (the craft pricer); only whole crafts count (`made = floor(qty / need)`). The crafted items are sold together at their best venue that sells (Best sale for `made` units: an insta-sell walks the book for all of them), and leftover items at the best raw price per item. `net = made × (value of one crafted item − its side-ingredient cost) + leftover × best raw price`; its time is the longer of the crafted sale and the leftover sale. Options are listed best first; the page total adds each item's best option.
 
 ## Trades: my orders and the journal
 
@@ -352,7 +356,7 @@ The insta-sell and sell-offer options read the snapshot as it is.
 
 ## Book combining
 
-Two level-k books combine into one level-(k+1) book, so one level-L book takes `2^(L−k)` level-k books. For each output book, the app tries every `k` from `L − 1` down to `L − 4` (`BOOK.maxChainLevels = 4`, at most 16 input books) and keeps the input level with the most profit per hour. On a tie, it keeps the shorter chain. One unit is one output book: it costs `count` input books, and the input's fill rate and book depth are divided by `count`.
+Two level-k books combine into one level-(k+1) book, so one level-L book takes `2^(L−k)` level-k books. For each output book, the app tries every `k` from `L − 1` down to `L − 4` (`BOOK.maxChainLevels = 4`, at most 16 input books) and keeps the input level with the most profit per hour. On a tie, it keeps the shorter chain. One unit is one output book: it costs `count` input books, and the input's fill rate and book depth are divided by `count`. With conservatism on, the input's re-listing cost is per input book like its price, so the row's churn counts it `count` times; `buyRef` stays per input book, like the buy price shown.
 
 Both legs are bazaar orders in order modes: the input buy order holds `count` books per output book, and the output sell offer one (see Order slots). The row's risk is the output's sell-side risk plus only the `INGREDIENT_FLAGS` (`PRICE_SPIKE`, `QUICK_DIVERGENCE`) of the input's buy side.
 

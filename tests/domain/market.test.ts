@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { AH_SALES, CONSERVATIVE } from '../../src/config.ts';
-import { coreOf, createMarketCore, mergeCons, salesOf, sideLeg } from '../../src/domain/market.ts';
+import { ahRate, coreOf, createMarketCore, mergeCons, salesLookup, salesOf, sideLeg } from '../../src/domain/market.ts';
 import { buySide, competitors, effShare, sellSide } from '../../src/domain/pricing.ts';
 import { assessRisk } from '../../src/domain/risk.ts';
 import type { AhPrice, AhSalesStat, CalcCtx, Catalog, MarketStat, Product } from '../../src/types/contracts.ts';
@@ -21,7 +21,16 @@ const WHALE = makeProduct({
     { price: 90, amount: 1000, orders: 10 },
   ],
 });
-const products: Record<string, Product> = { X, TIGHT, WHALE };
+// a buy order at 99.6 under a 100 ask: conservatism lifts it to the ask
+const NEAR = makeProduct({
+  id: 'NEAR',
+  bids: [{ price: 99.5, amount: 5000, orders: 10 }],
+  asks: [
+    { price: 100, amount: 10, orders: 1 },
+    { price: 110, amount: 5000, orders: 10 },
+  ],
+});
+const products: Record<string, Product> = { X, TIGHT, WHALE, NEAR };
 const cat: Catalog = {
   ...catalog,
   items: {
@@ -113,6 +122,31 @@ describe('MarketCore bazaar sides', () => {
     expect(b.cons).toEqual({ buyRef: 105 });
   });
 
+  it('a buy order the adjustment lifts to the ask is re-quoted as an insta-buy', () => {
+    // medianBid 101: max(99.6, 101.1) capped at the 100 ask; an order there would be an insta-buy
+    const core = createMarketCore(mctx({ conservative: true }, { stats: () => stats({ medianBid: 101, medianAsk: 100 }), market: () => market() }));
+    const raw = buySide(NEAR, 'insta', baseSettings.share)!;
+    const b = core.buy('NEAR')!;
+    expect(b.quote).toMatchObject({ source: 'insta', clamped: 'ask', price: 100 });
+    expect(b.depth).toBe(raw.depth);
+    expect(b.rate).toBe(raw.rate);
+    expect(b.comp).toBe(0);
+    expect(b.cons).toEqual({ buyRef: 99.6 });
+    expect(sideLeg('NEAR', 'buy', b, 0).order).toBe(false);
+    // re-quoted at the size: 10 at 100 and 10 at 110
+    expect(core.buy('NEAR', 20)!.quote.price).toBeCloseTo(105, 9);
+    // the churn alone reaches the ask: 99.9 + 6 relists x 0.2 > 100
+    const churned = createMarketCore(
+      mctx({ conservative: true }, { stats: () => stats({ medianBid: 99.8, medianAsk: 100 }), market: () => market({ bidMovesPerHour: 10 }) }),
+    ).buy('NEAR')!;
+    expect(churned.quote.source).toBe('insta');
+    expect(churned.cons?.churn).toBeUndefined();
+    // the lead's case: bid 99.9, ask 100 is an insta-buy from the snapshot already
+    const edge = makeProduct({ id: 'EDGE', bids: [{ price: 99.9, amount: 10, orders: 1 }], asks: [{ price: 100, amount: 10, orders: 1 }] });
+    const e = createMarketCore({ ...mctx({ conservative: true }, { stats: () => stats({ medianBid: 101, medianAsk: 100 }) }), snap: { lastUpdated: 0, fetchedAt: 0, source: 'fixture', products: { EDGE: edge } } }).buy('EDGE')!;
+    expect(e.quote).toMatchObject({ source: 'insta', clamped: 'ask', price: 100 });
+  });
+
   it('competitors weighted by amount lower your share of the flow', () => {
     const on = mctx({ conservative: true, share: 0.5 }, { stats: () => stats() });
     const raw = buySide(WHALE, 'order', 0.5)!;
@@ -160,12 +194,14 @@ describe('MarketCore NPC and AH purchases', () => {
 
   it('ahBuy: VWAP over the kept per-item prices, else the lowest BIN', () => {
     const ah: Record<string, AhPrice> = {
-      V4: { price: 10, count: 3, prices: [10, 12, 20] },
-      V3: { price: 40, count: 1 },
+      V4: { price: 10, count: 30, prices: [10, 12, 20] },
+      V3: { price: 40, count: 2 },
       ZERO: { price: 0, count: 1 },
     };
     const core = createMarketCore(mctx({}, { ah: (id) => ah[id] ?? null }));
-    expect(core.ahBuy('V4')).toEqual({ price: 10, rate: AH_SALES.defaultPerHour, count: 3 });
+    // a batch can only buy the 3 listings whose price is known, out of 30
+    expect(core.ahBuy('V4')).toEqual({ price: 10, rate: AH_SALES.defaultPerHour, count: 30, depth: 3 });
+    expect(core.ahBuy('V3')).toMatchObject({ count: 2, depth: 2 });
     expect(core.ahBuy('V4', 2)!.price).toBeCloseTo(11, 9);
     expect(core.ahBuy('V4', 3)!.price).toBeCloseTo(14, 9);
     expect(core.ahBuy('V4', 2)).toBe(core.ahBuy('V4', 2));
@@ -186,6 +222,20 @@ describe('MarketCore NPC and AH purchases', () => {
     expect(at(sales({ perHour: 2, coverageHours: AH_SALES.minCoverageHours - 0.5 }))).toBe(AH_SALES.defaultPerHour);
     expect(at(sales({ perHour: null }))).toBe(AH_SALES.defaultPerHour);
     expect(at(null)).toBe(AH_SALES.defaultPerHour);
+  });
+});
+
+describe('salesLookup', () => {
+  it('an id absent from a well-covered feed sold nothing; below the coverage threshold it is no data', () => {
+    const s = sales({ coverageHours: 6 });
+    const look = salesLookup({ v: 1, updatedAt: 0, coverageHours: 6, byId: { A: s } });
+    expect(look('A')).toBe(s);
+    expect(look('B')).toEqual({ n: 0, items: 0, median: 0, perHour: 0, coverageHours: 6, last: 0 });
+    expect(salesLookup({ v: 1, updatedAt: 0, coverageHours: AH_SALES.minCoverageHours - 0.1, byId: { A: s } })('B')).toBeNull();
+    // the zero stat: no AH rate (and no median: n < AH_SALES.minSales)
+    const ctx = mctx({}, { ah: () => ({ price: 10, count: 3 }), ahSales: look });
+    expect(ahRate(salesOf(ctx, 'B')!.perHour, 1)).toBe(0);
+    expect(createMarketCore(ctx).ahBuy('B')!.rate).toBe(0);
   });
 });
 

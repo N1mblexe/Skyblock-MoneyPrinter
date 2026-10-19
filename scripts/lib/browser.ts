@@ -11,7 +11,7 @@ import { gunzipSync } from 'node:zlib';
 import { chromium } from 'playwright-core';
 import { emptySalesState, ingestPage, salesInfo, summarize, validateEnded } from '../../src/api/ahSales.ts';
 import type { RawAhPage } from '../../src/api/auctions.ts';
-import { createMarketCore } from '../../src/domain/market.ts';
+import { createMarketCore, salesLookup } from '../../src/domain/market.ts';
 import type { AhSalesSnapshot, AhSnapshot, CalcCtx, Catalog, Settings, Snapshot } from '../../src/types/contracts.ts';
 
 export const ROOT = fileURLToPath(new URL('../..', import.meta.url));
@@ -145,7 +145,7 @@ export function derivedCtx(i: DerivedCtxInput): { trade: CalcCtx; full: CalcCtx 
   const sales = i.settings.ahEnabled ? i.sales : null;
   const acc: Pick<CalcCtx, 'ah' | 'ahSales'> = {
     ah: ah ? (id) => ah.lowestBin[id] ?? null : undefined,
-    ahSales: sales ? (id) => sales.byId[id] ?? null : undefined,
+    ahSales: sales ? salesLookup(sales) : undefined,
   };
   const trade: CalcCtx = { ...plain, core: createMarketCore({ ...plain, ...acc }) };
   return { trade, full: { ...trade, ...acc } };

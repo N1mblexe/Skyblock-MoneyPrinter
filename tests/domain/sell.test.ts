@@ -3,7 +3,7 @@ import { rawOptions, sellOptions } from '../../src/domain/sell.ts';
 import { AH_SALES } from '../../src/config.ts';
 import { afterTax, ahNet } from '../../src/domain/pricing.ts';
 import { bestSale } from '../../src/domain/sale.ts';
-import type { CatalogFile, Product } from '../../src/types/contracts.ts';
+import type { AhSalesStat, CatalogFile, Product } from '../../src/types/contracts.ts';
 import { buildCatalog, catalogFile, ctx, makeProduct, snap, stats } from './helpers.ts';
 
 // A -> B (160 A) -> C (2 B + 1 S) -> D (4 C); S is NPC-bought. A has an NPC sell price too.
@@ -112,6 +112,15 @@ describe('sale venues and hours', () => {
     expect(insta.craft!.leftover).toBe(0);
   });
 
+  it('crafted items go to the best venue that sells: not an AH that sold nothing', () => {
+    const ahCat = buildCatalog(file);
+    ahCat.items.D!.auctionable = true;
+    const cx = { ...c(), catalog: ahCat, ah: (id: string) => (id === 'D' ? { price: 1e6, count: 5 } : null) };
+    const venue = (ahSales: () => AhSalesStat | null) => sellOptions({ ...cx, ahSales }, 'A', 2560).options.find((o) => o.craft?.toId === 'D')!.craft!;
+    expect(venue(() => null)).toMatchObject({ venue: 'ah', saleNet: ahNet(1e6 - 1) });
+    expect(venue(() => ({ n: 0, items: 0, median: 0, perHour: 0, coverageHours: 10, last: 0 })).venue).toBe('bazaar');
+  });
+
   it('crafted items sold to an NPC are immediate; a leftover with unknown hours makes the option unknown', () => {
     const npcCat = buildCatalog({ ...file, items: { ...file.items, D: { n: 'Delta', bz: 1, ns: 50_000 } } });
     const d = sellOptions({ ...c(), catalog: npcCat }, 'A', 2560).options.find((o) => o.craft?.toId === 'D')!;
@@ -126,14 +135,15 @@ describe('sale venues and hours', () => {
 });
 
 describe('edge cases', () => {
-  it('raw options: off-bazaar items, empty books, an AH with no sales', () => {
+  it('raw options: off-bazaar items, empty books, an AH that sold nothing', () => {
     const ahCat = buildCatalog({ ...file, items: { ...file.items, S: { n: 'Side', nb: 10, ns: 4 } } });
     ahCat.items.S!.auctionable = true;
     const sales = () => ({ n: 0, items: 0, median: 0, perHour: 0, coverageHours: 10, last: 0 });
     const cx = { ...c(), catalog: ahCat, ah: (id: string) => (id === 'S' ? { price: 50, count: 3 } : null), ahSales: sales };
     const by = new Map(rawOptions(cx, 'S', 5).map((o) => [o.method, o]));
-    expect([...by.keys()].sort()).toEqual(['ah', 'npc']);
-    expect(by.get('ah')!.hours).toBeNull(); // measured: nothing sells
+    // measured over 10 h, none sold: the AH is no option
+    expect([...by.keys()]).toEqual(['npc']);
+    expect(rawOptions({ ...cx, ahSales: () => null }, 'S', 5).map((o) => o.method).sort()).toEqual(['ah', 'npc']);
     const empty = { ...s, products: { ...s.products, A: makeProduct({ id: 'A', bids: [], asks: [], bid: null, ask: null }) } };
     expect(rawOptions({ ...c(), snap: empty }, 'A', 10).map((o) => o.method)).toEqual(['npc']);
   });

@@ -109,6 +109,10 @@ describe('computeAhFlips: scan v4', () => {
     expect(computeAhFlips(ah, cat, { sales: sales(stat({ n: 2 })), conservative: true })[0]!.sellAt).toBe(1_499_999);
     expect(computeAhFlips(ah, cat, { sales: sales(stat({ coverageHours: 1 })), conservative: true })[0]).toMatchObject({ sellAt: 1_499_999, salesPerHour: null });
     expect(computeAhFlips(ah, cat, { sales: sales(stat({ perHour: null })) })[0]!.sellHours).toBe(1 / AH_SALES.defaultPerHour);
+    // nothing sold over the coverage (salesLookup's zero stat): the flip doesn't sell, and its median is not used
+    const none = computeAhFlips(ah, cat, { sales: sales({ n: 0, items: 0, median: 0, perHour: 0, coverageHours: 5, last: 0 }), conservative: true })[0]!;
+    expect(none).toMatchObject({ sellAt: 1_499_999, salesPerHour: 0, sellHours: Infinity, profitPerHour: 0 });
+    expect(none.plan.unitsPerHour).toBe(0);
   });
 
   it('level keys', () => {

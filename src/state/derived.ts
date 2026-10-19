@@ -7,7 +7,7 @@ import { computeCrafts } from '../domain/craft.ts';
 import { computeFlips } from '../domain/flip.ts';
 import { computeFusion } from '../domain/fusion.ts';
 import { computeKatFlips, KAT_DERIVED_SKIP, katScanReady } from '../domain/kat.ts';
-import { createMarketCore } from '../domain/market.ts';
+import { createMarketCore, salesLookup } from '../domain/market.ts';
 import { computeNpcFlips } from '../domain/npc.ts';
 import { toOpportunities } from '../domain/optimizer.ts';
 import { computeShopRows } from '../domain/shops.ts';
@@ -144,7 +144,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
     coreKey = k;
     baseAh = {
       ah: ah ? (id) => ah.lowestBin[id] ?? null : undefined,
-      ahSales: sales ? (id) => sales.byId[id] ?? null : undefined,
+      ahSales: sales ? salesLookup(sales) : undefined,
     };
     return (base = { ...p, core: createMarketCore({ ...p, ...baseAh }) });
   }
@@ -222,7 +222,7 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
       const { conservative, share } = s.settings;
       return memo('ahFlips', [s.ah, sales, b.catalog, s.settings.ahEnabled, conservative, share, derpy], () =>
         s.ah && s.settings.ahEnabled
-          ? computeAhFlips(s.ah, b.catalog, { derpy, conservative, share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) })
+          ? computeAhFlips(s.ah, b.catalog, { derpy, conservative, share, ...(sales ? { sales: salesLookup(sales) } : {}) })
           : [],
       );
     },

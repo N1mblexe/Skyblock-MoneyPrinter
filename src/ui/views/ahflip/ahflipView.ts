@@ -3,6 +3,7 @@
 // or a setting they read changes; filters (and the mode) live in the URL.
 import { LS_VIEWPREFS } from '../../../config.ts';
 import { computeAhFlips, computeGeorgeFlips, type AhFlipRow } from '../../../domain/ahFlips.ts';
+import { salesLookup } from '../../../domain/market.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
 import { isDerpy } from '../../../state/derived.ts';
 import type { AppState, View, ViewContext } from '../../../types/contracts.ts';
@@ -173,7 +174,7 @@ export function createAhFlipView(): View {
       const out =
         m === 'george'
           ? computeGeorgeFlips(ah, catalog, { cycleHours })
-          : computeAhFlips(ah, catalog, { derpy, conservative, share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) });
+          : computeAhFlips(ah, catalog, { derpy, conservative, share, ...(sales ? { sales: salesLookup(sales) } : {}) });
       memo = { deps, rows: out };
     }
     return memo.rows;

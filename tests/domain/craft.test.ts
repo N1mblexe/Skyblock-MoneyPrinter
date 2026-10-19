@@ -481,6 +481,20 @@ describe('computeCrafts sources, sale venues and planner inputs', () => {
     expect(fast.tp).toMatchObject({ limitedBy: 'depth', batchQty: 1.5 });
     expect(fast.lines[0]!.unit).toBeCloseTo((100 + 120 + 200) / 3, 9);
     expect(fast.plan!.segments!.length).toBeGreaterThan(0);
+    // 30 listings seen but only 3 prices kept: a batch buys the 3 it can price, not 30 at their average
+    const many = rowsBy(computeCrafts({ ...base({}, { ahSales: sales }), ah: (id: string) => (id === 'RARE' ? { ...rare, count: 30 } : null) })).get('TOP#0')!;
+    expect(many.tp).toMatchObject({ limitedBy: 'depth', batchQty: 1.5 });
+    expect(many.lines[0]!.unit).toBeCloseTo((100 + 120 + 200) / 3, 9);
+    // without kept prices (a v3 scan) the listing count bounds the batch
+    const v3 = rowsBy(computeCrafts({ ...base({}, { ahSales: sales }), ah: (id: string) => (id === 'RARE' ? { price: 100, count: 30 } : null) })).get('TOP#0')!;
+    expect(v3.tp.batchQty).toBeGreaterThan(1.5);
+    expect(v3.lines[0]!.unit).toBe(100);
+    // nothing sold over the coverage: the AH buys none, so the craft has no rate
+    const none = (id: string): AhSalesStat | null => (id === 'RARE' ? { n: 0, items: 0, median: 0, perHour: 0, coverageHours: 10, last: 0 } : null);
+    const dead = run({}, { ahSales: none }).get('TOP#0')!;
+    expect(dead.lines[0]!.craftsPerHour).toBe(0);
+    expect(dead.tp.unitsPerHour).toBe(0);
+    expect(dead.profitPerHour).toBe(0);
     // thin AH market: AH_THIN on the row
     const thin = rowsBy(computeCrafts({ ...base(), ah: (id: string) => (id === 'RARE' ? { ...rare, count: 1 } : null) })).get('TOP#0')!;
     expect(thin.risk.flags).toContain('AH_THIN');

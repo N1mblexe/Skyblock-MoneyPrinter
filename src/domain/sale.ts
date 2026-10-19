@@ -56,8 +56,12 @@ export function isAuctionable(ctx: CalcCtx, id: string): boolean {
   return info ? info.auctionable === true : !ctx.snap.products[id];
 }
 
+/** An AH that sold nothing over the coverage: listed, it doesn't sell. */
+const deadAh = (q: SaleQuote): number => (q.venue === 'ah' && !(q.rate > 0) ? 1 : 0);
+
 /**
- * Every way to sell `id`, best net first (ties keep bazaar > AH > NPC).
+ * Every way to sell `id`, best net first (ties keep bazaar > AH > NPC); an AH quote at rate 0 (measured, none sold)
+ * comes last, so the best sale is one that sells.
  *  bazaar  the core's sell side (conservatism applied), after tax, your sell rate, sell-side risk
  *  AH      auctionable items only: listed at min(lowest, next) - AH_FLIP.undercut, and with conservatism on at no
  *          more than the median sold price (once AH_SALES.minSales sales are seen); net of the AH fees; rate ahRate
@@ -111,7 +115,7 @@ export function saleQuotes(ctx: CalcCtx, id: string, o: SaleOptions = {}): SaleQ
   }
   const ns = catalog.items[id]?.npcSell;
   if (venues.has('npc') && pos(ns)) out.push({ venue: 'npc', gross: ns, fees: 0, net: ns, rate: Infinity, liquidity: null, risk: null });
-  return out.sort((x, y) => y.net - x.net || VENUE_ORDER[x.venue] - VENUE_ORDER[y.venue]);
+  return out.sort((x, y) => deadAh(x) - deadAh(y) || y.net - x.net || VENUE_ORDER[x.venue] - VENUE_ORDER[y.venue]);
 }
 
 /** The best way to sell `id`, or null when it can't be sold anywhere. */

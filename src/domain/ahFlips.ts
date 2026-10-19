@@ -124,7 +124,8 @@ export function computeAhFlips(ah: AhSnapshot, catalog: Catalog, o: AhFlipOption
     const pet = id.includes(';');
     const flags = ahFlags(a, catalog, id);
     if (pet && !maxLevel && !flags.includes('AH_VARIANT')) flags.push('AH_VARIANT');
-    const perHour = sales?.perHour != null && sales.perHour > 0 ? sales.perHour : null;
+    // measured 0 (nothing sold over the coverage): rate 0, the flip doesn't sell
+    const perHour = sales?.perHour ?? null;
     const rate = ahRate(perHour, o.share ?? 1);
     const sellHours = stack / rate;
     const listingFee = ahListingFee(sellAt * stack) / stack;

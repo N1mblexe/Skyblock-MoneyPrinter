@@ -248,8 +248,8 @@ function createResolver(core: MarketCore): Resolver {
     const info = catalog.items[id];
     const a = (info ? info.auctionable === true : !snap.products[id]) ? core.ahBuy(id) : null;
     if (!a || !fin(a.price)) return null;
-    // the listings seen bound one batch like a book's depth
-    return single({ id, qty: 1, unit: a.price, source: 'ah', rate: Infinity, cap: a.rate, bound: 'ahSales', depth: a.count, thin: a.count < AH.minCount });
+    // the listings a batch can buy (those whose price is known) bound it like a book's depth
+    return single({ id, qty: 1, unit: a.price, source: 'ah', rate: Infinity, cap: a.rate, bound: 'ahSales', depth: a.depth, thin: a.count < AH.minCount });
   };
 
   const direct = (id: string): Direct => {
