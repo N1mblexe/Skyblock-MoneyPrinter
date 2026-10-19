@@ -15,7 +15,7 @@ import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeKatFlips, KAT_DERIVED_SKIP } from '../src/domain/kat.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
-import { allocate, toOpportunities } from '../src/domain/optimizer.ts';
+import { allocate, resourceCaps, toOpportunities } from '../src/domain/optimizer.ts';
 import { computeShopRows } from '../src/domain/shops.ts';
 import { defaultSettings } from '../src/state/appState.ts';
 import type { CalcCtx, Opportunity, Settings } from '../src/types/contracts.ts';
@@ -39,7 +39,8 @@ const settings: Settings = { ...defaultSettings };
 /** A fresh context per run, so per-context memos (pricers, risk) are rebuilt as they are on a new snapshot. */
 /** The Plan page's defaults with an empty URL, as smoke computes them. */
 const PQ = Object.fromEntries(Object.entries(PLAN_SCHEMA).map(([k, f]) => [k, (f as { def: unknown }).def])) as unknown as PlanQuery;
-const runPlan = (opps: readonly Opportunity[], capital: number) => allocate(filterKinds(opps, PQ), planOptions(PQ, { ...settings, capital }));
+const runPlan = (opps: readonly Opportunity[], capital: number, caps: Record<string, number>) =>
+  allocate(filterKinds(opps, PQ), planOptions(PQ, { ...settings, capital }, caps));
 const freshCtx = (s: Settings = settings): CalcCtx => ({ snap, catalog, settings: s, stats: () => null, ah: (id) => ah.lowestBin[id] ?? null });
 
 function median(xs: number[]): number {
@@ -76,17 +77,17 @@ for (let run = 0; run < RUNS; run++) {
     push(k, r.ms);
     outs[k] = r.out;
   }
-  const o = time(() =>
-    toOpportunities(
-      { flips: outs.flips, crafts: outs.crafts, chains: outs.chains, books: outs.books, npc: outs.npc, kat: outs.kat } as Parameters<typeof toOpportunities>[0],
-      settings,
-    ),
-  );
+  const o = time(() => {
+    const opps = toOpportunities({ flips: outs.flips, crafts: outs.crafts, chains: outs.chains, books: outs.books, npc: outs.npc, kat: outs.kat } as Parameters<
+      typeof toOpportunities
+    >[0]);
+    return { opps, caps: resourceCaps(ctx, opps) };
+  });
   push('toOpportunities', o.ms);
-  const a = time(() => runPlan(o.out, settings.capital));
+  const a = time(() => runPlan(o.out.opps, settings.capital, o.out.caps));
   push('allocate', a.ms);
   push('total', performance.now() - t0);
-  last = { ...outs, opps: o.out };
+  last = { ...outs, opps: o.out.opps, caps: o.out.caps };
 }
 
 const timings = Object.fromEntries(Object.entries(samples).map(([k, v]) => [k, Math.round(median(v) * 10) / 10]));
@@ -103,7 +104,7 @@ if (REPORT) {
       .map((r) => ({ id: r.id, pph: Math.round(r.profitPerHour) }));
   const opps = last.opps as ReturnType<typeof toOpportunities>;
   const plan = (capital: number) => {
-    const p = runPlan(opps, capital);
+    const p = runPlan(opps, capital, last.caps as Record<string, number>);
     return { pph: Math.round(p.profitPerHour), positions: p.allocations.length };
   };
   report = {

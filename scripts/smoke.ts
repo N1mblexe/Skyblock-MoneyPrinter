@@ -29,7 +29,7 @@ import { filterKat, KAT_SCHEMA, type KatQuery } from '../src/ui/views/kat/model.
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
-import { allocate, toOpportunities } from '../src/domain/optimizer.ts';
+import { allocate, resourceCaps, toOpportunities } from '../src/domain/optimizer.ts';
 import { matchesQuery, resolveUserInput } from '../src/domain/search.ts';
 import { computeShopRows } from '../src/domain/shops.ts';
 import { defaultSettings } from '../src/state/appState.ts';
@@ -187,9 +187,10 @@ async function computeExpected(): Promise<Expected> {
     shops: filterShops(computeShopRows(ctx), sf, catalog, settings.hideSuspicious).rows.length,
   };
 
-  const opps = toOpportunities({ flips: flipRows, crafts, chains, books: computeBookCombines(ctx), npc: npcAll, kat: katAll }, settings);
+  const opps = toOpportunities({ flips: flipRows, crafts, chains, books: computeBookCombines(ctx), npc: npcAll, kat: katAll });
   const pq = defaults<PlanQuery>(PLAN_SCHEMA);
-  const plan = (capital: number) => allocate(filterKinds(opps, pq), planOptions(pq, { ...settings, capital }));
+  const caps = resourceCaps(ctx, opps);
+  const plan = (capital: number) => allocate(filterKinds(opps, pq), planOptions(pq, { ...settings, capital }, caps));
   const base = plan(settings.capital);
   const big = plan(BIG_CAPITAL);
 
