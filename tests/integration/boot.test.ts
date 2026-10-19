@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
 // Boot the real app (bootstrap) against stubbed Hypixel endpoints: live status, overview, AH, election.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AhSalesPollerOptions } from '../../src/api/ahSales.ts';
+import { emptySalesState, ingestPage, salesInfo, validateEnded, type AhSalesPollerOptions } from '../../src/api/ahSales.ts';
+import { AH_SALES } from '../../src/config.ts';
 import type { AhSalesSnapshot } from '../../src/types/contracts.ts';
-import { bootApp, expectNoConsoleErrors, freshBazaar, go, settle, teardownApp, waitFor, type Booted } from './harness.ts';
+import { bootApp, endedNow, expectNoConsoleErrors, freshBazaar, go, settle, teardownApp, waitFor, type Booted } from './harness.ts';
 
 afterEach(teardownApp);
 
@@ -232,3 +233,75 @@ describe('AH sales poller', () => {
   });
 });
 
+describe('boot with AH sales (the real poller)', () => {
+  /** what the store holds after one fixture response (the Settings → Data box shows it) */
+  const fixtureInfo = () => {
+    const s = emptySalesState();
+    ingestPage(s, validateEnded(endedNow()));
+    return salesInfo(s);
+  };
+  const pillSales = () => document.querySelector<HTMLElement>('[data-testid="status-sales"]')!;
+  const salesBox = () => document.querySelector<HTMLElement>('[data-testid="sales-store"]')!;
+  /** the sales box's values (sales, items) once it has read the store */
+  async function salesBoxNumbers(): Promise<number[]> {
+    document.querySelector<HTMLButtonElement>('[data-testid="settings-btn"]')!.click();
+    await waitFor(() => salesBox().querySelectorAll('.sales-kv dd').length === 3, 'sales box values');
+    return [...salesBox().querySelectorAll('.sales-kv dd')].slice(0, 2).map((d) => Number(d.textContent!.replace(/\D/g, '')));
+  }
+
+  it('fetches auctions_ended, stores the sales, and the status pill and Settings → Data show them', async () => {
+    const b = await bootApp();
+    await waitFor(() => b.store.get().ahSales !== null, 'AH sales summary');
+    expect(b.net.calls('/skyblock/auctions_ended')).toBe(1);
+    const sales = b.store.get().ahSales!;
+    const info = fixtureInfo();
+    expect(info.sales).toBeGreaterThan(0);
+    // one response covers AH_SALES.windowSpanMs: far below the coverage at which rates are used
+    expect(sales.coverageHours).toBeCloseTo(AH_SALES.windowSpanMs / 3_600_000, 6);
+    expect(sales.coverageHours).toBeLessThan(AH_SALES.minCoverageHours);
+    expect(Object.keys(sales.byId).length).toBeGreaterThanOrEqual(info.ids);
+    expect(Object.values(sales.byId).every((x) => x.perHour === null && x.n > 0 && x.median > 0)).toBe(true);
+
+    await waitFor(() => !pillSales().hidden, 'status pill sales');
+    expect(pillSales().textContent).toBe(`sales 0.0/${AH_SALES.minCoverageHours} h`);
+    expect(pillSales().dataset.low).toBe('true');
+
+    expect(await salesBoxNumbers()).toEqual([info.sales, info.ids]);
+    expect(salesBox().hidden).toBe(false);
+    expectNoConsoleErrors(b);
+    expect(b.warns).not.toHaveBeenCalled();
+  });
+
+  it('a reload with the feed down shows the stored sales from IndexedDB; a repeat poll stores no duplicates', async () => {
+    const first = await bootApp();
+    await waitFor(() => first.store.get().ahSales !== null, 'AH sales summary');
+    const before = first.store.get().ahSales!;
+    await settle(3); // the store write
+    teardownApp();
+
+    const b = await bootApp({
+      keepDb: true,
+      beforeBoot: (net) => {
+        net.setEnded(false);
+        vi.spyOn(console, 'warn').mockImplementation(() => {}); // the expected failed poll (bootApp's spy is this one)
+      },
+    });
+    await waitFor(() => b.store.get().ahSales !== null, 'cached AH sales');
+    const cached = b.store.get().ahSales!;
+    expect(Object.keys(cached.byId).sort()).toEqual(Object.keys(before.byId).sort());
+    expect(cached.coverageHours).toBeCloseTo(before.coverageHours, 9);
+    await waitFor(() => b.net.calls('/skyblock/auctions_ended') === 1 && b.warns.mock.calls.length > 0, 'failed sales poll');
+    expect(b.warns).toHaveBeenCalledWith('AH sales fetch failed', expect.any(Error));
+    expect(b.store.get().ahSales).toBe(cached); // a failed poll keeps the summary
+    await waitFor(() => !pillSales().hidden, 'status pill sales');
+    expect(await salesBoxNumbers()).toEqual([fixtureInfo().sales, fixtureInfo().ids]);
+    teardownApp();
+
+    // the feed is back: the same auctions again (a new lastUpdated) add coverage (overlapping windows merge), not sales
+    const c = await bootApp({ keepDb: true });
+    await waitFor(() => c.net.calls('/skyblock/auctions_ended') === 1 && (c.store.get().ahSales?.coverageHours ?? 0) > before.coverageHours, 'second poll');
+    expect(c.store.get().ahSales!.coverageHours).toBeLessThanOrEqual(2 * before.coverageHours);
+    expect(await salesBoxNumbers()).toEqual([fixtureInfo().sales, fixtureInfo().ids]);
+    expectNoConsoleErrors(c);
+  });
+});

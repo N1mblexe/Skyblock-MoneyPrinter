@@ -4,9 +4,10 @@
 // (context.route), and the expected numbers are computed at startup from the same fixtures with the domain code
 // (computeFlips, computeCrafts, allocate, ...) and default settings, so no threshold here is hand-picked.
 //   bazaar   -> tests/fixtures/smoke/bazaar.json.gz (lastUpdated = now on every request)
-//   auctions -> tests/fixtures/ah-page.json (page 0, totalPages 1; the app scans it as AH scan v3, so Kat runs)
+//   auctions -> tests/fixtures/ah-page.json (page 0, totalPages 1; the app scans it as AH scan v3, so Kat runs), with one
+//               pet (GEORGE_PET) repriced below what George pays, so the George view has a row
 //   election -> tests/fixtures/election.json
-//   auctions_ended -> tests/fixtures/ah-ended.json (lastUpdated = now)
+//   auctions_ended -> tests/fixtures/ah-ended.json (moved to now: lastUpdated and sale times)
 //   Google Fonts CSS -> empty stylesheet; anything else external -> aborted and reported.
 // Suites: desktop 1280x800 (everything), mobile 390x844 (shell + routes + cards), error path (API down, manual load).
 // --live: no stubbing, reduced checks (status, routes, flip rows, palette, language, mobile shell).
@@ -16,29 +17,41 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Locator, type Page, type Route as PwRoute } from 'playwright-core';
 import { scanAuctions, type RawAhPage } from '../src/api/auctions.ts';
+import { parseElection } from '../src/api/election.ts';
 import { toSnapshot, validateRaw } from '../src/api/normalize.ts';
 import { catalogFromFile, validateCatalogFile } from '../src/data/catalog.ts';
-import { computeBookCombines } from '../src/domain/books.ts';
-import { computeAhFlips } from '../src/domain/ahFlips.ts';
+import { computeAhFlips, computeGeorgeFlips, type AhFlipRow } from '../src/domain/ahFlips.ts';
 import { computeBitsRows } from '../src/domain/bits.ts';
+import { computeBookCombines } from '../src/domain/books.ts';
 import { bestPerLadder, computeChains } from '../src/domain/chains.ts';
-import { computeKatFlips, KAT_DERIVED_SKIP } from '../src/domain/kat.ts';
-import { AHFLIP_SCHEMA, filterAhFlips, type AhFlipQuery } from '../src/ui/views/ahflip/model.ts';
-import { BITS_SCHEMA, filterBitsRows, type BitsQuery } from '../src/ui/views/bits/model.ts';
-import { filterKat, KAT_SCHEMA, type KatQuery } from '../src/ui/views/kat/model.ts';
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
+import { computeKatFlips, KAT_DERIVED_SKIP } from '../src/domain/kat.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
 import { allocate, resourceCaps, toOpportunities } from '../src/domain/optimizer.ts';
 import { matchesQuery, resolveUserInput } from '../src/domain/search.ts';
 import { computeShopRows } from '../src/domain/shops.ts';
 import { defaultSettings } from '../src/state/appState.ts';
-import type { CalcCtx, FlipRow, Settings } from '../src/types/contracts.ts';
-import { CHAIN_SCHEMA, filterChains, filterCrafts, SCHEMA as CRAFT_SCHEMA, type ChainQuery, type KindFilter, type MarketFilter } from '../src/ui/views/craft/helpers.ts';
+import { isDerpy } from '../src/state/derived.ts';
+import type { AhSalesSnapshot, AhSnapshot, CalcCtx, Catalog, FlipRow, Settings, Snapshot } from '../src/types/contracts.ts';
+import { fmtCoins } from '../src/ui/format.ts';
+import { AHFLIP_SCHEMA, filterAhFlips, type AhFlipQuery } from '../src/ui/views/ahflip/model.ts';
+import { BITS_SCHEMA, filterBitsRows, type BitsQuery } from '../src/ui/views/bits/model.ts';
+import {
+  CHAIN_SCHEMA,
+  filterChains,
+  filterCrafts,
+  kindsOf,
+  SCHEMA as CRAFT_SCHEMA,
+  type ChainQuery,
+  type CraftQuery,
+  type MarketFilter,
+  type SourceFilter,
+} from '../src/ui/views/craft/helpers.ts';
+import { filterKat, KAT_SCHEMA, type KatQuery } from '../src/ui/views/kat/model.ts';
 import { filterFlips, filterShops, FLIP_SCHEMA as NPC_FLIP_SCHEMA, SHOP_SCHEMA, SEGMENTS, type FlipFilters, type ShopFilters } from '../src/ui/views/npc/npcData.ts';
 import { filterKinds, PLAN_SCHEMA, planOptions, type PlanQuery } from '../src/ui/views/plan/model.ts';
-import { fmtCoins } from '../src/ui/format.ts';
-import { findBrowser, freePort, loadSmokeFixtures, ROOT, sleep, startServer, withNow } from './lib/browser.ts';
+import { derivedCtx, endedNow, findBrowser, fixtureSales, freePort, loadSmokeFixtures, ROOT, sleep, startServer, withNow } from './lib/browser.ts';
 
 const LIVE = process.argv.includes('--live');
 const DESKTOP = { width: 1280, height: 800 };
@@ -75,6 +88,8 @@ const BAZAAR_TEXT = FIXTURES?.bazaar ?? '';
 const AH_PAGE: RawAhPage | null = FIXTURES?.ahPage ?? null;
 const ELECTION_TEXT = FIXTURES?.election ?? '';
 const AH_ENDED_TEXT = FIXTURES?.ahEnded ?? '';
+/** a pet listed in the fixture page above George's price: computeExpected lists it at half his price */
+const GEORGE_PET = 'ENDERMAN;2';
 
 /** Schema defaults as the view's query state decodes them with an empty URL and no stored prefs. */
 function defaults<V>(schema: Record<string, { def: unknown }>): V {
@@ -86,15 +101,25 @@ interface Expected {
   flipRows: FlipRow[];
   flipDefault: number;
   flipQ: number;
-  /** Craft page: shown / all craft recipes; Forge page: shown / all forge recipes */
+  /** Craft page (source Crafts, the default): shown / all craft recipes; Forge page: shown / all forge recipes */
   craftTotal: number;
   craftAll: number;
   forgeTotal: number;
   craftForge: number;
+  /** Craft page with the source segment on Shop trades / Both: shown and all */
+  shopShown: number;
+  shopTotal: number;
+  bothShown: number;
+  bothTotal: number;
   chainTotal: number;
   chainDefault: number;
   ahFlipTotal: number;
   ahFlipDefault: number;
+  /** AH flips page in George mode (#/ahflip?mode=george) */
+  georgeTotal: number;
+  georgeDefault: number;
+  /** George mode with min profit 0 */
+  georgeAll: number;
   katTotal: number;
   katDefault: number;
   /** with suspect rows shown (the fixture's thin pet markets are all suspect) */
@@ -105,52 +130,74 @@ interface Expected {
   planPph: { base: string; big: string; baseN: number; bigN: number; positions: number };
   paletteId: string | null;
   mayor: string | null;
+  /** what differs with settings.conservative off (empty: conservatism is a no-op without history, as it must be) */
+  consDiff: string[];
+  /** the sales store after the fixture auctions_ended page (Settings → Data) */
+  sales: { sales: number; ids: number };
 }
 
 const BIG_CAPITAL = 1e9;
 
-async function computeExpected(): Promise<Expected> {
-  const raw = validateRaw(JSON.parse(withNow(BAZAAR_TEXT)));
-  const snap = toSnapshot(raw, Date.now(), 'live');
-  const catalog = catalogFromFile(validateCatalogFile(JSON.parse(readFileSync(fx('public/data/catalog.json'), 'utf8'))));
-  const ah = await scanAuctions(async () => AH_PAGE!, () => {});
-  const settings: Settings = { ...defaultSettings };
-  // history has < RISK.spikeMinPoints points during the run, which assessRisk treats like no stats
-  const ctx: CalcCtx = { snap, catalog, settings, stats: () => null, ah: (id) => ah.lowestBin[id] ?? null };
+/** The fixture inputs every expected number is computed from. */
+interface Inputs {
+  snap: Snapshot;
+  catalog: Catalog;
+  ah: AhSnapshot;
+  sales: AhSalesSnapshot | null;
+  derpy: boolean;
+}
+
+type Counts = Omit<Expected, 'ctx' | 'flipRows' | 'paletteId' | 'mayor' | 'consDiff' | 'sales'> & { ctx: CalcCtx; flipRows: FlipRow[] };
+
+/**
+ * Every count and plan number the pages show with `settings`, computed the way src/state/derived.ts computes them
+ * (derivedCtx: one market core over the AH part; AH and George flips join the opportunities as 'ahflip') and filtered
+ * with each view's URL defaults.
+ */
+function countsFor(settings: Settings, i: Inputs): Counts {
+  const { snap, catalog, ah, sales, derpy } = i;
+  const { trade, full: ctx } = derivedCtx({ snap, catalog, settings, ah, sales, derpy });
+  const hide = settings.hideSuspicious;
 
   // flip view defaults (FLIP_SCHEMA in src/ui/views/flip/flipView.ts, not importable here: it pulls in CSS):
   // minVol 10,000/week, minMargin 1 %, risk 'all', suspect rows hidden while settings.hideSuspicious
-  const flipRows = computeFlips(ctx);
-  const flipPass = (r: FlipRow) => r.weekVol >= 10_000 && r.margin >= 0.01 && !(settings.hideSuspicious && r.risk.level === 'suspect');
+  const flipRows = computeFlips(trade);
+  const flipPass = (r: FlipRow) => r.weekVol >= 10_000 && r.margin >= 0.01 && !(hide && r.risk.level === 'suspect');
   const flipDefault = flipRows.filter(flipPass).length;
   const flipQ = flipRows.filter((r) => flipPass(r) && matchesQuery(catalog, r.id, FLIP_Q)).length;
 
+  // Craft / Forge pages: the pane's recipe kinds (kindsOf: the Craft page's source segment, default Crafts), then the filters
   const crafts = computeCrafts(ctx);
-  const cq = defaults<{ q: string; minVol: number | null; minMargin: number | null; minPph: number | null; kind: string; market: string; unpriced: boolean; suspect: boolean }>(CRAFT_SCHEMA);
-  const craftCount = (kind: KindFilter) =>
-    filterCrafts(
-      crafts,
-      { q: cq.q, minVol: cq.minVol, minMargin: cq.minMargin, minPph: cq.minPph, kind, market: cq.market as MarketFilter, showUnpriced: cq.unpriced, hideSuspect: settings.hideSuspicious && !cq.suspect },
+  const cq = defaults<CraftQuery>(CRAFT_SCHEMA);
+  const craftCount = (kinds: ReadonlySet<string>) => {
+    const all = crafts.filter((r) => kinds.has(r.recipe.kind));
+    const shown = filterCrafts(
+      all,
+      { q: cq.q, minVol: cq.minVol, minMargin: cq.minMargin, minPph: cq.minPph, kind: 'all', market: cq.market as MarketFilter, showUnpriced: cq.unpriced, hideSuspect: hide && !cq.suspect },
       catalog,
     ).rows.length;
+    return { shown, total: all.length };
+  };
+  const craft = craftCount(kindsOf('craft', cq.src as SourceFilter));
+  const shop = craftCount(kindsOf('craft', 'shop'));
+  const both = craftCount(kindsOf('craft', 'all'));
+  const forge = craftCount(kindsOf('forge', 'craft'));
 
   // chains tab defaults: best move per ladder, min 2 steps, min margin 1 %, suspect hidden while hideSuspicious
   const chains = computeChains(ctx);
   const chq = defaults<ChainQuery>(CHAIN_SCHEMA);
   const chainDefault = filterChains(
     chains,
-    { q: chq.q, only: chq.best ? bestPerLadder(chains) : null, minSteps: chq.minSteps, minMargin: chq.minMargin, minPph: chq.minPph, showUnpriced: chq.unpriced, hideSuspect: settings.hideSuspicious && !chq.suspect },
+    { q: chq.q, only: chq.best ? bestPerLadder(chains) : null, minSteps: chq.minSteps, minMargin: chq.minMargin, minPph: chq.minPph, showUnpriced: chq.unpriced, hideSuspect: hide && !chq.suspect },
     catalog,
   ).rows.length;
 
-  // AH flips page defaults, on the fixture scan (the fixture mayor is not Derpy)
-  const ahFlips = computeAhFlips(ah, catalog);
+  // AH flips page defaults (relist and George modes), with the options derived and the page pass
+  const ahFlips = computeAhFlips(ah, catalog, { derpy, conservative: settings.conservative, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) });
+  const george = computeGeorgeFlips(ah, catalog, { cycleHours: settings.cycleHours });
   const afq = defaults<AhFlipQuery>(AHFLIP_SCHEMA);
-  const ahFlipDefault = filterAhFlips(
-    ahFlips,
-    { q: afq.q, minProfit: afq.minProfit, minMargin: afq.minMargin, minCount: afq.minCount, pets: afq.pets, hideSuspect: settings.hideSuspicious && !afq.suspect },
-    catalog,
-  ).rows.length;
+  const ahFlipCount = (rows: AhFlipRow[], minProfit = afq.minProfit) =>
+    filterAhFlips(rows, { q: afq.q, minProfit, minMargin: afq.minMargin, minCount: afq.minCount, pets: afq.pets, hideSuspect: hide && !afq.suspect }, catalog).rows.length;
 
   // Kat page defaults: skip items when they pay, settings.taming (60: no rows dropped), both bands, min profit 100k, unpriced and
   // suspect hidden
@@ -166,57 +213,92 @@ async function computeExpected(): Promise<Expected> {
         maxHours: kq.maxHours,
         band: kq.band === 'any' || kq.band === 'max' ? kq.band : 'both',
         showUnpriced: kq.unpriced,
-        hideSuspect: settings.hideSuspicious && !suspect,
+        hideSuspect: hide && !suspect,
       },
       catalog,
     ).rows.length;
-  const katDefault = katCount(kq.suspect);
-  const katSuspect = katCount(true);
 
-  // Bits page defaults: New Player rank (x1, nothing stored), every source, untradeable / unpriced and suspect hidden
-  const bits = computeBitsRows(ctx, { multiplier: 1 }).rows;
+  // Bits page defaults: settings.bitsMultiplier (x1 by default), every source, untradeable / unpriced and suspect hidden
+  const bits = computeBitsRows(ctx).rows;
   const bq = defaults<BitsQuery>(BITS_SCHEMA);
-  const bitsDefault = filterBitsRows(bits, { q: bq.q, minCpb: bq.minCpb, src: bq.src, unsold: bq.unsold, hideSuspect: settings.hideSuspicious && !bq.suspect }, catalog).rows.length;
+  const bitsDefault = filterBitsRows(bits, { q: bq.q, minCpb: bq.minCpb, src: bq.src, unsold: bq.unsold, hideSuspect: hide && !bq.suspect }, catalog).rows.length;
 
-  const npcAll = computeNpcFlips(ctx);
+  const npcAll = computeNpcFlips(trade);
   const ff = defaults<FlipFilters>(NPC_FLIP_SCHEMA);
   const sf = defaults<ShopFilters>(SHOP_SCHEMA);
   const npc = {
     bz2npc: filterFlips(npcAll, 'bz2npc', ff, { snap, catalog, settings }).rows.length,
     npc2bz: filterFlips(npcAll, 'npc2bz', ff, { snap, catalog, settings }).rows.length,
-    shops: filterShops(computeShopRows(ctx), sf, catalog, settings.hideSuspicious).rows.length,
+    shops: filterShops(computeShopRows(ctx), sf, catalog, hide).rows.length,
   };
 
-  const opps = toOpportunities({ flips: flipRows, crafts, chains, books: computeBookCombines(ctx), npc: npcAll, kat: katAll });
+  // derived.opportunities() + the Plan page: its kind toggles (ahflip off by default) and planCaps over calcCtx()
+  const opps = toOpportunities({ flips: flipRows, crafts, chains, books: computeBookCombines(trade), npc: npcAll, kat: katAll, ahFlips: [...ahFlips, ...george] });
   const pq = defaults<PlanQuery>(PLAN_SCHEMA);
   const caps = resourceCaps(ctx, opps);
   const plan = (capital: number) => allocate(filterKinds(opps, pq), planOptions(pq, { ...settings, capital }, caps));
   const base = plan(settings.capital);
   const big = plan(BIG_CAPITAL);
 
-  const election = JSON.parse(ELECTION_TEXT) as { mayor?: { name?: string } };
   return {
     ctx,
     flipRows,
     flipDefault,
     flipQ,
-    craftTotal: crafts.filter((r) => r.recipe.kind === 'craft').length,
-    craftAll: craftCount('craft'),
-    forgeTotal: crafts.filter((r) => r.recipe.kind === 'forge').length,
-    craftForge: craftCount('forge'),
+    craftTotal: craft.total,
+    craftAll: craft.shown,
+    forgeTotal: forge.total,
+    craftForge: forge.shown,
+    shopShown: shop.shown,
+    shopTotal: shop.total,
+    bothShown: both.shown,
+    bothTotal: both.total,
     chainTotal: chains.length,
     chainDefault,
     ahFlipTotal: ahFlips.length,
-    ahFlipDefault,
+    ahFlipDefault: ahFlipCount(ahFlips),
+    georgeTotal: george.length,
+    georgeDefault: ahFlipCount(george),
+    georgeAll: ahFlipCount(george, 0),
     katTotal: katAll.length,
-    katDefault,
-    katSuspect,
+    katDefault: katCount(kq.suspect),
+    katSuspect: katCount(true),
     bitsTotal: bits.length,
     bitsDefault,
     npc,
     planPph: { base: fmtCoins(base.profitPerHour), big: fmtCoins(big.profitPerHour), baseN: base.profitPerHour, bigN: big.profitPerHour, positions: base.allocations.length },
+  };
+}
+
+async function computeExpected(): Promise<Expected> {
+  const raw = validateRaw(JSON.parse(withNow(BAZAAR_TEXT)));
+  const snap = toSnapshot(raw, Date.now(), 'live');
+  const catalog = catalogFromFile(validateCatalogFile(JSON.parse(readFileSync(fx('public/data/catalog.json'), 'utf8'))));
+  // reprice GEORGE_PET's cheapest listing (in the page the app is served too) to half of George's price
+  const listing = (await scanAuctions(async () => AH_PAGE!, () => {})).lowestBin[GEORGE_PET];
+  const auction = AH_PAGE!.auctions.find((a) => a.uuid === listing?.uuid);
+  const george = catalog.george[GEORGE_PET];
+  if (!auction || !george) throw new Error(`fixture: no ${GEORGE_PET} listing or George price to reprice`);
+  auction.starting_bid = Math.floor(george / 2);
+  const ah = await scanAuctions(async () => AH_PAGE!, () => {});
+  const election = parseElection(JSON.parse(ELECTION_TEXT), Date.now());
+  // the app's first sales poll (coverage < AH_SALES.minCoverageHours: no rates or medians used)
+  const sales = fixtureSales(AH_ENDED_TEXT);
+  const inputs: Inputs = { snap, catalog, ah, sales: sales.summary, derpy: isDerpy(election) };
+  const settings: Settings = { ...defaultSettings };
+  const exp = countsFor(settings, inputs);
+  // without history, conservatism must change nothing: the same numbers with settings.conservative flipped
+  const alt = countsFor({ ...settings, conservative: !settings.conservative }, inputs);
+  const sig = (c: Counts) => ({ ...c, ctx: null, flipRows: c.flipRows.length });
+  const a = sig(exp) as Record<string, unknown>;
+  const b = sig(alt) as Record<string, unknown>;
+  const consDiff = Object.keys(a).filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+  return {
+    ...exp,
     paletteId: resolveUserInput(catalog, 'enchanted gold', new Set(Object.keys(snap.products))),
     mayor: election.mayor?.name ?? null,
+    consDiff,
+    sales: { sales: sales.info.sales, ids: sales.info.ids },
   };
 }
 
@@ -292,7 +374,7 @@ async function handleRoute(env: Env, route: PwRoute): Promise<void> {
     }
     if (u.pathname === '/v2/skyblock/auctions_ended') {
       env.hits.auctionsEnded++;
-      return json(withNow(AH_ENDED_TEXT));
+      return json(endedNow(AH_ENDED_TEXT));
     }
     if (u.pathname === '/v2/resources/skyblock/election') {
       env.hits.election++;
@@ -418,6 +500,19 @@ async function desktopSuite(browser: Browser, exp: Expected): Promise<void> {
     );
   });
 
+  await step(`${L} AH sales feed`, async () => {
+    // the sales poller's first request (after it loads the empty store) and the coverage it adds to the status pill
+    const hits = await until(async () => env.hits.auctionsEnded, (n) => n > 0, 30_000);
+    check(hits > 0, `${L} the AH sales poller requests auctions_ended (${hits} request(s))`);
+    const pill = page.locator(tid('status-sales'));
+    const text = await until(() => textOf(pill), (x) => /^sales \d+(\.\d)?\/\d+ h$/.test(x));
+    const low = await pill.getAttribute('data-low');
+    check(
+      /^sales \d+(\.\d)?\/\d+ h$/.test(text) && low === 'true' && (await pill.isVisible()),
+      `${L} status pill shows the sales coverage, below the minimum while the feed is new ("${text}", data-low=${low})`,
+    );
+  });
+
   await routesSuite(env, false);
 
   await step(`${L} palette`, async () => {
@@ -533,6 +628,27 @@ async function craftSuite(env: Env, exp: Expected): Promise<void> {
     const all = await until(counts, (xs) => xs.includes(exp.craftAll) && xs.includes(exp.craftTotal));
     check(all.includes(exp.craftAll) && all.includes(exp.craftTotal), `${L} Craft page shows the domain count (${exp.craftAll} of ${exp.craftTotal}; UI ${all.join('/')})`);
   });
+  await step(`${L} craft source segment`, async () => {
+    // Crafts (default) -> Shop trades -> Both, by the filter bar's source segment; the URL follows
+    const seg = (v: string) => page.locator(`#view [data-filter="src"] button[data-value="${v}"]`);
+    for (const [src, shown, total] of [
+      ['shop', exp.shopShown, exp.shopTotal],
+      ['all', exp.bothShown, exp.bothTotal],
+    ] as const) {
+      await seg(src).click();
+      const n = await until(counts, (xs) => xs.includes(shown) && xs.includes(total));
+      const q = await until(async () => query(page).get('src'), (x) => x === src);
+      check(
+        n.includes(shown) && n.includes(total) && q === src && (await seg(src).getAttribute('aria-pressed')) === 'true',
+        `${L} Craft page source ${src} shows the domain count (${shown} of ${total}; UI ${n.join('/')}, src=${q})`,
+      );
+    }
+    check(exp.shopTotal > 0 && exp.bothTotal === exp.craftTotal + exp.shopTotal, `${L} shop recipes exist and Both = Crafts + Shop trades (${exp.craftTotal} + ${exp.shopTotal} = ${exp.bothTotal})`);
+    await seg('craft').click();
+    const back = await until(counts, (xs) => xs.includes(exp.craftAll) && xs.includes(exp.craftTotal));
+    const q = await until(async () => query(page).has('src'), (x) => !x);
+    check(back.includes(exp.craftAll) && !q, `${L} Crafts restores the default count and drops src from the URL (${back.join('/')}, ${hash(page)})`);
+  });
   await step(`${L} AH flips page`, async () => {
     await go(page, '#/ahflip');
     const n = await until(async () => ints(await textOf(page.locator(tid('ahflip-count')))), (xs) => xs.includes(exp.ahFlipDefault) && xs.includes(exp.ahFlipTotal));
@@ -540,6 +656,16 @@ async function craftSuite(env: Env, exp: Expected): Promise<void> {
       n.includes(exp.ahFlipDefault) && n.includes(exp.ahFlipTotal),
       `${L} AH flips page shows the domain count (${exp.ahFlipDefault} of ${exp.ahFlipTotal}; UI ${n.join('/')})`,
     );
+    await go(page, '#/ahflip?mode=george');
+    const g = await until(async () => ints(await textOf(page.locator(tid('ahflip-count')))), (xs) => xs.includes(exp.georgeDefault) && xs.includes(exp.georgeTotal));
+    check(
+      exp.georgeTotal > 0 && g.includes(exp.georgeDefault) && g.includes(exp.georgeTotal),
+      `${L} George mode shows the domain count (${exp.georgeDefault} of ${exp.georgeTotal} pets below George's price; UI ${g.join('/')})`,
+    );
+    await go(page, '#/ahflip?mode=george&minProfit=0');
+    const g0 = await until(async () => ints(await textOf(page.locator(tid('ahflip-count')))), (xs) => xs[0] === exp.georgeAll);
+    const rows = await until(() => page.locator('#view tbody tr[data-key]').count(), (x) => x === exp.georgeAll);
+    check(exp.georgeAll > 0 && g0[0] === exp.georgeAll && rows === exp.georgeAll, `${L} George mode with min profit 0 lists ${exp.georgeAll} row(s) (UI ${g0.join('/')}, ${rows} in the DOM)`);
   });
   await step(`${L} Kat upgrades page`, async () => {
     await go(page, '#/kat');
@@ -681,6 +807,49 @@ async function settingsSuite(env: Env, exp: Expected): Promise<void> {
     await page.press(`${drawer} [name="capital"]`, 'Tab');
     const reset = await until(() => textOf(page.locator(pph)), (s) => s === exp.planPph.base);
     check(reset === exp.planPph.base, `${L} capital back to 5m restores profit/hour (${reset})`);
+  });
+
+  await step(`${L} settings: conservative without history`, async () => {
+    check(exp.consDiff.length === 0, `${L} conservative off computes the same numbers without history (domain; differs: ${exp.consDiff.join(', ') || 'nothing'})`);
+    const box = page.locator(`${drawer} [name="conservative"]`);
+    check(await box.isChecked(), `${L} conservative is on by default`);
+    await box.uncheck();
+    const stored = await until(
+      () => page.evaluate(() => (JSON.parse(localStorage.getItem('bazaarMasasi.settings') ?? '{}') as { conservative?: boolean }).conservative),
+      (x) => x === false,
+    );
+    // let the plan recompute, then it must still show the default numbers
+    await sleep(500);
+    const off = await until(() => textOf(page.locator(pph)), (s) => s === exp.planPph.base);
+    const pos = ints(await textOf(page.locator(tid('plan-positions'))));
+    check(stored === false && off === exp.planPph.base && pos[0] === exp.planPph.positions, `${L} conservative off leaves the plan unchanged (${off}, ${pos[0]} positions)`);
+    await page.keyboard.press('Escape');
+    await until(() => isOpen(page, drawer), (x) => !x);
+    await go(page, '#/flip');
+    const f = await countIs(page, tid('flip-count'), exp.flipDefault);
+    await go(page, '#/craft');
+    const c = await until(async () => ints(await textOf(page.locator('.craft-count'))), (xs) => xs.includes(exp.craftAll) && xs.includes(exp.craftTotal));
+    check(f.includes(exp.flipDefault) && c.includes(exp.craftAll), `${L} conservative off leaves the flip and craft counts unchanged (flips ${f.join('/')}, crafts ${c.join('/')})`);
+    await go(page, '#/plan');
+    await h1Text(page);
+    await page.click(tid('settings-btn'));
+    await until(() => isOpen(page, drawer), (x) => x);
+    await box.check();
+    const on = await until(
+      () => page.evaluate(() => (JSON.parse(localStorage.getItem('bazaarMasasi.settings') ?? '{}') as { conservative?: boolean }).conservative),
+      (x) => x === true,
+    );
+    check(on === true, `${L} conservative back on`);
+  });
+
+  await step(`${L} settings: AH sales store`, async () => {
+    const kv = page.locator(`${drawer} ${tid('sales-store')} .sales-kv`);
+    const n = await until(async () => ints(await textOf(kv.locator('dd').first())), (xs) => xs[0] === exp.sales.sales);
+    const ids = ints(await textOf(kv.locator('dd').nth(1)));
+    check(
+      exp.sales.sales > 0 && n[0] === exp.sales.sales && ids[0] === exp.sales.ids && (await page.locator(`${drawer} ${tid('sales-store')}`).isVisible()),
+      `${L} Settings → Data shows the stored AH sales (${exp.sales.sales} sales of ${exp.sales.ids} items; UI ${n.join('/')} / ${ids.join('/')})`,
+    );
   });
 
   await step(`${L} settings: theme`, async () => {
@@ -943,8 +1112,8 @@ try {
   if (exp) {
     console.log(
       `info  expected (fixture, default settings): flips ${exp.flipDefault}/${exp.flipRows.length}, q=${FLIP_Q} ${exp.flipQ}, ` +
-        `crafts ${exp.craftAll} of ${exp.craftTotal}, forges ${exp.craftForge} of ${exp.forgeTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, AH flips ${exp.ahFlipDefault} of ${exp.ahFlipTotal}, Kat ${exp.katDefault} of ${exp.katTotal} (${exp.katSuspect} with suspect), bits ${exp.bitsDefault} of ${exp.bitsTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
-        `plan ${exp.planPph.base} -> ${exp.planPph.big} at 1b (${exp.planPph.positions} positions)`,
+        `crafts ${exp.craftAll} of ${exp.craftTotal} (shop ${exp.shopShown} of ${exp.shopTotal}, both ${exp.bothShown} of ${exp.bothTotal}), forges ${exp.craftForge} of ${exp.forgeTotal}, chains ${exp.chainDefault} of ${exp.chainTotal}, AH flips ${exp.ahFlipDefault} of ${exp.ahFlipTotal}, George ${exp.georgeDefault} of ${exp.georgeTotal}, Kat ${exp.katDefault} of ${exp.katTotal} (${exp.katSuspect} with suspect), bits ${exp.bitsDefault} of ${exp.bitsTotal}, npc bz2npc ${exp.npc.bz2npc} npc2bz ${exp.npc.npc2bz} shops ${exp.npc.shops}, ` +
+        `plan ${exp.planPph.base} -> ${exp.planPph.big} at 1b (${exp.planPph.positions} positions), AH sales ${exp.sales.sales} of ${exp.sales.ids} items`,
     );
   }
   const port = await freePort();
