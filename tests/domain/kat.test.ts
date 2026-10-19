@@ -440,11 +440,12 @@ describe('computeKatFlips', () => {
     const stat = (o: Partial<AhSalesStat> = {}): AhSalesStat => ({ n: 5, items: 5, median: 5_000_000, perHour: 0.5, coverageHours: 3, last: 0, ...o });
     const cons = { conservative: true };
     const r = byKey(run({ ...base, sales: { 'OCELOT;4': stat() }, settings: cons }), 'OCELOT;3>4:max');
-    expect(r).toMatchObject({ sellHours: 2, salesPerHour: 0.5, sell: 5_000_000, sellRef: 5_999_999, hours: 132 });
+    // 0.5/h x 0.05 share is under the next sale's rate: 1 / min(0.5, AH_SALES.defaultPerHour) = 4 h
+    expect(r).toMatchObject({ sellHours: 4, salesPerHour: 0.5, sell: 5_000_000, sellRef: 5_999_999, hours: 134 });
     expect(r.sellNet).toBe(ahNet(5_000_000));
     // raw numbers without conservatism
     const raw = byKey(run({ ...base, sales: { 'OCELOT;4': stat() } }), 'OCELOT;3>4:max');
-    expect(raw).toMatchObject({ sell: 5_999_999, sellHours: 2 });
+    expect(raw).toMatchObject({ sell: 5_999_999, sellHours: 4 });
     expect(raw.sellRef).toBeUndefined();
     // too few sales for the median, a median above the listing, no rate yet, too little coverage
     expect(byKey(run({ ...base, sales: { 'OCELOT;4': stat({ n: 2 }) } , settings: cons }), 'OCELOT;3>4:max').sell).toBe(5_999_999);

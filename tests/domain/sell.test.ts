@@ -4,7 +4,7 @@ import { AH_SALES } from '../../src/config.ts';
 import { afterTax, ahNet } from '../../src/domain/pricing.ts';
 import { bestSale } from '../../src/domain/sale.ts';
 import type { CatalogFile, Product } from '../../src/types/contracts.ts';
-import { buildCatalog, catalogFile, ctx, makeProduct, snap } from './helpers.ts';
+import { buildCatalog, catalogFile, ctx, makeProduct, snap, stats } from './helpers.ts';
 
 // A -> B (160 A) -> C (2 B + 1 S) -> D (4 C); S is NPC-bought. A has an NPC sell price too.
 const file: CatalogFile = {
@@ -35,6 +35,18 @@ const c = () => ({ ...ctx(), snap: s, catalog: cat });
 const TAX = 0.0125;
 
 describe('raw sale options', () => {
+  it('conservatism prices the raw bazaar sales like every other sale (no-op without enough history)', () => {
+    const hist = { stats: () => stats({ n: 50, medianAsk: 450, medianBid: 380, madAsk: 2 }) };
+    const raw = new Map(rawOptions({ ...c(), ...hist }, 'B', 10).map((o) => [o.method, o]));
+    const on = new Map(rawOptions({ ...c(), ...hist, settings: { ...c().settings, conservative: true } }, 'B', 10).map((o) => [o.method, o]));
+    // insta-sell at no more than the median bid; sell offer at no more than the median ask - tick
+    expect(on.get('insta')!.net).toBeCloseTo(afterTax(380, TAX) * 10, 6);
+    expect(on.get('offer')!.net).toBeLessThanOrEqual(afterTax(449.9, TAX) * 10 + 1e-6);
+    expect(on.get('offer')!.net).toBeLessThan(raw.get('offer')!.net);
+    const thin = new Map(rawOptions({ ...c(), settings: { ...c().settings, conservative: true } }, 'B', 10).map((o) => [o.method, o]));
+    expect(thin.get('insta')!.net).toBe(raw.get('insta')!.net);
+  });
+
   it('insta-sell walks the buy orders, sell offer takes time, NPC is immediate', () => {
     const by = new Map(rawOptions(c(), 'A', 1000).map((o) => [o.method, o]));
     expect(by.get('insta')!.net).toBeCloseTo(afterTax(1, TAX) * 1000, 6);

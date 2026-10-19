@@ -26,7 +26,7 @@ const byKey = <K extends string | number>([a]: [K, unknown], [b]: [K, unknown]) 
  */
 export function computeBookCombines(ctx: CalcCtx): BookRow[] {
   const { snap, catalog, settings } = ctx;
-  const { costMode, sellMode, taxRate } = settings;
+  const { sellMode, taxRate } = settings;
   const core = coreOf(ctx);
 
   // base -> level -> product
@@ -78,7 +78,7 @@ export function computeBookCombines(ctx: CalcCtx): BookRow[] {
       const { k, plan } = best;
       count = 2 ** (L - k);
       inputId = bookId(base, k);
-      const inRisk = core.risk(inputId, { buy: costMode })!;
+      const inRisk = core.risk(inputId, { buy: plan.buy.order ? 'order' : 'insta' })!;
       const row: BookRow = {
         id,
         name: catalog.name(id),

@@ -38,6 +38,7 @@ import type { AppState, Route, Snapshot, ToastKind, View, ViewContext } from './
 import { toast as kitToast } from './ui/kit/index.ts';
 import { createRouter, parseHash, routeToHash } from './ui/router.ts';
 import { mountShell } from './ui/shell.ts';
+import { migrateBitsPrefs } from './ui/views/bits/bitsView.ts';
 import { views } from './ui/views/index.ts';
 
 
@@ -68,6 +69,8 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     if (s.alerts !== prev.alerts) saveAlerts(s.alerts);
     if (s.alertLog !== prev.alertLog) saveAlertLog(s.alertLog);
   });
+  // the old Bits page's rank prefs feed settings.bitsMultiplier (Kat prices bits items with it), so move them at boot
+  migrateBitsPrefs(store);
 
   const toast = (msg: string, kind: ToastKind = 'info') => void kitToast(msg, kind);
   const watch = {

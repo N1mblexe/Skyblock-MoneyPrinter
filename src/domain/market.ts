@@ -59,6 +59,18 @@ export function salesOf(ctx: CalcCtx, id: string): AhSalesStat | null {
   return s && s.coverageHours >= AH_SALES.minCoverageHours ? s : null;
 }
 
+/**
+ * Your AH sales (or buys) per hour of one id: AH_SALES.defaultPerHour without measured sales, else your share of the
+ * measured rate, but no less than the next sale's rate (min(measured, default)): listed at the lowest BIN you are first
+ * in line, so a measured market is never slower than an unmeasured one unless it really sells less than the default.
+ * Measured 0 (nothing sold over the coverage) stays 0.
+ */
+export function ahRate(perHour: number | null | undefined, share: number): number {
+  if (perHour == null) return AH_SALES.defaultPerHour;
+  if (!(perHour > 0)) return 0;
+  return Math.max(perHour * share, Math.min(perHour, AH_SALES.defaultPerHour));
+}
+
 /** The context's core: ctx.core when set, else one memoized per context object. */
 export function coreOf(ctx: CalcCtx): MarketCore {
   if (ctx.core) return ctx.core;
@@ -164,7 +176,7 @@ export function createMarketCore(ctx: CalcCtx): MarketCore {
       if (!a || !(a.price > 0)) return ahMemo.set(id, k, null);
       // one listing per kept price (per item, ascending)
       const w = a.prices?.length ? walkBook(a.prices.map((price) => ({ price, amount: 1, orders: 1 })), qty ?? 1) : null;
-      return ahMemo.set(id, k, { price: w?.avgPrice ?? a.price, rate: salesOf(ctx, id)?.perHour ?? AH_SALES.defaultPerHour, count: a.count });
+      return ahMemo.set(id, k, { price: w?.avgPrice ?? a.price, rate: ahRate(salesOf(ctx, id)?.perHour, settings.share), count: a.count });
     },
   };
 }

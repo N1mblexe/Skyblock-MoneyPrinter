@@ -167,13 +167,13 @@ export function createAhFlipView(): View {
     const derpy = isDerpy(s.election);
     if (!s.ah || !s.catalog) return [];
     const { ah, catalog, ahSales: sales } = s;
-    const { conservative, cycleHours } = s.settings;
-    const deps = [m, ah, catalog, derpy, sales, conservative, cycleHours];
+    const { conservative, cycleHours, share } = s.settings;
+    const deps = [m, ah, catalog, derpy, sales, conservative, cycleHours, share];
     if (!memo || memo.deps.length !== deps.length || memo.deps.some((d, i) => d !== deps[i])) {
       const out =
         m === 'george'
           ? computeGeorgeFlips(ah, catalog, { cycleHours })
-          : computeAhFlips(ah, catalog, { derpy, conservative, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) });
+          : computeAhFlips(ah, catalog, { derpy, conservative, share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) });
       memo = { deps, rows: out };
     }
     return memo.rows;

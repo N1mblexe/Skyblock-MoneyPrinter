@@ -175,10 +175,14 @@ describe('MarketCore NPC and AH purchases', () => {
     expect(createMarketCore(mctx()).ahBuy('V4')).toBeNull();
   });
 
-  it('ahBuy rate: measured sales per hour once coverage reaches AH_SALES.minCoverageHours', () => {
+  it('ahBuy rate: ahRate of the measured sales once coverage reaches AH_SALES.minCoverageHours', () => {
     const ah = (): AhPrice => ({ price: 10, count: 3 });
     const at = (s: AhSalesStat | null) => createMarketCore(mctx({}, { ah, ahSales: () => s })).ahBuy('A')!.rate;
-    expect(at(sales({ perHour: 2 }))).toBe(2);
+    // 2/h x 0.05 share is under the next sale's rate: min(2, default)
+    expect(at(sales({ perHour: 2 }))).toBe(AH_SALES.defaultPerHour);
+    expect(at(sales({ perHour: 100 }))).toBeCloseTo(100 * 0.05, 12);
+    expect(at(sales({ perHour: 0.1 }))).toBe(0.1);
+    expect(at(sales({ perHour: 0 }))).toBe(0);
     expect(at(sales({ perHour: 2, coverageHours: AH_SALES.minCoverageHours - 0.5 }))).toBe(AH_SALES.defaultPerHour);
     expect(at(sales({ perHour: null }))).toBe(AH_SALES.defaultPerHour);
     expect(at(null)).toBe(AH_SALES.defaultPerHour);

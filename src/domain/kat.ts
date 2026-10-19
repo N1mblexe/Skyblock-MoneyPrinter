@@ -9,7 +9,7 @@ import { isPetMaxKey, petName } from './ahFlips.ts';
 import { bitsItemCosts } from './bits.ts';
 import { getPricer } from './craft.ts';
 import { petLevelFromName } from './ids.ts';
-import { coreOf, salesOf } from './market.ts';
+import { ahRate, coreOf, salesOf } from './market.ts';
 import { ahNet } from './pricing.ts';
 import { reportFromFlags } from './risk.ts';
 
@@ -420,7 +420,7 @@ function saleOf(ctx: CalcCtx, x: RowInput, maxLevel: number): Sale {
   const net = price > 0 ? ahNet(price, ctx.derpy) : 0;
   const base = { sellKey, count: listing?.count ?? 0, salesPerHour: perHour, george };
   if (george != null && george > net) return { ...base, venue: 'george', price: george, net: george, hours: 0, listing: null };
-  const sale: Sale = { ...base, venue: 'ah', price, net, hours: perHour != null ? 1 / perHour : KAT.defaultSellHours, listing: price > 0 ? listing : null };
+  const sale: Sale = { ...base, venue: 'ah', price, net, hours: perHour != null ? 1 / ahRate(perHour, ctx.settings.share) : KAT.defaultSellHours, listing: price > 0 ? listing : null };
   if (ref != null) sale.ref = ref;
   return sale;
 }

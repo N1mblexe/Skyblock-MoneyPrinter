@@ -2,7 +2,7 @@
 // chains, bits, shops and Sell or craft?. Owner: s1/core.
 import { AH, AH_FLIP, AH_SALES } from '../config.ts';
 import type { AhPrice, CalcCtx, Catalog, ConsInfo, RiskFlag, RiskReport, Throughput } from '../types/contracts.ts';
-import { coreOf, salesOf } from './market.ts';
+import { ahRate, coreOf, salesOf } from './market.ts';
 import { afterTax, ahNet } from './pricing.ts';
 import { reportFromFlags } from './risk.ts';
 
@@ -60,8 +60,8 @@ export function isAuctionable(ctx: CalcCtx, id: string): boolean {
  * Every way to sell `id`, best net first (ties keep bazaar > AH > NPC).
  *  bazaar  the core's sell side (conservatism applied), after tax, your sell rate, sell-side risk
  *  AH      auctionable items only: listed at min(lowest, next) - AH_FLIP.undercut, and with conservatism on at no
- *          more than the median sold price (once AH_SALES.minSales sales are seen); net of the AH fees; rate = sales
- *          per hour x share, else AH_SALES.defaultPerHour ('ahSales'); flags from ahFlags. Sales seen over less than
+ *          more than the median sold price (once AH_SALES.minSales sales are seen); net of the AH fees; rate ahRate
+ *          (your share of the sales per hour, else AH_SALES.defaultPerHour; 'ahSales'); flags from ahFlags. Sales seen over less than
  *          AH_SALES.minCoverageHours are ignored (salesOf)
  *  NPC     the NPC sell price, unlimited
  */
@@ -101,7 +101,7 @@ export function saleQuotes(ctx: CalcCtx, id: string, o: SaleOptions = {}): SaleQ
         gross: list,
         fees: list - net,
         net,
-        rate: sales?.perHour != null ? sales.perHour * settings.share : AH_SALES.defaultPerHour,
+        rate: ahRate(sales?.perHour, settings.share),
         limitedBy: 'ahSales',
         liquidity: a.count,
         risk: reportFromFlags(ahFlags(a, catalog, id)),

@@ -76,7 +76,7 @@ type StatsAll = ReturnType<HistoryRepo['statsAll']>;
  *  | crafts, chains         | core key + throughput                                        |
  *  | kat                    | calcCtx() (core key + all calc settings), taming, scan version |
  *  | shops                  | core key                                                     |
- *  | ahFlips                | AH scan + sales + catalog + ahEnabled, conservative, Derpy   |
+ *  | ahFlips                | AH scan + sales + catalog + ahEnabled, conservative, share, Derpy|
  *  | George flips           | AH scan + catalog + ahEnabled + cycleHours (georgeFlips)     |
  *  | opportunities          | the row sets above (AH and George flips as 'ahflip') + calcCtx() |
  *  | marketStats            | taxRate (history.marketStats, memoized there per record/minute) |
@@ -212,17 +212,17 @@ export function createDerived(store: Store<AppState>, history: HistoryRepo): Der
       const taming = settings.taming;
       return memo('kat', [c, ah, taming], () => (katScanReady(ah) ? computeKatFlips(c, { skip: KAT_DERIVED_SKIP, taming }) : []));
     },
-    // AH flips read the scan, sales, Derpy and conservatism, nothing else from the context
+    // AH flips read the scan, sales, Derpy, conservatism and share, nothing else from the context
     ahFlips: () => {
       const s = store.get();
       const b = marketCtx(s);
       if (!b) return [];
       const derpy = isDerpy(s.election);
       const sales = s.ahSales;
-      const conservative = s.settings.conservative;
-      return memo('ahFlips', [s.ah, sales, b.catalog, s.settings.ahEnabled, conservative, derpy], () =>
+      const { conservative, share } = s.settings;
+      return memo('ahFlips', [s.ah, sales, b.catalog, s.settings.ahEnabled, conservative, share, derpy], () =>
         s.ah && s.settings.ahEnabled
-          ? computeAhFlips(s.ah, b.catalog, { derpy, conservative, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) })
+          ? computeAhFlips(s.ah, b.catalog, { derpy, conservative, share, ...(sales ? { sales: (id: string) => sales.byId[id] ?? null } : {}) })
           : [],
       );
     },

@@ -1,12 +1,14 @@
 // "Sell or craft?": every way to turn items you already own into coins, compared on what you end up with.
 // Raw sales: insta-sell (walks the buy orders), sell offer (top of book − 0.1, takes time), NPC, AH (sale.ts: listed
-// under the lowest BIN, after fees, at the AH sales rate).
+// under the lowest BIN, after fees, at the AH sales rate). The bazaar ones get conservatism like every sale (sideAdjust
+// in that method's mode), so they compare fairly with crafting up (sale.ts).
 // Crafting up: every chain move that starts at the item; your items are free inputs, side ingredients are bought
 // (craft pricer), whole crafts only; the crafted items are sold for the crafted quantity at their best venue
 // (sale.ts) and the leftover items raw at the best raw unit price.
 import type { CalcCtx, CraftRow } from '../types/contracts.ts';
 import { walkBook } from './book.ts';
 import { chainGraph, priceMove } from './chains.ts';
+import { sideAdjust } from './conservative.ts';
 import { getPricer } from './craft.ts';
 import { afterTax, sellSide } from './pricing.ts';
 import { bestSale, saleQuotes, type SaleVenue } from './sale.ts';
@@ -62,13 +64,21 @@ export function rawOptions(ctx: CalcCtx, id: string, qty: number): SellOption[] 
   const p = snap.products[id];
   const push = (o: Omit<SellOption, 'perItem'>) => o.net > 0 && Number.isFinite(o.net) && out.push({ ...o, perItem: o.net / qty });
   if (p) {
+    // the conservative price (churn taken off) and rate multiplier of selling at `price` in `mode`; as is when off
+    const adjust = (mode: 'insta' | 'offer', price: number) => {
+      const a = sideAdjust('sell', p, price, ctx.stats?.(id) ?? null, ctx.market?.(id) ?? null, { ...settings, sellMode: mode });
+      return a ? { price: Math.max(0, a.price - a.churn), rateMul: a.rateMul } : { price, rateMul: 1 };
+    };
     const walk = walkBook(p.bids, qty);
     if (walk) {
-      push({ method: 'insta', net: afterTax(walk.avgPrice, settings.taxRate) * walk.filled, hours: 0, ...(walk.filled < qty ? { filled: walk.filled } : {}) });
+      const { price } = adjust('insta', walk.avgPrice);
+      push({ method: 'insta', net: afterTax(price, settings.taxRate) * walk.filled, hours: 0, ...(walk.filled < qty ? { filled: walk.filled } : {}) });
     }
     const side = sellSide(p, 'offer', settings.share);
     if (side && side.quote.price > 0) {
-      push({ method: 'offer', net: afterTax(side.quote.price, settings.taxRate) * qty, hours: side.rate > 0 ? qty / side.rate : null });
+      const { price, rateMul } = adjust('offer', side.quote.price);
+      const rate = side.rate * rateMul;
+      push({ method: 'offer', net: afterTax(price, settings.taxRate) * qty, hours: rate > 0 ? qty / rate : null });
     }
   }
   const ns = catalog.items[id]?.npcSell;

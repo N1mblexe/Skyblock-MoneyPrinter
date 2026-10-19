@@ -97,6 +97,9 @@ describe('computeAhFlips: scan v4', () => {
     const fed = computeAhFlips(ah, cat, { sales: sales(stat()) })[0]!;
     expect(fed).toMatchObject({ sellHours: 0.5, salesPerHour: 2, sellAt: 1_499_999 });
     expect(fed.plan.unitsPerHour).toBe(2);
+    // your share of a busy market (ahRate): 100/h x 0.05; a slow one still sells the next item at min(perHour, default)
+    expect(computeAhFlips(ah, cat, { sales: sales(stat({ perHour: 100 })), share: 0.05 })[0]!.sellHours).toBeCloseTo(1 / 5, 12);
+    expect(computeAhFlips(ah, cat, { sales: sales(stat()), share: 0.05 })[0]!.sellHours).toBe(1 / AH_SALES.defaultPerHour);
     const cons = computeAhFlips(ah, cat, { sales: sales(stat()), conservative: true })[0]!;
     expect(cons).toMatchObject({ sellAt: 1_200_000, sellRef: 1_499_999 });
     expect(cons.profit).toBeCloseTo(ahNet(1_200_000) - 1_000_000, 6);
