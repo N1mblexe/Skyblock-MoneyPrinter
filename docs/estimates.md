@@ -1,6 +1,6 @@
 # How estimates are made
 
-This page describes the model behind every number the app shows. Constants are named as they appear in `src/config.ts`; the code is in `src/domain/`. All figures are estimates from one bazaar snapshot plus the price history your browser has collected.
+This page describes the model behind every number the app shows. Constants are named as they appear in `src/config.ts`; the code is in `src/domain/`. All figures are estimates from one bazaar snapshot plus the price history your browser has collected and, while the AH scan is on, the last AH scan and the AH sales the app has seen.
 
 ## Settings that feed the model
 
@@ -8,16 +8,18 @@ This page describes the model behind every number the app shows. Constants are n
 |---|---|---|---|
 | Bazaar tax (`taxRate`) | 1.25 % | 1.25 / 1.125 / 1 % | bazaar sales |
 | Capital (`capital`) | 5,000,000 | 0 – 10^13 (0 = unlimited) | coins tied up per cycle |
-| Your share of volume (`share`) | 5 % | 0 – 100 % | fill rates |
-| Cycle length (`cycleHours`) | 1 h | 0.05 – 168 h | batch size |
+| Your share of volume (`share`) | 5 % | 0 – 100 % | fill rates, AH sale rates |
+| Cycle length (`cycleHours`) | 1 h | 0.05 – 168 h | batch size, NPC caps, re-listing |
 | When buying (`costMode`) | buy order | buy order / insta-buy | buy quotes |
 | When selling (`sellMode`) | sell offer | sell offer / insta-sell | sell quotes |
 | Forge slots (`forgeSlots`) | 2 | 1 – 7 | forge throughput |
 | Order slots (`orderSlots`) | 14 (`ORDER_SLOTS_DEFAULT`) | 1 – 35 (`ORDER_SLOTS_MAX`) | batch size, planner |
 | NPC daily limit (`npcDailyLimit`) | 640 (`NPC_DAILY_LIMIT_DEFAULT`) | 1 – 10,000,000 | NPC purchases |
 | Fill model (`fillModel`) | sequential | sequential / pipelined | throughput |
-| Auction house scan (`ahEnabled`) | on | on / off | off-bazaar craft outputs |
+| History-based conservatism (`conservative`) | on | on / off | bazaar quotes and rates, AH list prices (see Conservatism) |
+| Auction house scan (`ahEnabled`) | on | on / off | AH prices and the AH sales feed: craft inputs and outputs, AH flips, Kat, Bits, Shops, Sell or craft? |
 | Taming level (`taming`) | 60 (`KAT.maxTaming`) | 0 – 60 | Kat upgrades (page, planner, alerts) |
+| Bits multiplier (`bitsMultiplier`) | 1 | 1 – 5 | Bits shop and bits-priced Kat items; set on the Bits page |
 | Hide suspicious (`hideSuspicious`) | on | on / off | table filters only |
 
 ## Quotes
@@ -26,20 +28,20 @@ The bazaar API names its sides the other way round: `sell_summary` holds buy ord
 
 | mode | price per unit | notes |
 |---|---|---|
-| Buy order | `min(max(bid + 0.1, 0.9 × npcSell), ask)`, rounded to 0.1 | `PRICE_TICK = 0.1`, `NPC_FLOOR_RATIO = 0.9` |
+| Buy order | `max(bid + 0.1, 0.9 × npcSell)`, rounded to 0.1; at or above the ask it becomes an insta-buy (below) | `PRICE_TICK = 0.1`, `NPC_FLOOR_RATIO = 0.9` |
 | Insta-buy | volume-weighted average over the asks for the quantity | slippage = (average − best ask) / best ask |
 | Sell offer | `max(0.1, ask − 0.1)` | |
 | Insta-sell | volume-weighted average over the bids for the quantity | |
 
 **NPC floor.** Raw materials often show a 0.1-coin bid that never fills in real volume. Sellers rarely dump far below what an NPC pays, so a buy order is assumed to cost at least 0.9 × the item's NPC sell price. When the floor raises the price, the quote is marked `npcFloor`. One consequence: a bazaar → NPC flip by buy order can earn at most 0.1 × the NPC price per unit, a margin of 11.1 %.
 
-**Ask clamp.** A buy order above the ask makes no sense, so the price is capped at the ask and the quote is marked `ask`. Such an order fills against the sell offers at once, so it gets the insta-buy fill rate with no queue (see below).
+**Ask clamp.** A buy order priced at or above the ask would fill against the sell offers at once, so it is quoted as an insta-buy: the asks are walked for the quantity (VWAP, slippage included) and the quote is marked `ask` (`clamped: 'ask'`). From then on the leg is an insta leg everywhere: the insta-buy fill rate with no competition, the book depth as a cap, no order slot, and a re-quote at the batch size. The NPC floor can push an order into the clamp too.
 
-**Insta refine.** Insta quotes are first made for one unit. After the batch size is known, the insta legs are re-quoted once at the batch size so that slippage shows in the profit. Flips, books and NPC flips do this when the trade is profitable at one unit; crafts do it for directly bought insta ingredients and an insta-sold bazaar output.
+**Insta refine.** Insta quotes are first made for one unit. After the batch size is known, a trade with an insta leg (a clamped buy order included) is re-quoted once at the batch size so that slippage shows in the profit. Flips, books and NPC flips do this when the trade is profitable at one unit; crafts re-quote their insta and AH ingredients and an insta-sold bazaar output; fusion re-quotes its insta legs.
 
 ## Tax
 
-Bazaar sales receive `price × (1 − taxRate)`. Buys and NPC sales are not taxed. AH sales pay the AH fees below. The Bazaar Flipper upgrades in the Community Shop lower the rate to 1.125 % and 1 %.
+Bazaar sales receive `price × (1 − taxRate)`. Buys and NPC sales are not taxed. AH sales pay the AH fees (see Auction house values). The Bazaar Flipper upgrades in the Community Shop lower the rate to 1.125 % and 1 %.
 
 ## Fill rates
 
@@ -54,15 +56,15 @@ Hourly market rates come from the moving-week counters, divided by 168:
 
 Your rate is the market rate times your share of it:
 
-- **Orders and offers** queue behind competitors. `n` is the sum of the `orders` counts on every level within 1 % (`COMP_TOL`) of the best price on that side. Your rate is `market × min(share, 1 / (1 + n))`.
+- **Orders and offers** queue behind competitors. `n` is the sum of the `orders` counts on every level within `max(0.1, 1 % × best price)` of the best price on that side (`COMP_TOL = 0.01`, with `PRICE_TICK` as the floor: on a cheap item the next price is a whole tick away, outside 1 %). Your rate is `market × min(share, 1 / (1 + n))`. With conservatism on, competitors are also weighted by amount (see Conservatism).
 - **Insta modes** don't queue. Your rate is `market × share`, and the batch is capped by the units on the book (`depthCap`, the sum over the stored levels).
-- **A buy order clamped at the ask** gets `insta-buy rate × share`, with no competition.
+- **A buy order clamped at the ask** is an insta-buy: `insta-buy rate × share`, no competition, capped by the asks' depth.
 
 Example: 1,680,000 insta-sells a week is 10,000 per hour. With a 5 % share and 3 competing bids, your buy order fills `10,000 × min(0.05, 1/4) = 500` per hour. With 30 competing bids it is `10,000 × 1/31 ≈ 323` per hour.
 
 ## Throughput: sequential vs pipelined
 
-Each trade is planned as one batch of `Q` units per period. Let `rB` and `rS` be your buy and sell rates in units per hour, and `hB = 1/rB`, `hS = 1/rS` the hours per unit (0 when a side is instant, for example selling to an NPC).
+Each trade is planned as one batch of `Q` units per period. Let `rB` and `rS` be your buy and sell rates in units per hour, and `hB = 1/rB`, `hS = 1/rS` the hours per unit. An **instant** leg takes no time (`h = 0`): selling to an NPC, buying from an NPC shop, buying on the AH. Instant purchases are capped per cycle instead (below).
 
 | | sequential (default) | pipelined |
 |---|---|---|
@@ -74,10 +76,11 @@ The batch is the smallest of these bounds, and `limitedBy` records which one won
 
 | bound | formula | `limitedBy` |
 |---|---|---|
-| volume | `cycleHours / hFill` | `volume`, or `npcLimit` when the binding side is an NPC purchase |
-| forge | `forgeCap × cycleHours`, with `forgeCap = forgeSlots × 3600 / durationSec` | `forge` |
-| capital | `floor(capital / (overlap × unitCost))`, overlap 2 for pipelined, else 1 | `capital` |
-| depth | units on the book (insta legs only) | `depth` |
+| volume | `cycleHours / hFill` | `volume`, or `ahSales` when the binding side is an AH sale |
+| forge | `forgeCap × cycleHours`, with `forgeCap = forgeSlots / forge hours per unit` | `forge` |
+| capital | `floor(capital / (overlap × unitCost))`, overlap 2 for pipelined with two timed legs, else 1 | `capital` |
+| depth | units on the book (insta legs) or AH listings seen (AH purchases) | `depth` |
+| instant caps | `perHour × cycleHours` for each instant purchase: an NPC shop (`npcDailyLimit / 24`) or the AH (AH sales per hour) | `npcLimit`, `ahSales` |
 | order slots | largest `Q` whose orders fit in `orderSlots` (next section) | `slots` |
 
 If nothing bounds the batch (instant legs, unlimited capital, no orders), `Q = MAX_ORDER_UNITS` and `limitedBy = depth`. Then:
@@ -101,43 +104,100 @@ profitPerHour = unitsPerHour × profit per unit
 
 With little capital, pipelined makes half as much per hour. With plenty, it makes twice as much and holds 2,000,000 coins instead of 500,000.
 
+**Planner inputs.** Every flip, book, NPC flip, craft, Kat and AH flip row also carries `plan` (`planInputs` in `src/domain/pricing.ts`): the same throughput with capital and order slots unbounded (the planner applies both), the buy cost and unit cost per unit (doubled under pipelined), the order units, and the markets the row draws on (`X:bid`, `X:ask`, `X:npc`, `forge`). A row with an insta leg or an AH-bought ingredient also gets a concave profit curve, from re-quotes at 25, 50, 75 and 100 % of its largest batch (`OPTIMIZER.segments = 4`); a George flip's curve is its listings, cheapest first. How the planner uses them is under Planner.
+
 ## Order slots and `MAX_ORDER_UNITS`
 
-A bazaar order holds at most `MAX_ORDER_UNITS = 71,680` units. Each order or offer leg of a batch takes `ceil(Q × units per batch unit / 71,680)` slots, at least 1. Insta and NPC legs take none.
+A bazaar order holds at most `MAX_ORDER_UNITS = 71,680` units. Each order or offer leg of a batch takes `ceil(Q × units per batch unit / 71,680)` slots, at least 1. Insta, NPC and AH legs take none, and neither does a buy order clamped at the ask.
 
 - A flip by buy order and sell offer at `Q = 100,000` takes 2 + 2 = 4 slots.
-- A craft counts one order per ordered ingredient line (qty per craft × Q) plus the output offer (output count × Q). A sub-crafted ingredient's ordered inputs are counted together as one order, so slots are slightly underestimated there.
-- A book combine orders `count × Q` input books plus `Q` output books.
+- A book combine has two orders in order modes: the input buy order holds `count × Q` books (`count = 2^(L−k)`), the output sell offer `Q`.
+- A craft counts its bought items after sub-crafts are flattened: the bought inputs of every line, sub-crafted ones included, are merged by item and source, and each item bought by order is one order of (its units per craft × Q). The output offer adds one (`outCount × Q`) when the output is sold on the bazaar by sell offer.
 
 If the batch needs more than `orderSlots` slots, it shrinks to the largest size that fits (`limitedBy = slots`).
 
 ## NPC daily limit
 
-NPC shops limit how much of each item you can buy per day, and the in-game limits vary. The app uses one value for every item, the `npcDailyLimit` setting (default 640). It is spread evenly over the day: you can buy `npcDailyLimit / 24` units per hour. This rate caps NPC → bazaar flips and NPC-bought craft ingredients, and shows as `limitedBy = npcLimit`. Selling to an NPC has no limit in the model.
+NPC shops limit how much of each item you can buy per day, and the in-game limits vary. The app uses one value for every item, the `npcDailyLimit` setting (default 640), spread evenly over the day: `npcDailyLimit / 24` units per hour.
 
-## Crafts and forges
+An NPC purchase is **instant**: it adds no fill time and no second batch under the pipelined model, but it caps the batch at `npcDailyLimit / 24 × cycleHours` units (`limitedBy = npcLimit`). The cap applies to NPC → bazaar flips, NPC-bought craft and fusion ingredients, and shop trades (each unit a trade makes is bought from the NPC). Coins listed as a recipe input (`SKYBLOCK_COIN`: forge fees, shop prices) are paid as they are, with no cap. Selling to an NPC has no limit in the model.
 
-**Ingredients.** Each ingredient takes its cheapest source:
+## Conservatism
 
-1. a bazaar quote in the current buy mode,
-2. the NPC shop price (rate `npcDailyLimit / 24`), or
-3. a sub-craft, if strictly cheaper than both. Only `craft` recipes are used as sub-crafts, never forge recipes. Sub-crafts go up to `CRAFT_RECURSION_DEPTH = 3` levels deep, and cycles are cut.
+The `conservative` setting (on by default, Settings) checks each bazaar quote against the item's recent history and moves it against you (`sideAdjust` in `src/domain/conservative.ts`, applied by the shared market core in `src/domain/market.ts`, so every strategy gets the same numbers). It changes nothing when the setting is off, or when the item has fewer than `CONSERVATIVE.minPoints = 12` points in its risk baseline (see Risk flags): until the browser has collected some history, you see the snapshot numbers.
 
-A sub-craft's unit cost is `Σ qty × input cost / outCount`. Its rate is the slowest input's `rate / qty`, times `outCount`.
+| leg | price | rate × |
+|---|---|---|
+| sell offer | `min(quote, medianAsk − 0.1)` | insta-buy volume trend |
+| insta-sell | `min(quote, medianBid)` | insta-sell volume trend |
+| buy order | `max(quote, medianBid + 0.1)`, never above the ask | insta-sell volume trend |
+| insta-buy (or a buy order clamped at the ask) | `max(quote, medianAsk)` | insta-buy volume trend |
 
-**Output value.**
+Prices are rounded to 0.1. The trend is the volume trend of the flow that fills the leg (Market stats), clamped to `CONSERVATIVE.trendClamp = [0.5, 1]`: a slowing market lowers your rate, a busy one never raises it.
 
-| output | value per craft |
+Orders and offers also pay for the queue:
+
+- **Re-listing.** You will be outbid or undercut and re-list. Re-lists per leg = `min(CONSERVATIVE.maxRelists = 6, top-price moves per hour on your side × cycleHours)`, each costing `max(0.1, CONSERVATIVE.relistStep × price)` (`relistStep = 0.2 %`). This churn is added to a buy price and taken off a sell price. Moves per hour come from the last 3 h of history (Market stats).
+- **Competitors by amount.** A big order at the top fills before yours however few orders it counts as. Competitors count as `max(orders in the band, amount in the band / typical order size)`, where the typical size is the side's total amount / total orders over the stored levels. When that is more than the order count, your rate is scaled by `min(share, 1 / (1 + weighted)) / min(share, 1 / (1 + orders))`.
+
+On the AH, conservatism caps a list price at the median sold price once `AH_SALES.minSales = 3` sales are seen (Best sale, AH flips, Kat).
+
+Rows record what changed in `cons`: the snapshot prices (`buyRef`, `sellRef`), the lowest rate multiplier and the churn per unit (a craft sums the churn over its bought units and its output). The trade pages show it in the detail panel. Turn the setting off for the raw snapshot numbers.
+
+## Best sale
+
+Crafts, chains, Bits, Shops and Sell or craft? sell an item through one rule (`saleQuotes` / `bestSale` in `src/domain/sale.ts`):
+
+| venue | net per item | rate | risk |
+|---|---|---|---|
+| bazaar | sell quote in your sell mode (conservatism applied), after tax | your sell rate | the item's sell-side risk |
+| AH | listed one coin under the lowest BIN (`AH_FLIP.undercut = 1`) and, with conservatism on, at no more than the median sold price; after the AH fees | measured sales per hour × share, else `AH_SALES.defaultPerHour = 0.25` (`limitedBy = ahSales`) | `AH_THIN`, `AH_GAP`, `AH_VARIANT` |
+| NPC | NPC sell price | unlimited | none |
+
+The AH venue is offered only for auctionable items: the catalog says so, or the item is unknown to the catalog and not a bazaar product. The best net wins; ties keep bazaar, then AH, then NPC. Kat and AH flips use their own sale rules (below).
+
+## Crafts, forges and shop trades
+
+Recipes come in three kinds: `craft`, `forge` and `shop`. A shop recipe is an NPC shop offer paid with items (any coins in the price become the input `SKYBLOCK_COIN`) or a NEU trade. The catalog has 1,845 recipes: 1,418 crafts, 124 forges and 303 shop recipes (233 from `npc_shop`, 70 trades). The Craft page lists crafts, shop trades or both (a Crafts / Shop trades / Both switch); the Forge page lists the forges. One shared pricer (`getPricer` in `src/domain/craft.ts`) prices crafts, chain moves, Kat items and Sell or craft?.
+
+**Ingredient sources.**
+
+| source | price per unit | rate |
+|---|---|---|
+| bazaar | buy quote in your cost mode (a buy order at the ask is an insta-buy) | your fill rate |
+| NPC shop | NPC buy price | instant, capped at `npcDailyLimit / 24` per hour |
+| AH | VWAP over the scan's per-item prices for the quantity; auctionable items only | instant, capped at the AH sales rate (measured, else `AH_SALES.defaultPerHour = 0.25`); the listings seen cap one batch |
+| mix | the NPC up to its limit, the bazaar for the rest, split `cap / (cap + bazaar rate)` | the two rates added |
+| sub-recipe | `Σ qty × input cost / outCount` over a craft, forge or shop recipe | the slowest input's rate; a forge sub-recipe adds its forge time, a shop trade draws on its NPC limit |
+| coins (`SKYBLOCK_COIN`) | 1 coin | unlimited |
+
+Sub-recipes go up to `CRAFT_RECURSION_DEPTH = 3` levels deep, and cycles are cut.
+
+**Source choice** takes two passes:
+
+1. Each ingredient takes its cheapest source: the cheapest direct one (bazaar, then NPC, then AH on ties), or a sub-recipe when strictly cheaper. The output takes its best net sale.
+2. If the row is profitable and its batch is bound by a source (volume, NPC limit, AH sales, forge or depth, not capital or slots), two lifts are tried:
+   - when the slowest ingredient line is slower than the output, every other source of that line (bazaar, NPC, AH, mix or sub-recipe) that is faster and keeps the row profitable;
+   - when the sell side binds (the output's rate is at most the ingredients'), every faster sale venue that still covers the cost.
+
+   The variant with the most profit per hour wins.
+
+**Output value.** The output goes through Best sale, with the venues its kind allows:
+
+| output | venues |
 |---|---|
-| bazaar product | `outCount × max(bazaar sell quote after tax, NPC sell price)` |
-| not on the bazaar | `outCount × max(NPC sell price, AH lowest BIN)`, NPC on a tie |
-| neither priced | unpriced (cost and value shown as 0, hidden by default) |
+| bazaar product | bazaar, AH (if auctionable), NPC |
+| bazaar product, shop trade | bazaar, AH |
+| not on the bazaar | AH, NPC |
+| not on the bazaar, shop trade | AH |
 
-When the AH value wins and the item had fewer than `AH.minCount = 2` BIN listings, the row gets the `AH_THIN` flag. NPC and AH sales are not limited by bazaar volume, so only the ingredients and forge slots limit those rows.
+A shop trade's output is never valued at the NPC sell price: an NPC shop won't buy back above what it sells for. A row with an unpriced input or no venue is unpriced (cost and value shown as 0, hidden by default).
 
-**Throughput.** The buy rate is the slowest ingredient line in crafts per hour (the "bottleneck"). The sell rate is the output's bazaar rate / outCount, or unlimited for NPC and AH sales. Forges are also limited by `forgeSlots × 3600 / durationSec` per hour.
+**Throughput.** The buy rate is the slowest bazaar-bought ingredient in crafts per hour (the "bottleneck"); NPC, AH and shop-trade purchases are instant legs that cap the batch per cycle (`npcLimit`, `ahSales`). The sell rate is the venue's rate / outCount: your bazaar fill rate, the AH sales rate (`ahSales`), or unlimited for an NPC sale. Forges are also limited by `forgeSlots / forge hours` per hour, where the forge hours per unit include those of forge sub-recipes. The Craft page's minimum weekly volume filter applies only to rows sold on the bazaar; AH and NPC sales are bounded in profit per hour instead.
 
-**Risk.** A craft row combines the output's market risk (when sold on the bazaar) with only the `PRICE_SPIKE` and `QUICK_DIVERGENCE` flags of bazaar-bought ingredients. Dead bids are normal on raw materials, so the other ingredient flags are ignored.
+**Refine.** Insta and AH ingredients, and an insta-sold bazaar output, are re-quoted once at the planned batch size.
+
+**Risk.** A craft row combines its sale's risk (the output's sell-side bazaar risk, or the AH flags), only the `PRICE_SPIKE` and `QUICK_DIVERGENCE` flags of bazaar-bought ingredients (`INGREDIENT_FLAGS`, checked on the side each one is bought), and `AH_THIN` for an AH-bought ingredient with fewer than `AH.minCount = 3` listings. Dead bids are normal on raw materials, so the other ingredient flags are ignored.
 
 ## Craft chains
 
@@ -145,7 +205,7 @@ The **Chains** tab of Craft & Forge (`#/craft?view=chains`, `src/domain/chains.t
 
 **Steps and ladders.** A `craft` recipe with a bazaar output is a chain step when its main input (the input with the largest quantity) is a bazaar item, makes up at least `CHAIN.mainShare = 0.5` of the recipe's input items, and goes in faster than the output comes out (`qty / outCount > 1`; this drops uncrafting such as Hay Bale → 9 Wheat). The other inputs are side ingredients. When several recipes link the same two items, the one with the fewest side inputs wins, then the one with the fewest main units per output. Steps join into ladders from a root (an item no step produces) to a top; a tier with two steps up gives two ladders.
 
-**Moves.** A move buys one tier and crafts it up at least `CHAIN.minSteps = 2` steps (single steps are the Recipes tab's rows). It is priced as one recipe: `need` units of the first tier plus every step's side ingredients, summed top-down (crafts at a step = units needed of its output / outCount), producing one unit of the top tier. Pricing is the craft model above, with one difference: the first tier is always bought, never sub-crafted, so a move means what it says. By default it is bought on the bazaar (`ChainStart` `bazaar`): an NPC shop is often cheaper per item, but its daily limit makes long ladders crawl. The tab's "First tier from: Cheapest" switch allows the NPC price too. Side ingredients always take their cheapest source.
+**Moves.** A move buys one tier and crafts it up at least `CHAIN.minSteps = 2` steps (single steps are the Recipes tab's rows). It is priced as one recipe: `need` units of the first tier plus every step's side ingredients, summed top-down (crafts at a step = units needed of its output / outCount), producing one unit of the top tier. Pricing is the craft model above, through the same shared pricer, with one difference: the first tier is always bought, never sub-crafted, so a move means what it says. By default it is bought on the bazaar (`ChainStart` `bazaar`): an NPC shop is often cheaper per item, but its daily limit makes long ladders crawl. The tab's "First tier from: Cheapest" switch allows the other direct sources (NPC shop, AH) too. Side ingredients always take their cheapest source.
 
 **Best per ladder.** By default the tab shows each ladder's move with the highest profit per hour. The planner gets every priced, profitable move as a `chain` opportunity; a move and the same item's craft row share the planner's one-position-per-item rule.
 
@@ -153,57 +213,100 @@ The **Chains** tab of Craft & Forge (`#/craft?view=chains`, `src/domain/chains.t
 
 ## Auction house values
 
-The AH scan reads every page of `/v2/skyblock/auctions`, keeps unclaimed BIN listings only, decodes each item's NBT and records the lowest price and listing count per id. A page that fails twice is skipped and the scan goes on.
+**The scan.** Every 10 minutes (`AH.pollMs`), in a Web Worker, the scan reads every page of `/v2/skyblock/auctions` (4 at a time), keeps unclaimed BIN listings only and decodes each item's NBT (inflated synchronously with `fflate`, skipping the display and skull-texture tags). Per id it records the listing count, the lowest `AH.keepPrices = 8` per-item prices (`price` is the lowest, `next` the second) and the cheapest listing's uuid, name and stack size. Scan v4 (`AH_SCAN_VERSION` in `src/api/auctions.ts`):
 
-The id is `ExtraAttributes.id`, with two adjustments: pets become `TYPE;RARITY` (for example `ENDER_DRAGON;4`), and single-enchant books become `ENCHANTMENT_<NAME>_<LEVEL>`. Everything else about the item is ignored, so:
+- **Per item.** A stack's price is divided by its `Count`.
+- **Deduped.** A listing seen again under the same auction uuid, on another page or the same one, counts once.
+- **Consistent pages.** A page whose `lastUpdated` differs from page 0's (the AH refreshed mid-scan, or the CDN served an older copy) is fetched once more; if it still differs it is used and counted in `mixedPages`. A page that fails twice is skipped and the scan goes on.
+- **Pet levels.** A pet listing is also filed under one level key, read from its `[Lvl N]` name: `TYPE;RARITY@MAX` at max level (`AH.petMaxSuffix`), else the level band `@L49` (1–49), `@L89` (50–89) or `@L99` (90–99) (`AH.petBands`). The plain key's lowest BIN is almost always a level 1 pet. The scanner knows the 200-level pets (Golden, Jade and Rose Dragon) from a hand-kept list; their levels 100–199 get no band. Pets keep the cheapest listing's XP (`exp`). Pets holding a Tier Boost are left out: their id has the base rarity, but they sell as the boosted one.
 
-- one lowest BIN covers every copy of a base id, whatever its stars, reforge, enchantments or pet level. A starred or levelled item is valued like the cheapest copy;
-- the lowest BIN is taken as your sale price, without undercutting;
-- every AH sale pays the seller fees (`AH.fees` in `src/config.ts`, `ahNet` in `src/domain/pricing.ts`), per item listed:
+A saved scan older than v4 still loads, and a new scan starts at once. Kat upgrades work from v3 (pet XP and `@MAX` keys); the level bands need v4.
+
+**Ids.** The id is `ExtraAttributes.id`, with these adjustments: pets become `TYPE;RARITY` (for example `ENDER_DRAGON;4`), single-enchant books become `ENCHANTMENT_<NAME>_<LEVEL>`, and runes and potions take NEU's ids (`MUSIC_RUNE;3`, `POTION_CRITICAL;4`), as the catalog does. Everything else about the item is ignored, so one lowest BIN covers every copy of a base id, whatever its stars, reforge or enchantments. A starred item is valued like the cheapest copy. Pet level is covered only by the level keys.
+
+**Fees.** Every AH sale pays the seller fees (`AH.fees` in `src/config.ts`, `ahNet` in `src/domain/pricing.ts`), per item listed:
 
 | fee | amount |
 |---|---|
 | BIN listing fee | 1 % up to 10M, 2 % up to 100M, 2.5 % above |
 | claim tax | 1 % of sales above 1M, never taking the payout below 1M; ×4 while Derpy is mayor (read from the election data) |
 
-AH values are used only for craft outputs that aren't bazaar products, and only while the AH scan is on. The item page also shows the lowest BIN.
+While the AH scan is on, AH values are used for craft ingredients and outputs, Sell or craft?, Bits and Shops (as a sale venue), AH flips and Kat upgrades. The item page shows the lowest BIN.
 
-**Scan v3 (pets).** Each pet's lowest-BIN entry also keeps the cheapest listing's XP (`exp`), and max-level listings are recorded a second time under `TYPE;RARITY@MAX` (`AH.petMaxSuffix`, for example `ENDERMAN;3@MAX`), since the plain key's lowest BIN is almost always a level 1 pet. Pets holding a Tier Boost are left out of the scan: their id has the base rarity, but they sell as the boosted one. An older saved scan still loads; the pages that need v3 (Kat upgrades) ask for a rescan, and AH flips skips the `@MAX` keys.
+## AH sales
+
+What actually sold comes from `/v2/skyblock/auctions_ended` (`src/api/ahSales.ts`), polled every 60 s (`AH_SALES.pollMs`) while the AH scan is on and a tab is open. Each response holds the sales of the last minute. Hypixel's CDN can serve the same response for up to 5 minutes, so a response whose `lastUpdated` was already seen is skipped.
+
+- Only BIN sales count. Each is priced per item (`price / Count`) and filed with the scan's id rules, pets also under their level key from the name; Tier-Boosted pets are left out. Sales are deduped by `auction_id`.
+- **Coverage** is the time the feed has actually seen: each new response adds the minute before its `lastUpdated`, and overlapping windows merge. Gaps (the app closed, polls missed) don't count.
+- The sales are kept for 7 days (`AH_SALES.windowMs`), in IndexedDB (`bazaar-masasi-ahsales`): one record per id with its newest 64 sales (`AH_SALES.maxPrices`) and hourly counts.
+
+Per id the feed gives the sales `n` and items sold in the window, the `median` per-item price of the stored sales, and `perHour = items / coverage hours`. Below `AH_SALES.minCoverageHours = 2` h of coverage the stats are ignored everywhere: AH rates fall back to `AH_SALES.defaultPerHour = 0.25` items per hour (Kat to `KAT.defaultSellHours = 1` h). The median caps a list price only with conservatism on and at least `AH_SALES.minSales = 3` sales.
+
+The status pill shows the coverage, the item page has an AH sales panel (median sold, sales per hour, coverage), and Settings → Data shows the store's size with a Clear button.
 
 ## AH flips
 
-The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) uses the AH scan's two lowest BIN prices per id (scan v2; an older cached scan shows a "rescan needed" note until the next scan). A row buys the lowest BIN and relists it at the second-lowest minus `AH_FLIP.undercut = 1` coin:
+The **AH flips** page (`#/ahflip`, `src/domain/ahFlips.ts`) has two modes.
 
-`profit = ahNet(next − 1) − lowest`, `margin = profit / lowest`, using the AH fees above (×4 claim tax under Derpy).
+**Relist** (default). Buy the cheapest listing and relist it one coin (`AH_FLIP.undercut = 1`) under the second-lowest per-item price; with conservatism on, at no more than the median sold price. You buy the cheapest listing's whole stack and relist it, so the fees are taken on the stack:
 
-Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter is 5). Because one id covers every copy of an item, two flags warn about variants: `AH_VARIANT` for pets and for gear and tools (`AH_FLIP.variantCategories`), and `AH_GAP` when the second price is more than `AH_FLIP.gapRatio = 3` times the lowest. Both together make a row suspect, hidden while "Hide suspicious" is on. Prices can change before you reach the listing; the page copies `/viewauction <uuid>` for the cheapest listing.
+```
+profit per item = ahNet(sellAt × stack) / stack − lowest
+margin          = profit / lowest
+sellHours       = stack / sales per hour   (measured, else AH_SALES.defaultPerHour = 0.25)
+profit/hour     = profit per item × sales per hour
+```
+
+Ids need at least `AH_FLIP.minCount = 3` BIN listings (the page's default filter is 5). Plain ids and max-level pet keys (`@MAX`, one level per key) are flipped; level-band keys are not. Because one id covers every copy of an item, two flags warn about variants: `AH_VARIANT` for gear and tools (`AH_FLIP.variantCategories`) and for pets other than `@MAX` keys, and `AH_GAP` when the second price is more than `AH_FLIP.gapRatio = 3` times the lowest. Both together make a row suspect, hidden while "Hide suspicious" is on. Without measured sales the sell time is shown as a guess (`~`).
+
+**George.** George buys pets at fixed prices, any level (NEU `constants/george.json`, `catalog.george` keyed `TYPE;RARITY`; 307 prices). A George flip buys a pet listed below his price and sells it to him at once: `profit = George − buy`, with no fees and no wait. Every kept listing below his price counts, cheapest first, as one batch per cycle: `profit/hour = Σ (George − price) / cycleHours`. The listing-count filter doesn't apply.
+
+Prices can change before you reach the listing; both modes copy `/viewauction <uuid>` for the cheapest one.
 
 ## Kat upgrades
 
-The **Kat upgrades** page (`#/kat`, `src/domain/kat.ts`) buys a pet at the lowest BIN, takes it up one or more rarities at Kat (consecutive steps of one pet, from catalog.kat), and sells it at the lowest BIN of the new rarity. It needs AH scan v3 (above; `KAT_MIN_SCAN`, also for the planner and alerts). Each start is tried in two bands: the cheapest listing of any level (`PET;i`) and the cheapest max-level one (`PET;i@MAX`).
+The **Kat upgrades** page (`#/kat`, `src/domain/kat.ts`) buys a pet at the lowest BIN, takes it up one or more rarities at Kat (consecutive steps of one pet, from catalog.kat), and sells it on the AH or to George. It needs AH scan v3 or newer (`KAT_MIN_SCAN`, also for the planner and alerts). Each start is tried in two bands: the cheapest listing of any level (`PET;i`) and the cheapest max-level one (`PET;i@MAX`).
 
-**Level.** The pet keeps its XP through an upgrade, but higher rarities need more XP per level, so the level is recomputed at each rarity from the leveling table in NEU's `constants/pets.json` (the rarity's offset into the shared table, and per-pet custom tables such as Golden Dragon's levels 101–200). A level 100 Epic comes out a lower-level Legendary. The start level comes from the listing's XP; without it (or with 0 XP on a max-band listing), an any-level listing counts as level 1 (no discount) and a max-band one as max level. Without the listing's XP or a leveling table the level is a guess and the row is flagged `AH_VARIANT`. The scanner files `@MAX` listings by a hand-kept list of 200-level pets (it has no catalog); a `@MAX` entry whose listing level differs from the catalog's max level is not trusted: as a buy the max band is skipped, as a sale the any-level price is used (flagged `AH_VARIANT`).
+**Level.** The pet keeps its XP through an upgrade, but higher rarities need more XP per level, so the level is recomputed at each rarity from the leveling table in NEU's `constants/pets.json` (the rarity's offset into the shared table, and per-pet custom tables such as Golden Dragon's levels 101–200). A level 100 Epic comes out a lower-level Legendary. The start level comes from the listing's XP; without it (or with 0 XP on a max-band listing), an any-level listing counts as level 1 (no discount) and a max-band one as max level. Without the listing's XP or a leveling table the level is a guess. The scanner files `@MAX` listings by a hand-kept list of 200-level pets (it has no catalog); a `@MAX` entry whose listing level differs from the catalog's max level is not trusted: as a buy the max band is skipped, as a sale a less specific key is used.
 
 **Cost per step.**
 
 ```
 coins    = Kat's list price × (1 − KAT.levelDiscount × level)    (0.3 % off per level, at the level the pet goes in)
-items    = each upgrade item at its cheapest source (bazaar in your cost mode, NPC or sub-craft, as crafts price inputs), else its AH lowest BIN
-skip     = Kat Flowers / Bouquets (only with the skip option)
+items    = each upgrade item at its cheapest source (the craft pricer: bazaar, NPC, AH or sub-craft), else its AH
+           lowest BIN; a bits-shop item at no more than its bits × the cookie cost per bit
+skip     = Kat Flowers / Bouquets (skip option below)
 capital  = buy + Σ (coins + items + skip)
 ```
 
-A step with an item nobody sells keeps the row, marked unpriced (profit 0).
+Items sold in the bits shop cost `min(market price, bits per item × cookieCostPerBit)` (see Bits shop; marked `bits`). Today that is the Kat Flower and the Kat Bouquet: no upgrade item is in the bits shop. A step with an item nobody sells keeps the row, marked unpriced (profit 0).
 
-**Time.** Kat's base wait per step; Kat's wait reduction for higher pet levels is not modelled, so long waits are on the safe side. With the skip option on, each step buys the cheapest mix of Kat Flowers (−24 h, `KAT.flowerHours`) and Kat Bouquets (−120 h, `KAT.bouquetHours`) that skips every full day of its wait; the part under one day stays. Flowers are priced like the step items. `hours = Σ waits after skipping + KAT_TRADE_HOURS` (1 h for the two AH legs: the BIN buy is instant, the sale is an optimistic guess at the lowest BIN). The planner and market alerts use the page defaults: no skip items.
+**Time.** Kat's base wait per step; Kat's wait reduction for higher pet levels is not modelled, so long waits are on the safe side. A Kat Flower skips 24 h (`KAT.flowerHours`), a Kat Bouquet 120 h (`KAT.bouquetHours`); each skipped step buys the cheapest mix that skips every full day of its wait, and the part under one day stays. The skip option:
 
-**Sale.** When the pet ends at its max level and a max-level listing of the target rarity exists, it is priced at that `PET;j@MAX` lowest BIN; otherwise at the any-level `PET;j` lowest BIN, which is whatever level is cheapest, so the row is flagged `AH_VARIANT`. The sale pays the AH fees (`ahNet`, ×4 claim tax under Derpy).
+| option | steps skipped |
+|---|---|
+| `best` (default) | the steps whose skip raises the profit per hour: skips ranked by cost per saved hour, and the prefix with the most profit per hour is used |
+| `none` | none |
+| `flowers` | every step that can be |
+
+`hours = Σ waits after skipping + sell hours`. The planner and market alerts use the page default, `best`.
+
+**Sale.** The sale is priced from the most specific AH key that is listed:
+
+1. `PET;j@MAX` when the pet ends at its max level (and the listing's level matches the catalog's max),
+2. else the level band `PET;j@L49` / `@L89` / `@L99` when the end level is known (scan v4),
+3. else the plain `PET;j`.
+
+The pet is listed one coin under that key's lowest BIN (`AH_FLIP.undercut`) and, with conservatism on, at no more than its median sold price (at least `AH_SALES.minSales = 3` sales). It sells in `1 / sales per hour` of that key, else `KAT.defaultSellHours = 1` h. The sale pays the AH fees (`ahNet`, ×4 claim tax under Derpy).
+
+**George floor.** When George pays more for `PET;j` than the AH sale nets, the pet goes to George: his price, no fees, no wait.
 
 ```
-profit = ahNet(sell) − capital,  margin = profit / capital,  profit/hour = profit / hours
+profit = sellNet − capital,  margin = profit / capital,  profit/hour = profit / max(hours, 1 min)
 ```
 
-**Flags.** `AH_THIN` when the buy or the sell key has fewer than `KAT.minCount = 3` listings, `AH_GAP` when the second-cheapest start listing is more than `AH_FLIP.gapRatio = 3` times the cheapest, `AH_VARIANT` as above. Suspect rows are hidden while "Hide suspicious" is on.
+**Flags.** `AH_THIN` when the buy key, or the AH sale key, has fewer than `KAT.minCount = 3` listings; `AH_GAP` when the second-cheapest start listing is more than `AH_FLIP.gapRatio = 3` times the cheapest; `AH_VARIANT` when the pet is sold on the AH from a key other than `@MAX` (a band or plain key's lowest BIN is whatever level is cheapest in it), or its level is a guess. Suspect rows are hidden while "Hide suspicious" is on.
 
 **Taming.** Each target rarity needs a Taming level (`KAT.tamingReq`: Uncommon 1, Rare 5, Epic 10, Legendary 20, Mythic 25). Your Taming level is a setting (`taming`, also editable on the Kat page): runs whose target needs more are left out of the Kat page, the planner and market alerts; the default (60) drops nothing.
 
@@ -213,14 +316,16 @@ profit = ahNet(sell) − capital,  margin = profit / capital,  profit/hour = pro
 
 The **Sell or craft?** page (`#/sell`, `src/domain/sell.ts`) values items you already own. Raw options for `qty` items:
 
-| option | you get |
-|---|---|
-| insta-sell | walk the buy orders for `qty` (VWAP), after bazaar tax; if the book holds fewer, only the filled part counts and the row says so |
-| sell offer | `(ask − 0.1)` after tax × qty; time = qty / your sell rate (your share of weekly volume) |
-| NPC | NPC sell price × qty |
-| AH | `ahNet(lowest BIN)` × qty, for auctionable items with a scanned price |
+| option | you get | time |
+|---|---|---|
+| insta-sell | walk the buy orders for `qty` (VWAP), after bazaar tax; if the book holds fewer, only the filled part counts and the row says so | now |
+| sell offer | `(ask − 0.1)` after tax × qty | qty / your sell rate (your share of weekly volume) |
+| NPC | NPC sell price × qty | now |
+| AH | the AH venue of Best sale × qty: one coin under the lowest BIN (median-capped with conservatism), after the AH fees; auctionable items with a scanned price | qty / the AH sales rate |
 
-**Craft up:** for every chain ladder (see Craft chains) that contains the item, every higher tier is an option. Your items are free inputs; side ingredients are bought at their cheapest source (the craft pricer); only whole crafts count (`made = floor(qty / need)`); leftover items are sold at the best raw price per item. `net = made × (value of one crafted item − its side-ingredient cost) + leftover × best raw price`. Options are listed best first; the page total adds each item's best option.
+The insta-sell and sell-offer options read the snapshot as it is.
+
+**Craft up:** for every chain ladder (see Craft chains) that contains the item, every higher tier is an option. Your items are free inputs; side ingredients are bought at their cheapest source (the craft pricer); only whole crafts count (`made = floor(qty / need)`). The crafted items are sold together at their best venue (Best sale for `made` units: an insta-sell walks the book for all of them), and leftover items at the best raw price per item. `net = made × (value of one crafted item − its side-ingredient cost) + leftover × best raw price`; its time is the longer of the crafted sale and the leftover sale. Options are listed best first; the page total adds each item's best option.
 
 ## Trades: my orders and the journal
 
@@ -238,7 +343,9 @@ The **Sell or craft?** page (`#/sell`, `src/domain/sell.ts`) values items you al
 
 ## Book combining
 
-Two level-k books combine into one level-(k+1) book, so one level-L book takes `2^(L−k)` level-k books. For each output book, the app tries every `k` from `L − 1` down to `L − 4` (`BOOK.maxChainLevels = 4`, at most 16 input books) and keeps the most profitable chain. On a tie, it keeps the shorter chain. One unit is one output book: it costs `count` input books, and the input's fill rate and book depth are divided by `count`.
+Two level-k books combine into one level-(k+1) book, so one level-L book takes `2^(L−k)` level-k books. For each output book, the app tries every `k` from `L − 1` down to `L − 4` (`BOOK.maxChainLevels = 4`, at most 16 input books) and keeps the input level with the most profit per hour. On a tie, it keeps the shorter chain. One unit is one output book: it costs `count` input books, and the input's fill rate and book depth are divided by `count`.
+
+Both legs are bazaar orders in order modes: the input buy order holds `count` books per output book, and the output sell offer one (see Order slots). The row's risk is the output's sell-side risk plus only the `INGREDIENT_FLAGS` (`PRICE_SPIKE`, `QUICK_DIVERGENCE`) of the input's buy side.
 
 **Verified vs unverified.** Not every level can be made on an anvil; some exist only as drops or rewards. `scripts/data/book-rules.json` lists the anvil maximum for enchants we are sure about, with sources. A row is verified when its enchant is in that file and `L` is at most the listed maximum. Every other row is unverified: either the enchant isn't listed (the catalog then only knows the enchanting-table maximum from NEU), or `L` is above the maximum, like Sharpness VI or VII. The Books page hides unverified rows by default (`BOOK.hideUnverified`), and the overview card shows only verified ones.
 
@@ -246,25 +353,25 @@ Combining costs no coins in the model. The anvil's XP-level cost is not modelled
 
 ## Shops
 
-Currency shops (bits, copper, motes, North Stars, medals, coupons, essences, …) come from NEU's NPC shop data and SkyMart. Each offer is valued as:
+Currency shops (bits, copper, motes, North Stars, medals, coupons, essences, …) come from NEU's NPC shop data and SkyMart. Each offer is valued through Best sale (bazaar after tax, AH after fees while the scan is on, NPC):
 
 ```
-value            = outQty × max(bazaar sell quote after tax, NPC sell price)
+value            = outQty × best net sale
 coinsPerCurrency = value / costQty
 ```
 
-`coinsPerCurrency` is how many coins one unit of the currency turns into through that offer. Offers with the highest value per currency unit come first. The cost of earning the currency isn't modelled, and there's no throughput: the weekly volume column shows how much the bazaar absorbs.
+`coinsPerCurrency` is how many coins one unit of the currency turns into through that offer. Offers with the highest value per currency unit come first. The cost of earning the currency isn't modelled, and there's no throughput: the weekly volume column shows how much the market absorbs (the bazaar's weekly volume on the side you sell to, or a week of measured AH sales).
 
 ## Bits shop
 
-The **Bits shop** page (`#/bits`, `src/domain/bits.ts`) ranks Elizabeth's offers paid in bits (`SKYBLOCK_BIT`) and prices a bit through Booster Cookies. It is a ranking only: bits offers are not planner opportunities or market-alert kinds.
+The **Bits shop** page (`#/bits`, `src/domain/bits.ts`) ranks Elizabeth's offers paid in bits (`SKYBLOCK_BIT`), prices a bit through Booster Cookies, and fills one cookie's bits into a basket. It is a ranking only: bits offers are not planner opportunities or market-alert kinds.
 
-**Value.** Each offer's output is sold at the best of three quotes, per item:
+**Value.** Each offer's output is valued through Best sale, per item:
 
 | quote | net per item |
 |---|---|
 | bazaar | sell quote in your sell mode, after bazaar tax |
-| AH | lowest BIN after the AH fees (`ahNet`, ×4 claim tax under Derpy), only while the AH scan is on |
+| AH | one coin under the lowest BIN (median-capped with conservatism), after the AH fees (`ahNet`, ×4 claim tax under Derpy), only while the AH scan is on |
 | NPC | NPC sell price |
 
 ```
@@ -272,29 +379,38 @@ value       = outQty × best net
 coinsPerBit = value / bits
 ```
 
-Ties keep bazaar, then AH, then NPC. The detail panel lists the quotes that lost. Risk comes from the winning quote: the bazaar risk report, or `AH_THIN` (fewer than `AH.minCount = 2` listings), `AH_GAP` and `AH_VARIANT` (gear categories) for the AH.
+Ties keep bazaar, then AH, then NPC. The detail panel lists the quotes that lost. Risk comes from the winning quote: the bazaar sell-side risk, or `AH_THIN` (fewer than `AH.minCount = 3` listings), `AH_GAP` and `AH_VARIANT` (gear categories) for the AH.
 
-**Cookies.** A Booster Cookie gives `BITS.perCookie = 4,800` bits × the fame-rank multiplier (`BITS.fameRanks`: New Player ×1 up to Imperator ×2.38; a custom multiplier overrides the rank, saved under `LS_BITS`).
+**Cookies.** A Booster Cookie gives `BITS.perCookie = 4,800` bits × your multiplier: the `bitsMultiplier` setting (1 – 5), which the Bits page sets from your fame rank (`BITS.fameRanks`: New Player ×1 up to Imperator ×2.38) or a custom value. The page's older saved rank (`bazaarMasasi.bits`) is moved into the setting once, the first time the page opens.
 
 ```
 cookieCostPerBit = cookie buy quote (cost mode) / (4,800 × multiplier)
 vsCookie         = coinsPerBit / cookieCostPerBit        (> 1: buying cookies to buy this offer pays)
-coinsPerCookie   = 4,800 × multiplier × best coinsPerBit (best tradeable, non-suspect offer)
-profitPerCookie  = coinsPerCookie − cookie cost
 ```
+
+**Basket.** One cookie's bits (`4,800 × multiplier`) go to the usable offers (tradeable, valued, not suspect) by coins per bit, best first. Each offer is bought up to what its market absorbs in `BITS.basketHours = 24` h (`sale rate × 24 / outQty` offers; offers of the same item share that), until the bits run out. Bits no offer can take are kept for later and not valued.
+
+```
+coinsPerCookie  = the basket's coins
+profitPerCookie = coinsPerCookie − cookie cost
+```
+
+The same cookie cost per bit prices bits-shop items in Kat upgrades.
 
 **Hand-kept data** (`scripts/data/bits-rules.json`, each entry with a source): Absorb I (4,000 bits) is added because NEU lacks it; the eight abicases and Pure Black / White Dye are kept as auctionable although the Hypixel items API omits them; five sacks are untradeable (`catalog.untradeable`) and are never valued. Untradeable and unpriced rows are hidden by default.
 
 ## NPC flips
 
-| direction | buy | sell |
-|---|---|---|
-| Bazaar → NPC | bazaar, current buy mode | NPC sell price, no tax, unlimited |
-| NPC → Bazaar | NPC buy price, `npcDailyLimit / 24` per hour | bazaar, current sell mode, after tax |
+| direction | buy | sell | risk |
+|---|---|---|---|
+| Bazaar → NPC | bazaar, current buy mode | NPC sell price, no tax, unlimited | the bazaar buy side only |
+| NPC → Bazaar | NPC buy price, instant, at most `npcDailyLimit / 24 × cycleHours` per batch | bazaar, current sell mode, after tax | the bazaar sell side only |
 
 ## Fusion
 
-Fusion recipes are entered by the user. Inputs are priced as bazaar buys and the output as a bazaar sale after tax. Throughput treats a fusion like a craft with two inputs: the buy rate is the slower input's `rate / qty`, and the sell rate is the output's rate / qo. Fusion fees are not modelled (`FUSION_FEE_COINS = 0`, and the fee isn't applied anywhere).
+Fusion recipes are entered by the user. Each input is bought at the cheaper of the bazaar (your cost mode) and an NPC shop (instant, capped at `npcDailyLimit / 24` per hour); the output is a bazaar sale after tax. Throughput treats a fusion like a craft with two inputs: the buy rate is the slower bazaar input's `rate / qty`, NPC inputs cap the batch, and the sell rate is the output's rate / qo. Insta legs are re-quoted once at the batch size. Risk covers the buy side of bazaar-bought inputs and the output's sell side.
+
+Fusion fees: the fee per fusion (`FUSION_FEE_COINS`) is added to each fusion's cost, but it is 0 until the real fee is checked in game, so fees are not modelled yet.
 
 ## Planner (optimizer)
 
@@ -339,7 +455,7 @@ With different unit costs the integer problem is NP-hard, so 0.9 is the bound th
 
 ## Market stats
 
-Computed from the last 24 h of history. The "thinned" series keeps the last point of each 15-minute bucket, so the dense last 3 hours don't outweigh the rest of the day.
+Computed from the last 24 h of history in one columnar pass over every item (`statsAll`). The "thinned" series keeps the last point of each 15-minute bucket, so the dense last 3 hours don't outweigh the rest of the day.
 
 | stat | definition | needs |
 |---|---|---|
@@ -348,6 +464,7 @@ Computed from the last 24 h of history. The "thinned" series keeps the last poin
 | spread median | median of `(ask − bid) / bid`, thinned | |
 | consistency | share of thinned points where a flip was profitable: `(ask − 0.1) × (1 − tax) − (bid + 0.1) > 0` | ≥ 12 thinned points |
 | volume trend | see below | ≥ 30 min between first and last point |
+| bid / ask moves per hour | how often the best bid (ask) changed between consecutive snapshots in the last 3 h, per hour (used by Conservatism) | ≥ 2 points |
 
 The overview's "Most consistent flips" ranks non-suspect profitable flips by consistency × profit per hour. "Movers" ignores items with fewer than `STATS.moversMinWeekVol = 10,000` insta-buys plus insta-sells a week.
 
@@ -386,15 +503,38 @@ Each product's market is checked against `config.RISK`. Some flags need price hi
 | `EXTREME_SPREAD` | `(ask − bid) / bid > 2` (`extremeSpreadMargin`, 200 %), unless `DEAD_BID` | hard |
 | `PRICE_SPIKE` | robust z of the ask vs the baseline median > 3.5 (`spikeZ`); or ask > 1.5 × median ask (`spikeUp`); or bid < 0.67 × median bid (`spikeDown`). Needs ≥ 12 baseline points (`spikeMinPoints`) | hard |
 | `WIDE_SPREAD` | `(ask − bid) / bid > 0.6` (`wideSpreadMargin`) | 2 |
-| `LOW_VOLUME` | `min(insta-buys, insta-sells)` per week < 1,000 units (`lowVolumeUnits`), or × price < 1,000,000 coins (`lowVolumeCoins`) | 2 |
-| `FEW_ORDERS` | fewer than 5 buy orders or 5 sell offers (`fewOrders`) | 1 |
+| `LOW_VOLUME` | the weekly flow that fills the sides used (the smaller one, if both) < 1,000 units (`lowVolumeUnits`), or × price < 1,000,000 coins (`lowVolumeCoins`) | 2 |
+| `FEW_ORDERS` | fewer than 5 buy orders or 5 sell offers (`fewOrders`) on a side used | 1 |
 | `THIN_TOP` | second ask > 1.25 × best ask (`thinTopGap`) and the best ask holds less than an hour of insta-buys; or the same on the bid side | 1 |
 | `QUICK_DIVERGENCE` | `quick_status` buy price / ask or sell price / bid outside [0.5, 2] (`quickDivergence`) | 1 |
 | `VOLUME_IMBALANCE` | insta-buys / insta-sells outside [0.1, 10] (`volumeImbalance`), or one side 0 | 1 |
-| `AH_THIN` | AH-valued craft output with fewer than 2 BIN listings (`AH.minCount`) | 2 |
+| `AH_THIN` | an AH price or sale with fewer than 3 BIN listings (`AH.minCount`) | 2 |
+| `AH_GAP` | the second-lowest BIN is more than 3 × the lowest (`AH_FLIP.gapRatio`) | 2 |
+| `AH_VARIANT` | one AH id covers copies that differ: gear and tools (`AH_FLIP.variantCategories`), pets not priced from a `@MAX` key, or a Kat level that is a guess | 1 |
 | `NO_HISTORY` | fewer than 12 baseline points | 0 |
 
 Robust z = `0.6745 × (x − median) / MAD`. Hard flags weigh `suspectScore = 3`.
+
+**Side-aware risk.** A strategy is checked only on the sides of the book it trades (`assessRisk(p, stats, use)`, memoized per item and use in the market core). A buy order and an insta-sell use the bids, which fill from insta-sells; an insta-buy and a sell offer use the asks, which fill from insta-buys.
+
+| flag | checked when |
+|---|---|
+| `DEAD_BID`, `WIDE_SPREAD`, `EXTREME_SPREAD` | a sell side is used: a buyer pays the quote it gets, whatever the spread |
+| `LOW_VOLUME`, `FEW_ORDERS`, `THIN_TOP`, `QUICK_DIVERGENCE` | on the book sides used |
+| `VOLUME_IMBALANCE` | the side with the smaller flow is used |
+| `PRICE_SPIKE`, `NO_HISTORY` | always |
+
+| row | sides checked |
+|---|---|
+| flip | buy side (cost mode) and sell side (sell mode) |
+| bazaar → NPC | buy side only |
+| NPC → bazaar | sell side only |
+| book combine | output sell side; the input's buy side adds only `PRICE_SPIKE` and `QUICK_DIVERGENCE` |
+| craft | the sale's risk; bazaar-bought ingredients add only `PRICE_SPIKE` and `QUICK_DIVERGENCE`, thin AH-bought ones `AH_THIN` |
+| fusion | buy side of bazaar-bought inputs, sell side of the output |
+| Best sale (Bits, Shops, Sell or craft?) | the winning venue: bazaar sell side, or the AH flags |
+
+The item page shows the side-blind report (every flag on both sides).
 
 **Levels.** A row is **suspect** if it has any hard flag, or both `WIDE_SPREAD` and `LOW_VOLUME`, or a score ≥ 3 (`suspectScore`). Otherwise it is **caution** at a score ≥ 1 (`cautionScore`), else **ok**. Rows that combine several markets (crafts, books, fusion) take the union of the flags, the highest score and the worst level. "Hide suspicious" hides suspect rows from the tables.
 
@@ -403,6 +543,6 @@ Robust z = `0.6745 × (x − median) / MAD`. Hard flags weigh `suspectScore = 3`
 - **Minion calculator.** There are no usable drop tables.
 - **Automatic shard-fusion candidates.** NEU's `attribute_shards.json` has no recipes, so fusion recipes are entered by hand.
 - **Collection and recipe requirements.** Every recipe is assumed to be unlocked.
-- **Order book changes during fills.** Prices, competition and volume are taken from the current snapshot and held constant while your orders fill.
+- **Order book changes during fills.** Prices, competition and volume are taken from the current snapshot and held constant while your orders fill. With conservatism on, the recent history makes them less optimistic, but they still don't move during a fill.
 - **Fusion fees.** `FUSION_FEE_COINS = 0`.
-- Also not modelled: the anvil XP cost of book combining, AH item attributes (stars, reforges, pet level), per-item NPC limits (one global setting), and mayor perks (shown on the overview but not used in calculations).
+- Also not modelled: the anvil XP cost of book combining, AH item attributes (stars, reforges, enchantments; pet level only through the level keys), per-item NPC limits (one global setting), and mayor perks (shown on the overview but not used in calculations, apart from Derpy's AH claim tax).
