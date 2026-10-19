@@ -19,6 +19,7 @@ import {
 } from '../../kit/index.ts';
 import { CHAIN_PREFS_KEY, CHAIN_SCHEMA, filterChains, fmtQty, relabel, tabsHtml, type ChainQuery } from './helpers.ts';
 import {
+  ahEnv,
   buyStepHtml,
   craftColumns,
   linesTable,
@@ -215,8 +216,7 @@ export function createChainsPane(): View {
     catalog: () => ctx?.store.get().catalog ?? null,
     settings: () => ctx!.store.get().settings,
     product: (id) => ctx?.store.get().snapshot?.products[id],
-    ah: (id) => ctx?.derived.calcCtx()?.ah?.(id) ?? null,
-    derpy: () => ctx?.derived.calcCtx()?.derpy ?? false,
+    ...ahEnv(() => ctx?.derived.calcCtx()),
     recipe(key) {
       const cat = ctx?.store.get().catalog;
       if (!cat) return undefined;
@@ -416,7 +416,8 @@ export function createChainsPane(): View {
             s.catalogError !== prev.catalogError ||
             s.settings !== prev.settings ||
             s.historyTick !== prev.historyTick ||
-            s.ah !== prev.ah
+            s.ah !== prev.ah ||
+            s.ahSales !== prev.ahSales
           ) {
             schedule();
           }

@@ -10,6 +10,7 @@ import { createAhFlipView, filterAhFlips } from '../../../src/ui/views/ahflip/ah
 import { ahListingCount } from '../../../src/ui/views/ahflip/model.ts';
 import catalogJson from '../../fixtures/catalog.json';
 import { fakeHistory, fakeViewCtx } from '../../helpers/fakes.ts';
+import { fmtCoins, fmtHours, fmtNum } from '../../../src/ui/format.ts';
 
 let store: Store<AppState>;
 let root: HTMLElement;
@@ -77,8 +78,8 @@ describe('AH flips view', () => {
       { q: '', minProfit: 100_000, minMargin: 5, minCount: 5, pets: true, hideSuspect: store.get().settings.hideSuspicious },
       catalog,
     ).rows;
-    expect(new Set(keys())).toEqual(new Set(want.map((r) => r.id)));
-    expect(keys()).not.toContain('SMALL');
+    expect(new Set(keys())).toEqual(new Set(want.map((r) => r.key)));
+    expect(keys()).not.toContain('ah:SMALL');
     expect(q('[data-testid="ahflip-count"]').textContent).toBe(t('ahflip.count', { n: want.length, total: all.length, count: all.length }));
   });
 
@@ -86,7 +87,7 @@ describe('AH flips view', () => {
     store.set({ catalog, ah: AH });
     mount({ q: 'god' });
     await flush();
-    expect(keys()).toEqual(['GOD_POTION_2']);
+    expect(keys()).toEqual(['ah:GOD_POTION_2']);
     root.querySelector<HTMLElement>('.ahf-table tbody tr[data-key]')!.click();
     const panel = q('.kit-panel');
     expect(panel.hidden).toBe(false);
@@ -103,28 +104,89 @@ describe('AH flips view', () => {
     store.set({ catalog, ah: AH, settings: { ...store.get().settings, hideSuspicious: false } });
     mount({ minProfit: '0', minMargin: '0' });
     await flush();
-    expect(keys()).toContain('BLACK_CAT;5');
+    expect(keys()).toContain('ah:BLACK_CAT;5');
     const cb = q<HTMLInputElement>('.kit-filterbar input[data-filter="pets"]');
     cb.checked = false;
     cb.dispatchEvent(new Event('change', { bubbles: true }));
     await flush();
-    expect(keys()).not.toContain('BLACK_CAT;5');
+    expect(keys()).not.toContain('ah:BLACK_CAT;5');
   });
 
-  it('scan v3: max-level pet keys are not separate rows and their listings are counted once', async () => {
+  it('max-level pet keys are rows of their own, marked; level keys are counted once', async () => {
     const ah: AhSnapshot = {
       ...AH,
-      v: 3,
-      lowestBin: { ...AH.lowestBin, 'BLACK_CAT;5@MAX': { price: 90_000_000, next: 120_000_000, count: 4, name: '[Lvl 100] Black Cat', exp: 2.6e7 } },
+      v: 4,
+      lowestBin: {
+        ...AH.lowestBin,
+        'BLACK_CAT;5@MAX': { price: 90_000_000, next: 120_000_000, count: 4, name: '[Lvl 100] Black Cat', exp: 2.6e7 },
+        'BLACK_CAT;5@L49': { price: 50_000_000, next: 80_000_000, count: 1, name: '[Lvl 1] Black Cat' },
+      },
     };
-    expect(computeAhFlips(ah, catalog).map((r) => r.id)).toEqual(computeAhFlips(AH, catalog).map((r) => r.id));
+    expect(computeAhFlips(ah, catalog).map((r) => r.id).sort()).toEqual([...computeAhFlips(AH, catalog).map((r) => r.id), 'BLACK_CAT;5@MAX'].sort());
     expect(ahListingCount(ah)).toBe(6 + 8 + 9 + 5);
     store.set({ catalog, ah, settings: { ...store.get().settings, hideSuspicious: false } });
-    mount({ minProfit: '0', minMargin: '0' });
+    mount({ minProfit: '0', minMargin: '0', minCount: '3' });
     await flush();
     expect(q('.ahf-state').hidden).toBe(true);
-    expect(keys()).toContain('BLACK_CAT;5');
-    expect(keys()).not.toContain('BLACK_CAT;5@MAX');
+    expect(keys()).toContain('ah:BLACK_CAT;5');
+    expect(keys()).toContain('ah:BLACK_CAT;5@MAX');
+    expect(keys()).not.toContain('ah:BLACK_CAT;5@L49');
+    expect(q('.ahf-table tbody tr[data-key="ah:BLACK_CAT;5@MAX"] [data-ahf-max]')).not.toBeNull();
     expect(q('.ahf-scan').textContent).toContain(String(6 + 8 + 9 + 5));
+  });
+
+  it('sell time: measured AH sales, else a marked guess; the detail explains a stack and the median cap', async () => {
+    const ah: AhSnapshot = { ...AH, v: 4, lowestBin: { GOD_POTION_2: { price: 1_000_000, next: 1_400_000, count: 8, stack: 2, uuid: 'def' }, HYPERION: AH.lowestBin.HYPERION! } };
+    // 80 sold per hour, your share (0.05) 4/h: the stack of 2 sells in half an hour
+    const stat = { n: 9, items: 9, median: 1_300_000, perHour: 80, coverageHours: 6, last: 0 };
+    store.set({
+      catalog,
+      ah,
+      ahSales: { v: 1, updatedAt: 0, coverageHours: 6, byId: { GOD_POTION_2: stat } },
+      settings: { ...store.get().settings, conservative: true },
+    });
+    mount();
+    await flush();
+    const god = q('.ahf-table tbody tr[data-key="ah:GOD_POTION_2"]');
+    expect(god.textContent).toContain(fmtHours(0.5));
+    expect(god.querySelector('[data-ahf-stack]')).not.toBeNull();
+    // HYPERION sold nothing over the 6 h covered: it doesn't sell
+    expect(q('.ahf-table tbody tr[data-key="ah:HYPERION"]').textContent).toContain(fmtHours(Infinity));
+    god.click();
+    const panel = q('.kit-panel');
+    expect(panel.textContent).toContain(t('ahflip.d_stackNote', { n: '2', total: fmtCoins(2_000_000) }));
+    expect(panel.textContent).toContain(t('ahflip.d_medianCap', { ref: fmtCoins(1_399_999) }));
+    expect(panel.textContent).toContain(t('ahflip.perHour', { n: fmtNum(80, 2) }));
+    q<HTMLElement>('.ahf-table tbody tr[data-key="ah:HYPERION"]').click();
+    expect(panel.textContent).toContain(t('ahflip.perHour', { n: fmtNum(0, 2) }));
+    // too little coverage: no measured sales, the sell time a marked guess
+    store.set({ ahSales: { v: 1, updatedAt: 0, coverageHours: 1, byId: { GOD_POTION_2: { ...stat, coverageHours: 1 } } } });
+    await flush();
+    expect(q('.ahf-table tbody tr[data-key="ah:HYPERION"]').textContent).toContain(`~${fmtHours(4)}`);
+    q<HTMLElement>('.ahf-table tbody tr[data-key="ah:HYPERION"]').click();
+    expect(q('.kit-panel').textContent).toContain(t('ahflip.d_noSales'));
+  });
+
+  it('George mode: pets below his price, sold at once; the listing filter does not apply', async () => {
+    const george = { ...catalog, george: { 'BLACK_CAT;5': 60_000_000, 'BEE;1': 500 } };
+    const ah: AhSnapshot = { ...AH, v: 4, lowestBin: { ...AH.lowestBin, 'BEE;1': { price: 200, count: 1, prices: [200] } } };
+    store.set({ catalog: george, ah, settings: { ...store.get().settings, hideSuspicious: false } });
+    mount({ mode: 'george', minProfit: '0' });
+    await flush();
+    expect(keys().sort()).toEqual(['george:BEE;1', 'george:BLACK_CAT;5']);
+    expect(q('.ahf-table thead').textContent).toContain(t('ahflip.col_george'));
+    expect(q('.ahf-table tbody tr[data-key="george:BEE;1"]').textContent).toContain(t('ahflip.instant'));
+    q<HTMLElement>('.ahf-table tbody tr[data-key="george:BLACK_CAT;5"]').click();
+    const panel = q('.kit-panel');
+    expect(panel.textContent).toContain(t('ahflip.d_george'));
+    expect(panel.textContent).toContain(t('ahflip.georgeCaveat'));
+    expect(panel.textContent).not.toContain(t('ahflip.d_fee'));
+    // back to relisting
+    const seg = root.querySelector<HTMLElement>('.kit-filterbar [data-filter="mode"] [data-value="relist"]');
+    expect(seg).not.toBeNull();
+    seg!.click();
+    await flush();
+    expect(keys().every((k) => k.startsWith('ah:'))).toBe(true);
+    expect(q('.ahf-table thead').textContent).toContain(t('ahflip.col_next'));
   });
 });

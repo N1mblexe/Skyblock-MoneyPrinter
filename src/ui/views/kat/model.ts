@@ -1,6 +1,6 @@
 // Kat upgrades page model: URL schema and row filtering (no DOM or CSS, so scripts/smoke.ts can import it).
 import { KAT } from '../../../config.ts';
-import type { KatBand, KatRow } from '../../../domain/kat.ts';
+import { KAT_DERIVED_SKIP, KAT_SKIPS, type KatBand, type KatRow } from '../../../domain/kat.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import type { AppState } from '../../../types/contracts.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
@@ -16,7 +16,7 @@ export const KAT_SCHEMA = {
   maxCapital: { kind: 'number', def: null, min: 0 },
   maxHours: { kind: 'number', def: null, min: 0 },
   band: { kind: 'enum', def: 'both', values: ['both', 'any', 'max'] },
-  skip: { kind: 'bool', def: false },
+  skip: { kind: 'enum', def: KAT_DERIVED_SKIP, values: KAT_SKIPS },
   unpriced: { kind: 'bool', def: false },
   suspect: { kind: 'bool', def: false },
   sort: { kind: 'sort', def: { key: 'pph', dir: 'desc' }, keys: SORT_KEYS },

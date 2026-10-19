@@ -9,6 +9,7 @@ import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type { AhSnapshot, AppState, Catalog, PetLeveling, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { esc } from '../../../src/ui/dom.ts';
+import { fmtCoins, fmtHours } from '../../../src/ui/format.ts';
 import { createKatView, filterKat, katDetail, rarityName } from '../../../src/ui/views/kat/katView.ts';
 import { KAT_MAX_TAMING, type KatFilters } from '../../../src/ui/views/kat/model.ts';
 import bazaarJson from '../../fixtures/bazaar.json';
@@ -53,6 +54,7 @@ function mount(query?: Record<string, string>): void {
   view.mount(root, ctx, { id: 'kat', ...(query ? { query } : {}) });
 }
 
+const skipSeg = (v: string) => q<HTMLButtonElement>(`.kit-filterbar [data-filter="skip"] [data-value="${v}"]`).click();
 const ready = (over: Partial<AppState> = {}) => store.set({ catalog, snapshot: snap, ah: AH, ...over });
 
 function openRow(key: string): HTMLElement {
@@ -147,13 +149,14 @@ describe('Kat view', () => {
 
   it('filters: band, max hours, max capital, search, unpriced', async () => {
     ready();
-    mount({ band: 'max' });
+    // without skip items: under the default (skip when it pays) Kat Flowers bring OCELOT;3>4 under the hour limits
+    mount({ band: 'max', skip: 'none' });
     await flush();
     expect(keys().every((k) => k.endsWith(':max'))).toBe(true);
-    view.update!({ id: 'kat', query: { maxHours: '50' } });
+    view.update!({ id: 'kat', query: { skip: 'none', maxHours: '50' } });
     await flush();
     expect(new Set(keys())).toEqual(new Set(['OCELOT;4>5:any', 'OCELOT;4>5:max']));
-    view.update!({ id: 'kat', query: { maxCapital: '5000000' } });
+    view.update!({ id: 'kat', query: { skip: 'none', maxCapital: '5000000' } });
     await flush();
     expect(keys()).toEqual(['OCELOT;3>4:max']);
     view.update!({ id: 'kat', query: { q: 'bee', unpriced: '1' } });
@@ -177,10 +180,8 @@ describe('Kat view', () => {
     expect(store.get().settings.taming).toBe(KAT_MAX_TAMING);
     await flush();
     expect(keys()).toContain('OCELOT;3>5:max');
-    // with the skip option the page computes its own rows, for the same Taming level
-    const cb = q<HTMLInputElement>('.kit-filterbar input[data-filter="skip"]');
-    cb.checked = true;
-    cb.dispatchEvent(new Event('change', { bubbles: true }));
+    // with another skip option the page computes its own rows, for the same Taming level
+    skipSeg('flowers');
     await flush();
     expect(keys()).toContain('OCELOT;3>5:max');
     store.set({ settings: { ...store.get().settings, taming: 20 } });
@@ -194,7 +195,7 @@ describe('Kat view', () => {
     expect(store.get().settings.taming).toBe(20);
   });
 
-  it('the rows without skip items are derived.kat(), kept across display-only setting changes', async () => {
+  it("the default skip option's rows are derived.kat(), kept across display-only setting changes", async () => {
     ready();
     mount();
     await flush();
@@ -208,17 +209,43 @@ describe('Kat view', () => {
 
   it('the skip toggle buys Kat Flowers and shortens the wait', async () => {
     ready();
-    mount({ maxHours: '20' });
+    mount({ maxHours: '20', skip: 'none' });
     await flush();
     expect(keys()).not.toContain('OCELOT;3>4:max');
-    const cb = q<HTMLInputElement>('.kit-filterbar input[data-filter="skip"]');
-    cb.checked = true;
-    cb.dispatchEvent(new Event('change', { bubbles: true }));
+    skipSeg('flowers');
     await flush();
     expect(keys()).toContain('OCELOT;3>4:max');
     const panel = openRow('OCELOT;3>4:max');
     expect(panel.textContent).toContain(t('kat.d_skip'));
     expect(panel.textContent).toContain('5× Kat Flower');
+    // never: the page's own rows without skip items; best: derived.kat()
+    skipSeg('none');
+    await flush();
+    expect(keys()).not.toContain('OCELOT;3>4:max');
+    const spy = vi.spyOn(ctx.derived, 'kat');
+    skipSeg('best');
+    await flush();
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it('sale markers: George when he pays more, else the AH key the pet is priced from', async () => {
+    ready({
+      catalog: { ...catalog, george: { 'BEE;1': 2_000_000 } },
+      ah: { ...AH, v: 4, lowestBin: { ...AH.lowestBin, 'OCELOT;4@L99': { price: 7_000_000, count: 3 } } },
+    });
+    mount({ unpriced: '1', suspect: '1', minProfit: '0' });
+    await flush();
+    const cell = (key: string) => q(`.kat-table tbody tr[data-key="${CSS.escape(key)}"]`);
+    expect(cell('BEE;0>1:any').querySelector('[data-kat-sale="george"]')).not.toBeNull();
+    expect(cell('OCELOT;3>4:max').querySelector('[data-kat-sale="band"]')!.textContent).toBe(t('kat.sale_band', { a: 90, b: 99 }));
+    expect(cell('OCELOT;4>5:max').querySelector('[data-kat-sale="max"]')).not.toBeNull();
+    expect(cell('OCELOT;3>5:max').querySelector('[data-kat-sale="any"]')).not.toBeNull();
+    const panel = openRow('BEE;0>1:any');
+    expect(panel.textContent).toContain(t('kat.georgeNote'));
+    expect(panel.textContent).not.toContain(t('kat.d_sellNet'));
+    const band = openRow('OCELOT;3>4:max');
+    expect(band.textContent).toContain(t('kat.d_sellHours'));
+    expect(band.textContent).toContain(t('kat.noSales', { h: fmtHours(KAT.defaultSellHours) }));
   });
 
   it('a row opens the per-step breakdown and copies the /viewauction command', async () => {
@@ -276,6 +303,28 @@ describe('katDetail', () => {
     expect(html).toContain(t('kat.derpy'));
     expect(html).toContain('NOWHERE_ITEM');
     expect(html).not.toContain('data-kat-copy');
+  });
+
+  it('notes the median cap, a George price under the AH sale and bits-priced flowers', () => {
+    ready();
+    const r = row();
+    const html = katDetail(
+      {
+        ...r,
+        sell: 5_000,
+        sellVenue: 'ah',
+        sellRef: 6_000,
+        george: 100,
+        salesPerHour: 2,
+        steps: r.steps.map((s) => ({ ...s, skip: [{ id: KAT.flowerId, name: 'Kat Flower', qty: 1, unit: 9, total: 9, source: 'bits' as const }] })),
+      },
+      false,
+    );
+    expect(html).toContain(esc(t('kat.medianCap', { ref: fmtCoins(6_000) })));
+    expect(html).toContain(esc(t('kat.d_george')));
+    expect(html).toContain(esc(t('kat.bitsNote')));
+    expect(html).toContain('data-src="bits"');
+    expect(html).not.toContain(esc(t('kat.noSales', { h: fmtHours(r.sellHours) })));
   });
 
   it('rarity names', () => {

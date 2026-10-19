@@ -1,59 +1,69 @@
 import type { CalcCtx, NpcFlipRow } from '../types/contracts.ts';
-import { afterTax, buySide, npcBuyRate, planTrade, sellSide, type Leg } from './pricing.ts';
-import { assessRisk } from './risk.ts';
+import { coreOf, mergeCons, sideLeg, type NpcLeg, type RiskUse } from './market.ts';
+import { planTrade, tradePlanInputs, type Leg } from './pricing.ts';
 
-/** Profitable bz2npc and npc2bz flips. */
+/**
+ * Profitable bz2npc and npc2bz flips. Each row's risk covers only the bazaar side it trades: the buy side for
+ * bazaar -> NPC, the sell side for NPC -> bazaar. An NPC purchase is instant, capped at npcDailyLimit / 24 per hour.
+ */
 export function computeNpcFlips(ctx: CalcCtx): NpcFlipRow[] {
   const { snap, catalog, settings } = ctx;
-  const { costMode, sellMode, share, taxRate } = settings;
-  const npcRate = npcBuyRate(settings.npcDailyLimit);
+  const { costMode, sellMode, taxRate } = settings;
+  const core = coreOf(ctx);
   const rows: NpcFlipRow[] = [];
-  for (const [id, p] of Object.entries(snap.products)) {
-    const info = catalog.items[id];
-    if (!info) continue;
-    let risk: NpcFlipRow['risk'] | undefined;
-    const push = (direction: NpcFlipRow['direction'], plan: ReturnType<typeof planTrade>) => {
-      if (!plan || !(plan.profit > 0) || !(plan.buy.net > 0)) return;
-      risk ??= assessRisk(p, ctx.stats?.(id) ?? null);
-      rows.push({
-        id,
-        name: catalog.name(id),
-        direction,
-        buyAt: plan.buy.net,
-        sellAt: plan.sell.net,
-        profit: plan.profit,
-        margin: plan.profit / plan.buy.net,
-        tp: plan.tp,
-        profitPerHour: plan.tp.unitsPerHour * plan.profit,
-        risk,
-      });
+  const buyUse = { buy: costMode };
+  const sellUse = { sell: sellMode };
+  // one set of legs for the whole scan, reading the current item (no closures per product)
+  let id = '';
+  let npcSell = 0;
+  let npc: NpcLeg | null = null;
+  const bzBuy = (q: number): Leg | null => {
+    const s = core.buy(id, q);
+    return s && sideLeg(id, 'buy', s, taxRate);
+  };
+  const npcSale = (): Leg => ({ price: npcSell, net: npcSell, rate: Infinity });
+  const npcBuy = (): Leg => ({ price: npc!.price, net: npc!.price, rate: Infinity, cap: npc!.rate, bound: 'npcLimit', res: `${id}:npc` });
+  const bzSell = (q: number): Leg | null => {
+    const s = core.sell(id, q);
+    return s && sideLeg(id, 'sell', s, taxRate);
+  };
+  const push = (
+    direction: NpcFlipRow['direction'],
+    buy: (q: number) => Leg | null,
+    sell: (q: number) => Leg | null,
+    use: RiskUse,
+  ) => {
+    const plan = planTrade(buy, sell, settings);
+    if (!plan || !(plan.profit > 0) || !(plan.buy.net > 0)) return;
+    const row: NpcFlipRow = {
+      id,
+      name: catalog.name(id),
+      direction,
+      buyAt: plan.buy.net,
+      sellAt: plan.sell.net,
+      profit: plan.profit,
+      margin: plan.profit / plan.buy.net,
+      tp: plan.tp,
+      profitPerHour: plan.tp.unitsPerHour * plan.profit,
+      risk: core.risk(id, use)!,
     };
+    const cons = mergeCons(plan.buy.cons, plan.sell.cons);
+    if (cons) row.cons = cons;
+    const pi = tradePlanInputs(buy, sell, settings);
+    if (pi) row.plan = pi;
+    rows.push(row);
+  };
 
-    const ns = info.npcSell;
-    if (ns != null && ns > 0) {
-      const buy = (q: number): Leg | null => {
-        const s = buySide(p, costMode, share, q, ns);
-        return s && { price: s.quote.price, net: s.quote.price, rate: s.rate, depth: s.depth, order: costMode === 'order' };
-      };
-      const sell = (): Leg => ({ price: ns, net: ns, rate: Infinity });
-      push('bz2npc', planTrade(buy, sell, settings, costMode === 'insta'));
+  for (const pid of Object.keys(snap.products)) {
+    const info = catalog.items[pid];
+    if (!info) continue;
+    id = pid;
+    if (info.npcSell != null && info.npcSell > 0) {
+      npcSell = info.npcSell;
+      push('bz2npc', bzBuy, npcSale, buyUse);
     }
-
-    const nb = info.npcBuy;
-    if (nb != null && nb > 0) {
-      const buy = (): Leg => ({ price: nb, net: nb, rate: npcRate, bound: 'npcLimit' });
-      const sell = (q: number): Leg | null => {
-        const s = sellSide(p, sellMode, share, q);
-        return s && {
-          price: s.quote.price,
-          net: afterTax(s.quote.price, taxRate),
-          rate: s.rate,
-          depth: s.depth,
-          order: sellMode === 'offer',
-        };
-      };
-      push('npc2bz', planTrade(buy, sell, settings, sellMode === 'insta'));
-    }
+    npc = core.npcBuy(id);
+    if (npc) push('npc2bz', npcBuy, bzSell, sellUse);
   }
   return rows;
 }

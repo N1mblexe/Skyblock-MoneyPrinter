@@ -1,6 +1,7 @@
-// Bits shop page model: URL schema, row filtering and the saved rank (no DOM or CSS, so scripts/smoke.ts can import it).
+// Bits shop page model: URL schema, row filtering and the multiplier helpers (no DOM or CSS, so scripts/smoke.ts can
+// import it).
 import { BITS } from '../../../config.ts';
-import type { BitsRow } from '../../../domain/bits.ts';
+import { bitsMultiplier, type BitsRow } from '../../../domain/bits.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import type { AppState } from '../../../types/contracts.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
@@ -47,7 +48,7 @@ export function filterBitsRows(rows: readonly BitsRow[], o: BitsFilters, catalog
   return { rows: out, hidden };
 }
 
-/** Saved under LS_BITS: the fame rank, and a custom multiplier that overrides it when set. */
+/** The old page's prefs under LS_BITS (before settings.bitsMultiplier): the fame rank, and a custom multiplier. */
 export interface BitsPrefs {
   rank: string;
   custom: number | null;
@@ -62,4 +63,21 @@ export function parseBitsPrefs(raw: unknown): BitsPrefs {
   const rank = BITS.fameRanks.some(([n]) => n === x.rank) ? (x.rank as string) : DEFAULT_BITS_PREFS.rank;
   const custom = typeof x.custom === 'number' && Number.isFinite(x.custom) && x.custom > 0 ? x.custom : null;
   return { rank, custom };
+}
+
+/** Valid settings.bitsMultiplier values (sanitizeSettings keeps 1..5). */
+export const MULT_MIN = 1;
+export const MULT_MAX = 5;
+export const validMultiplier = (n: number): boolean => Number.isFinite(n) && n >= MULT_MIN && n <= MULT_MAX;
+
+/** The multiplier the old prefs meant, clamped to the settings range; null when nothing was stored. */
+export function legacyMultiplier(raw: unknown): number | null {
+  if (raw == null) return null;
+  const p = parseBitsPrefs(raw);
+  return Math.min(MULT_MAX, Math.max(MULT_MIN, bitsMultiplier(p.rank, p.custom)));
+}
+
+/** The fame rank whose multiplier is `m`, null for a custom value. */
+export function rankOf(m: number): string | null {
+  return BITS.fameRanks.find(([, , x]) => x === m)?.[0] ?? null;
 }

@@ -227,3 +227,50 @@ describe('books view', () => {
     expect(root.children).toHaveLength(0);
   });
 });
+
+describe('books view: slots, the ask cap, conservatism and side-aware risk', () => {
+  it('shows the order slots a chain takes (input buy order + output sell offer)', async () => {
+    store.set({ snapshot: SNAP, catalog: CATALOG });
+    mount();
+    const col = [...root.querySelectorAll('thead th')].findIndex((th) => th.textContent!.includes('Slot'));
+    expect(col).toBeGreaterThan(0);
+    const cell = q(`tr[data-key="${UW}_5"]`).children[col]!;
+    expect(Number(cell.textContent)).toBeGreaterThanOrEqual(2);
+    (q(`tr[data-key="${UW}_5"] td.num`) as HTMLElement).click();
+    expect(panel().textContent).toContain('çıktı kitabı başına 8 kitap');
+    // sell side of the output, ingredient flags of the input
+    expect(panel().querySelector('.risk-scope')!.textContent).toMatch(/Çıktı kitabının satış tarafı/);
+    expect(panel().querySelector('[data-testid="books-clamp"]')).toBeNull();
+  });
+
+  it('an input order capped at the ask is planned as an insta-buy', async () => {
+    // Protection I: bid 10, ask 10.1 -> a buy order at 10.1 would reach the ask
+    const snap: Snapshot = { ...SNAP, products: { ...SNAP.products, [`${PR}_1`]: book(`${PR}_1`, 10, 10.1) } };
+    store.set({ snapshot: snap, catalog: CATALOG });
+    mount();
+    (q(`tr[data-key="${PR}_2"] td.num`) as HTMLElement).click();
+    const steps = [...panel().querySelectorAll('.dp-steps li')].map((li) => li.textContent);
+    expect(steps[0]).toMatch(/insta-buy/);
+    expect(q('[data-testid="books-clamp"]').textContent).toContain('Ask sınırı');
+  });
+
+  it('marks rows adjusted by recent history and lists the changes', async () => {
+    view.unmount();
+    // recent medians: the output sold lower, the input cost more than the snapshot (wide MADs: no price spike)
+    const stats = (id: string) =>
+      id === `${UW}_5`
+        ? { n: 30, medianAsk: 20_500, medianBid: 20_000, madAsk: 1000, madBid: 1000, change24h: null }
+        : id === `${UW}_2`
+          ? { n: 30, medianAsk: 1100, medianBid: 1050, madAsk: 100, madBid: 100, change24h: null }
+          : null;
+    ctx = fakeViewCtx(store, fakeHistory({ stats })) as never;
+    view = createBooksView();
+    store.set({ snapshot: SNAP, catalog: CATALOG });
+    mount();
+    expect(q(`tr[data-key="${UW}_5"] .cons-badge`).textContent).toBe('Ayarlı');
+    (q(`tr[data-key="${UW}_5"] td.num`) as HTMLElement).click();
+    const lines = [...panel().querySelectorAll('[data-testid="cons-list"] li')].map((li) => li.textContent!);
+    expect(lines[0]).toMatch(/^Alış fiyatı anlık veride 1[.,]000[.,]1 → 1[.,]050[.,]1/);
+    expect(lines[1]).toMatch(/^Satış fiyatı anlık veride 20[.,]999[.,]9 → 20[.,]499[.,]9/);
+  });
+});

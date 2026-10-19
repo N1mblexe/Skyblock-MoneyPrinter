@@ -5,6 +5,7 @@ import { alertMessage, fmtMetric, startAlerts } from '../../src/state/alertsRunn
 import { initialState } from '../../src/state/appState.ts';
 import { createDerived } from '../../src/state/derived.ts';
 import { createStore } from '../../src/state/store.ts';
+import { createHistoryRepo } from '../../src/storage/history.ts';
 import type { AlertEvent, AlertRule, AppState, Snapshot } from '../../src/types/contracts.ts';
 import { baseSettings, catalog, makeProduct, snap as fixtureSnap } from '../domain/helpers.ts';
 import { fakeHistory } from '../helpers/fakes.ts';
@@ -158,6 +159,38 @@ describe('market alerts in the runner', () => {
     stop();
   });
 
+  it('a market-alert run after a snapshot sees stats that include it (history recorded before the one store update)', async () => {
+    const clock = { t: T0 };
+    const history = createHistoryRepo(`alerts-${Math.random()}`, () => clock.t); // memory only (no indexedDB in node)
+    const store = createStore<AppState>({ ...initialState({ ...baseSettings, lang: 'tr' }), catalog });
+    const derived = createDerived(store, history);
+    const seen: (number | undefined)[] = [];
+    // the runner reads rows through derived; record the pinned market stats each run sees
+    const spy: typeof derived = {
+      ...derived,
+      flips: () => (seen.push(derived.calcCtx()!.market!('X')?.n), derived.flips()),
+    };
+    const stop = startAlerts({ store, derived: spy, toast: vi.fn(), notify: vi.fn(), now: () => clock.t });
+    store.set({ oppAlerts: [{ key: 'm', scope: ['flip'], metric: 'profit', value: 0, maxRisk: 'caution', enabled: true, seen: [], hits: [] }] });
+    /** app.ts applySnapshot: record, then one store update */
+    const apply = async (s: Snapshot) => {
+      await history.record(s);
+      store.set((st) => ({ snapshot: s, status: 'live', lastError: null, historyTick: st.historyTick + 1 }));
+    };
+    for (let k = 0; k < 3; k++) {
+      clock.t = T0 + k * 20 * MIN; // one 15-min bucket each: MarketStat.n counts every snapshot so far
+      await apply(snapAt(clock.t));
+    }
+    expect(seen).toEqual([1, 2, 3]);
+    // the old order (show the snapshot, then record) ran the rules on stats without it
+    clock.t += 20 * MIN;
+    const s = snapAt(clock.t);
+    store.set({ snapshot: s });
+    await history.record(s);
+    expect(seen.at(-1)).toBe(3);
+    stop();
+  });
+
   it('Kat upgrade runs feed market rules', () => {
     const kat = [{ pet: 'TESTPET', from: 3, to: 4, coins: 1_000_000, hours: 24, items: [] }];
     const ah = { v: 3, fetchedAt: 0, lastUpdated: 0, lowestBin: { 'TESTPET;3': { price: 1e6, count: 5 }, 'TESTPET;4': { price: 1e7, count: 5 } } };
@@ -165,6 +198,18 @@ describe('market alerts in the runner', () => {
     store.set({ oppAlerts: [{ key: 'm', scope: ['kat'], metric: 'profit', value: 1_000_000, maxRisk: 'caution', enabled: true, seen: [], hits: [] }] });
     store.set({ snapshot: snapAt(T0) });
     expect(store.get().oppAlerts[0]!.hits.map((h) => [h.key, h.kind])).toEqual([['kat:TESTPET;3>4:any', 'kat']]);
+    stop();
+  });
+
+  it('AH and George flips feed market rules as kind ahflip', () => {
+    const ah = { v: 4, fetchedAt: 0, lastUpdated: 0, lowestBin: { HYPERION: { price: 1e8, next: 3e8, count: 5 }, 'BEE;1': { price: 100, count: 3 } } };
+    const { store, stop } = setup({ alerts: [], catalog: { ...catalog, george: { 'BEE;1': 500 } }, ah });
+    store.set({ oppAlerts: [{ key: 'm', scope: ['ahflip'], metric: 'profit', value: 100, maxRisk: 'caution', enabled: true, seen: [], hits: [] }] });
+    store.set({ snapshot: snapAt(T0) });
+    expect(store.get().oppAlerts[0]!.hits.map((h) => [h.key, h.kind]).sort()).toEqual([
+      ['ahflip:ah:HYPERION', 'ahflip'],
+      ['ahflip:george:BEE;1', 'ahflip'],
+    ]);
     stop();
   });
 });

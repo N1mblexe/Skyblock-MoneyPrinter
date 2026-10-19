@@ -9,7 +9,7 @@ import { createStore } from '../../../src/state/store.ts';
 import type { AhSnapshot, AppState, Catalog, ItemInfo, ShopOffer, Snapshot, Store, View, ViewContext } from '../../../src/types/contracts.ts';
 import { fmtCoins, fmtInt } from '../../../src/ui/format.ts';
 import { createBitsView, filterBitsRows } from '../../../src/ui/views/bits/bitsView.ts';
-import { parseBitsPrefs } from '../../../src/ui/views/bits/model.ts';
+import { legacyMultiplier, parseBitsPrefs, rankOf } from '../../../src/ui/views/bits/model.ts';
 import catalogJson from '../../fixtures/catalog.json';
 import { makeProduct } from '../../domain/helpers.ts';
 import { fakeHistory, fakeViewCtx } from '../../helpers/fakes.ts';
@@ -127,59 +127,105 @@ describe('bits view', () => {
     expect(q('.bits-stats').hidden).toBe(true);
   });
 
-  it('rank select and custom multiplier drive the stats and are saved', async () => {
+  it('rank select and custom multiplier drive the stats through settings.bitsMultiplier', async () => {
     store.set({ snapshot: snap, catalog, ah: AH });
     mount();
     await flush();
-    expect(q<HTMLSelectElement>('[data-bits-rank]').options).toHaveLength(BITS.fameRanks.length);
-    expect(q<HTMLSelectElement>('[data-bits-rank]').options[5]!.textContent).toBe('Patron (×1.6)');
+    const sel = q<HTMLSelectElement>('[data-bits-rank]');
+    expect(sel.options).toHaveLength(BITS.fameRanks.length + 1);
+    expect(sel.options[5]!.textContent).toBe('Patron (×1.6)');
+    expect(sel.value).toBe('New Player');
     expect(statText('bitsPerCookie')).toBe(fmtInt(4800));
     expect(q('[data-testid="bits-using"]').textContent).toBe(t('bits.usingRank', { mult: '1', rank: 'New Player' }));
 
     pickRank('Patron');
     await flush();
-    expect(JSON.parse(localStorage.getItem(LS_BITS)!)).toEqual({ rank: 'Patron', custom: null });
+    expect(store.get().settings.bitsMultiplier).toBe(1.6);
     expect(statText('bitsPerCookie')).toBe(fmtInt(7680));
     expect(statText('costPerBit')).toBe(fmtCoins(2_000_000.1 / 7680));
 
     setCustom('2.5');
     await flush();
-    expect(JSON.parse(localStorage.getItem(LS_BITS)!)).toEqual({ rank: 'Patron', custom: 2.5 });
+    expect(store.get().settings.bitsMultiplier).toBe(2.5);
     expect(statText('bitsPerCookie')).toBe(fmtInt(12_000));
     expect(q('[data-testid="bits-using"]').textContent).toBe(t('bits.usingCustom', { mult: '2.5' }));
-    expect(q('[data-bits-clear]').hidden).toBe(false);
+    expect(sel.value).toBe('');
 
-    // invalid input is flagged and ignored
-    setCustom('abc');
-    expect(q('[data-bits-custom]').getAttribute('aria-invalid')).toBe('true');
-    expect(JSON.parse(localStorage.getItem(LS_BITS)!).custom).toBe(2.5);
+    // invalid input (or out of 1..5) is flagged and ignored; an empty one is left alone
+    for (const v of ['abc', '9', '0.5']) {
+      setCustom(v);
+      expect(q('[data-bits-custom]').getAttribute('aria-invalid'), v).toBe('true');
+    }
+    setCustom('');
+    expect(store.get().settings.bitsMultiplier).toBe(2.5);
 
-    // a remount restores both
+    // a remount reads the setting; a custom value equal to a rank shows the rank
     view.unmount();
     mount();
     await flush();
-    expect(q<HTMLSelectElement>('[data-bits-rank]').value).toBe('Patron');
+    expect(q<HTMLSelectElement>('[data-bits-rank]').value).toBe('');
     expect(q<HTMLInputElement>('[data-bits-custom]').value).toBe('2.5');
-    expect(statText('bitsPerCookie')).toBe(fmtInt(12_000));
-
-    q<HTMLButtonElement>('[data-bits-clear]').click();
+    setCustom('2.2');
     await flush();
-    expect(JSON.parse(localStorage.getItem(LS_BITS)!)).toEqual({ rank: 'Patron', custom: null });
-    expect(statText('bitsPerCookie')).toBe(fmtInt(7680));
-    expect(q('[data-bits-clear]').hidden).toBe(true);
+    expect(q<HTMLSelectElement>('[data-bits-rank]').value).toBe('Minister');
 
-    // picking a rank drops a custom value
-    setCustom('3');
+    // "Custom" keeps the value and moves to the input; a rank replaces a custom value
+    const s0 = store.get().settings.bitsMultiplier;
+    pickRank('');
+    expect(store.get().settings.bitsMultiplier).toBe(s0);
+    expect(document.activeElement).toBe(q('[data-bits-custom]'));
     pickRank('Imperator');
     await flush();
-    expect(JSON.parse(localStorage.getItem(LS_BITS)!)).toEqual({ rank: 'Imperator', custom: null });
+    expect(store.get().settings.bitsMultiplier).toBe(2.38);
+
+    // the setting changed elsewhere (another tab, Settings import) shows here
+    store.set({ settings: { ...store.get().settings, bitsMultiplier: 1.1 } });
+    await flush();
+    expect(q<HTMLSelectElement>('[data-bits-rank]').value).toBe('Settler');
+  });
+
+  it('moves the old LS_BITS prefs into settings.bitsMultiplier once', async () => {
+    localStorage.setItem(LS_BITS, JSON.stringify({ rank: 'Patron', custom: null }));
+    store.set({ snapshot: snap, catalog, ah: AH });
+    mount();
+    await flush();
+    expect(store.get().settings.bitsMultiplier).toBe(1.6);
+    expect(localStorage.getItem(LS_BITS)).toBeNull();
+    // never over a value already set; clamped to 1..5
+    view.unmount();
+    localStorage.setItem(LS_BITS, JSON.stringify({ rank: 'Patron', custom: 9 }));
+    mount();
+    expect(store.get().settings.bitsMultiplier).toBe(1.6);
+    expect(localStorage.getItem(LS_BITS)).toBeNull();
+    expect(legacyMultiplier({ rank: 'Patron', custom: 9 })).toBe(5);
+    expect(legacyMultiplier(null)).toBeNull();
+    expect(legacyMultiplier({ rank: 'Nope' })).toBe(1);
+    expect(rankOf(1.6)).toBe('Patron');
+    expect(rankOf(1.65)).toBeNull();
+  });
+
+  it('shows the basket one cookie buys', async () => {
+    store.set({ snapshot: snap, catalog, ah: AH });
+    mount();
+    await flush();
+    const res = computeBitsRows(ctx.derived.calcCtx()!);
+    expect(statText('basket')).toBe(fmtCoins(res.summary.basket.coins));
+    const lines = [...root.querySelectorAll<HTMLElement>('.bits-basket [data-basket]')].map((l) => l.dataset.basket);
+    expect(lines).toEqual(res.summary.basket.lines.map((l) => l.row.key));
+    root.querySelector<HTMLButtonElement>('.bits-basket [data-bits-open]')!.click();
+    expect(q('.kit-panel').textContent).toContain(res.summary.basket.lines[0]!.row.name);
+    expect(q('.kit-panel').textContent).toContain(t('bits.d_rate'));
+    // nothing sells: an empty basket
+    store.set({ catalog: { ...catalog, shops: [] } });
+    await flush();
+    expect(q('.bits-basket').textContent).toContain(t('bits.b_empty'));
   });
 
   it('lists the valued rows, best coins per bit first, with the summary', async () => {
     store.set({ snapshot: snap, catalog, ah: AH });
     mount();
     await flush();
-    const res = computeBitsRows(ctx.derived.calcCtx()!, { multiplier: 1 });
+    const res = computeBitsRows(ctx.derived.calcCtx()!);
     const want = filterBitsRows(res.rows, { q: '', minCpb: null, src: 'all', unsold: false, hideSuspect: true }, catalog).rows;
     expect(keys()).toEqual(want.map((r) => r.key));
     expect(keys()).not.toContain('FLOWER_SACK|14000');

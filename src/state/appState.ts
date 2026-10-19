@@ -22,6 +22,8 @@ export const defaultSettings: Settings = {
   notify: false,
   ahEnabled: true,
   taming: KAT.maxTaming,
+  conservative: true,
+  bitsMultiplier: 1,
 };
 
 /** Merge persisted (possibly partial/invalid) settings over defaults. */
@@ -41,6 +43,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   num('orderSlots', 1, ORDER_SLOTS_MAX);
   num('npcDailyLimit', 1, 1e7);
   if (Number.isInteger(r.taming)) num('taming', 0, KAT.maxTaming);
+  num('bitsMultiplier', 1, 5);
+  if (typeof r.conservative === 'boolean') s.conservative = r.conservative;
   if (r.fillModel === 'sequential' || r.fillModel === 'pipelined') s.fillModel = r.fillModel;
   if (r.density === 'comfortable' || r.density === 'compact') s.density = r.density;
   if (typeof r.notify === 'boolean') s.notify = r.notify;
@@ -73,6 +77,7 @@ export function initialState(settings: Settings = defaultSettings): AppState {
     alerts: [],
     alertLog: [],
     ah: null,
+    ahSales: null,
     ahProgress: null,
     election: null,
   };

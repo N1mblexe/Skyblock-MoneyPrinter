@@ -1,7 +1,8 @@
+import { AH_SALES } from '../../config.ts';
 import type { AppState, DataStatus, Store } from '../../types/contracts.ts';
 import { msgText, onLangChange, t } from '../../i18n/index.ts';
 import { ageStatus } from '../../state/status.ts';
-import { fmtAge } from '../format.ts';
+import { fmtAge, fmtNum } from '../format.ts';
 
 /** Status actually displayed: freshness of the snapshot overrides a successful-fetch 'live'. */
 export function displayStatus(s: AppState, now: number): DataStatus {
@@ -31,7 +32,24 @@ function setAttr(el: HTMLElement, name: string, value: string | null): void {
 }
 
 /**
- * Status pill: status label + data age + next-refresh countdown + error text.
+ * AH sales coverage text and tooltip (the auctions_ended feed), or null while the AH is off or nothing is loaded.
+ * Below AH_SALES.minCoverageHours the text shows how far the feed still has to go before sales rates are used.
+ */
+export function salesCoverage(s: AppState): { text: string; title: string; low: boolean } | null {
+  if (!s.settings.ahEnabled || !s.ahSales) return null;
+  const cov = s.ahSales.coverageHours;
+  const h = fmtNum(cov, 1);
+  const min = AH_SALES.minCoverageHours;
+  const low = !(cov >= min);
+  return {
+    text: t(low ? 'shell.salesCovLow' : 'shell.salesCov', { h, min }),
+    title: t(low ? 'shell.salesCovLowTitle' : 'shell.salesCovTitle', { h, min, n: Object.keys(s.ahSales.byId).length }),
+    low,
+  };
+}
+
+/**
+ * Status pill: status label + data age + next-refresh countdown + AH sales coverage + error text.
  * Only the label is a live region (role=status), and it is written only when the displayed status changes;
  * the age/countdown that tick every second sit outside it, so screen readers hear status changes only.
  */
@@ -50,9 +68,12 @@ export function createStatusPill(store: Store<AppState>): { el: HTMLElement; des
   age.className = 'status-age';
   const next = document.createElement('span');
   next.className = 'status-next';
+  const sales = document.createElement('span');
+  sales.className = 'status-sales';
+  sales.dataset.testid = 'status-sales';
   const err = document.createElement('span');
   err.className = 'status-err';
-  meta.append(age, next);
+  meta.append(age, next, sales);
   el.append(pill, meta, err);
 
   function render(): void {
@@ -79,6 +100,12 @@ export function createStatusPill(store: Store<AppState>): { el: HTMLElement; des
     setText(next, nextText);
     next.hidden = !nextText;
 
+    const cov = salesCoverage(s);
+    setText(sales, cov?.text ?? '');
+    setAttr(sales, 'title', cov?.title ?? null);
+    setAttr(sales, 'data-low', cov ? String(cov.low) : null);
+    sales.hidden = !cov;
+
     if (st === 'error' && s.lastError) {
       setText(err, shortErr(msgText(s.lastError)));
       setAttr(err, 'title', msgText(s.lastError));
@@ -93,7 +120,14 @@ export function createStatusPill(store: Store<AppState>): { el: HTMLElement; des
   render();
   const timer = setInterval(render, 1000);
   const unsub = store.subscribe((s, prev) => {
-    if (s.status !== prev.status || s.snapshot !== prev.snapshot || s.lastError !== prev.lastError || s.nextPollAt !== prev.nextPollAt)
+    if (
+      s.status !== prev.status ||
+      s.snapshot !== prev.snapshot ||
+      s.lastError !== prev.lastError ||
+      s.nextPollAt !== prev.nextPollAt ||
+      s.ahSales !== prev.ahSales ||
+      s.settings.ahEnabled !== prev.settings.ahEnabled
+    )
       render();
   });
   const unLang = onLangChange(render);

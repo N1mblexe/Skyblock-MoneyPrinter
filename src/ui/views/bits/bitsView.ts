@@ -1,15 +1,16 @@
-// Bits shop (#/bits): which Community Shop offer turns bits into the most coins, and what a bit costs in Booster
-// Cookies at the user's fame rank (src/domain/bits.ts). The rank / custom multiplier is saved under LS_BITS; filters
-// live in the URL. Recomputed when prices, the catalog, settings, the AH scan or the mayor change.
+// Bits shop (#/bits): which Community Shop offer turns bits into the most coins, what a bit costs in Booster Cookies
+// at the user's fame rank, and the basket one cookie's bits buy (src/domain/bits.ts). The multiplier is
+// settings.bitsMultiplier (the old LS_BITS prefs move there once); filters live in the URL. Recomputed when
+// calcCtx() changes (prices, catalog, calc settings, the AH scan and sales, the mayor).
 import { BITS, LS_BITS, LS_VIEWPREFS } from '../../../config.ts';
-import { bitsMultiplier, computeBitsRows, type BitsQuote, type BitsResult, type BitsRow, type BitsSource } from '../../../domain/bits.ts';
+import { computeBitsRows, type BitsBasket, type BitsQuote, type BitsResult, type BitsRow, type BitsSource } from '../../../domain/bits.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
 import { isDerpy } from '../../../state/derived.ts';
-import { lsGet, lsSet } from '../../../storage/local.ts';
-import type { AppState, CalcCtx, Settings, View, ViewContext } from '../../../types/contracts.ts';
+import { lsGet } from '../../../storage/local.ts';
+import type { AppState, CalcCtx, Settings, Store, View, ViewContext } from '../../../types/contracts.ts';
 import { riskBadge } from '../../cells.ts';
 import { esc, rafDebounce } from '../../dom.ts';
-import { fmtCoins, fmtCompact, fmtInt, fmtNum, fmtPct, locale } from '../../format.ts';
+import { fmtCoins, fmtCompact, fmtHours, fmtInt, fmtNum, fmtPct, locale } from '../../format.ts';
 import {
   bindQueryState,
   createDetailPanel,
@@ -23,7 +24,7 @@ import {
   type QueryState,
 } from '../../kit/index.ts';
 import './bits.css';
-import { BITS_SCHEMA, filterBitsRows, parseBitsPrefs, type BitsPrefs, type BitsQuery } from './model.ts';
+import { BITS_SCHEMA, filterBitsRows, legacyMultiplier, rankOf, validMultiplier, type BitsQuery } from './model.ts';
 
 export { BITS_SCHEMA, filterBitsRows };
 
@@ -31,6 +32,19 @@ export { BITS_SCHEMA, filterBitsRows };
 const fmtMult = (m: number) => new Intl.NumberFormat(locale(), { maximumFractionDigits: 2 }).format(m);
 
 const srcBadge = (s: BitsSource | null) => (s ? `<span class="badge src-${s}">${esc(t(`bits.src_${s}`))}</span>` : '—');
+
+/** Move the old page's LS_BITS prefs into settings.bitsMultiplier once (only over the default), then drop them. */
+export function migrateBitsPrefs(store: Store<AppState>): void {
+  try {
+    const m = legacyMultiplier(lsGet<unknown>(LS_BITS, null));
+    if (m == null) return;
+    const s = store.get().settings;
+    if (s.bitsMultiplier === 1 && m !== 1) store.set({ settings: { ...s, bitsMultiplier: m } });
+    localStorage.removeItem(LS_BITS);
+  } catch {
+    /* blocked storage: nothing to migrate */
+  }
+}
 
 function liqText(r: { liquidity: number | null; source: BitsSource | null }): string {
   if (r.source === 'npc') return '∞';
@@ -96,8 +110,8 @@ function columns(): KitColumn<BitsRow>[] {
 }
 
 function quoteLabel(q: BitsQuote, s: Settings): string {
-  if (q.source === 'bazaar') return t(s.sellMode === 'offer' ? 'bits.q_bazaarOffer' : 'bits.q_bazaarInsta', { tax: fmtPct(s.taxRate, 2) });
-  return t(q.source === 'ah' ? 'bits.q_ah' : 'bits.q_npc');
+  if (q.venue === 'bazaar') return t(s.sellMode === 'offer' ? 'bits.q_bazaarOffer' : 'bits.q_bazaarInsta', { tax: fmtPct(s.taxRate, 2) });
+  return t(q.venue === 'ah' ? 'bits.q_ah' : 'bits.q_npc');
 }
 
 /** Detail panel body: the offer, every way to sell it (the winner first), and the caveats. */
@@ -109,8 +123,8 @@ export function bitsDetail(r: BitsRow, s: Settings, o: { derpy: boolean; ahOn: b
   else if (!r.quotes.length) notes.push(t(o.ahOn ? 'bits.d_unpriced' : 'bits.d_unpricedAhOff'));
   else {
     const th = (k: string, cls = '') => `<th scope="col"${cls ? ` class="${cls}"` : ''}>${esc(t(k))}</th>`;
-    const tr = (q: BitsQuote, i: number) => `<tr class="${i === 0 ? 'bits-win' : 'muted'}" data-src="${q.source}">
-        <th scope="row">${srcBadge(q.source)} ${esc(quoteLabel(q, s))}${i === 0 ? ` <span class="badge risk-ok">${esc(t('bits.d_best'))}</span>` : ''}</th>
+    const tr = (q: BitsQuote, i: number) => `<tr class="${i === 0 ? 'bits-win' : 'muted'}" data-src="${q.venue}">
+        <th scope="row">${srcBadge(q.venue)} ${esc(quoteLabel(q, s))}${i === 0 ? ` <span class="badge risk-ok">${esc(t('bits.d_best'))}</span>` : ''}</th>
         <td class="num">${esc(fmtCoins(q.gross))}</td>
         <td class="num">${q.fees > 0 ? `−${esc(fmtCoins(q.fees))}` : '—'}</td>
         <td class="num">${esc(fmtCoins(q.net))}</td>
@@ -121,7 +135,7 @@ export function bitsDetail(r: BitsRow, s: Settings, o: { derpy: boolean; ahOn: b
         <tbody>${r.quotes.map(tr).join('')}</tbody>
       </table></div>`;
     if (r.outQty > 1) notes.push(t('bits.d_perItem', { qty: fmtInt(r.outQty) }));
-    if (o.derpy && r.quotes.some((q) => q.source === 'ah')) notes.push(t('bits.d_derpy'));
+    if (o.derpy && r.quotes.some((q) => q.venue === 'ah')) notes.push(t('bits.d_derpy'));
     if (r.valueSource === 'ah') notes.push(t('bits.d_ahNote'));
   }
   return `<div class="bits-detail">
@@ -132,6 +146,7 @@ export function bitsDetail(r: BitsRow, s: Settings, o: { derpy: boolean; ahOn: b
       ${kv('bits.d_value', esc(fmtCoins(r.value)))}
       ${kv('bits.d_cpb', `<strong>${esc(fmtCoins(r.coinsPerBit))}</strong>`)}
       ${kv('bits.d_vs', vsHtml(r.vsCookie))}
+      ${r.rate != null && r.valueSource !== 'npc' ? kv('bits.d_rate', esc(t('bits.d_rateVal', { n: fmtNum(r.rate, 2), h: fmtHours(BITS.basketHours) }))) : ''}
     </dl>
     ${how}
     ${notes.map((n) => `<p class="note small">${esc(n)}</p>`).join('')}
@@ -139,7 +154,19 @@ export function bitsDetail(r: BitsRow, s: Settings, o: { derpy: boolean; ahOn: b
   </div>`;
 }
 
-const loadPrefs = (): BitsPrefs => parseBitsPrefs(lsGet<unknown>(LS_BITS, null));
+/** The basket card: one cookie's bits, offer by offer, and the bits left over. */
+function basketHtml(b: BitsBasket): string {
+  if (!b.lines.length) return `<p class="muted small">${esc(t('bits.b_empty'))}</p>`;
+  const lines = b.lines
+    .map(
+      (l) =>
+        `<li data-basket="${esc(l.row.key)}"><button type="button" class="link" data-bits-open="${esc(l.row.key)}">${esc(t('bits.b_line', { n: fmtInt(l.offers), name: l.row.name }))}</button> <span class="muted">${esc(t('bits.b_bits', { n: fmtInt(l.bits) }))}</span> <span class="num">${esc(fmtCoins(l.coins))}</span></li>`,
+    )
+    .join('');
+  return `<ul class="bits-basket-lines">${lines}</ul>
+    <p class="small"><strong>${esc(t('bits.b_total', { coins: fmtCoins(b.coins), bits: fmtInt(b.bits) }))}</strong></p>
+    ${b.leftBits > 0 ? `<p class="note small">${esc(t('bits.b_left', { n: fmtInt(b.leftBits), h: fmtHours(BITS.basketHours) }))}</p>` : ''}`;
+}
 
 export function createBitsView(): View {
   let root: HTMLElement | null = null;
@@ -150,47 +177,45 @@ export function createBitsView(): View {
   let panel: DetailPanel | null = null;
   let detailEl: HTMLElement | null = null;
   let openKey: string | null = null;
-  let prefs: BitsPrefs = loadPrefs();
   const subs: (() => void)[] = [];
-  let memo: { c: CalcCtx; mult: number; res: BitsResult } | null = null;
+  /** calcCtx() carries settings.bitsMultiplier (a calc setting): one result per context */
+  let memo: { c: CalcCtx; res: BitsResult } | null = null;
 
   const $ = <E extends Element = HTMLElement>(sel: string) => root!.querySelector<E>(sel)!;
-  const multiplier = () => bitsMultiplier(prefs.rank, prefs.custom);
+  const multiplier = () => ctx!.store.get().settings.bitsMultiplier;
 
   function result(): BitsResult | null {
     const c = ctx?.derived.calcCtx();
     if (!c || !ctx!.store.get().catalog) return null;
-    const mult = multiplier();
-    if (memo?.c !== c || memo.mult !== mult) memo = { c, mult, res: computeBitsRows(c, { multiplier: mult }) };
+    if (memo?.c !== c) memo = { c, res: computeBitsRows(c) };
     return memo.res;
   }
 
-  function setPrefs(next: BitsPrefs): void {
-    prefs = next;
-    lsSet(LS_BITS, prefs);
+  function setMultiplier(m: number): void {
+    const s = ctx!.store.get().settings;
+    if (s.bitsMultiplier !== m) ctx!.store.set({ settings: { ...s, bitsMultiplier: m } });
     syncRank();
-    schedule();
   }
 
   function fillRanks(): void {
-    $('[data-bits-rank]').innerHTML = BITS.fameRanks
-      .map(([name, , m]) => `<option value="${esc(name)}">${esc(t('bits.rankOpt', { rank: name, mult: fmtMult(m) }))}</option>`)
-      .join('');
+    $('[data-bits-rank]').innerHTML =
+      BITS.fameRanks.map(([name, , m]) => `<option value="${esc(name)}">${esc(t('bits.rankOpt', { rank: name, mult: fmtMult(m) }))}</option>`).join('') +
+      `<option value="">${esc(t('bits.rankCustom'))}</option>`;
   }
 
-  /** Rank select, custom input and the "in effect" line from prefs (the input keeps text the user is typing). */
+  /** Rank select, custom input and the "in effect" line from the setting (the input keeps text the user is typing). */
   function syncRank(): void {
-    if (!root) return;
-    $<HTMLSelectElement>('[data-bits-rank]').value = prefs.rank;
+    if (!root || !ctx) return;
+    const m = multiplier();
+    const rank = rankOf(m);
+    $<HTMLSelectElement>('[data-bits-rank]').value = rank ?? '';
     const inp = $<HTMLInputElement>('[data-bits-custom]');
     if (document.activeElement !== inp) {
-      inp.value = prefs.custom == null ? '' : String(prefs.custom);
+      inp.value = rank == null ? String(m) : '';
       inp.removeAttribute('aria-invalid');
     }
-    $('[data-bits-clear]').hidden = prefs.custom == null;
-    $('[data-bits-using]').textContent =
-      prefs.custom != null ? t('bits.usingCustom', { mult: fmtMult(prefs.custom) }) : t('bits.usingRank', { mult: fmtMult(multiplier()), rank: prefs.rank });
-    $('.bits-rank').classList.toggle('bits-custom-on', prefs.custom != null);
+    $('[data-bits-using]').textContent = rank == null ? t('bits.usingCustom', { mult: fmtMult(m) }) : t('bits.usingRank', { mult: fmtMult(m), rank });
+    $('.bits-rank').classList.toggle('bits-custom-on', rank == null);
   }
 
   function applyLabels(): void {
@@ -200,7 +225,7 @@ export function createBitsView(): View {
     $('.bits-rank-lbl').textContent = t('bits.rank');
     $('.bits-custom-lbl').textContent = t('bits.custom');
     $<HTMLInputElement>('[data-bits-custom]').placeholder = t('bits.customPh');
-    $('[data-bits-clear]').textContent = t('bits.clearCustom');
+    $('.bits-basket-h').textContent = t('bits.b_title');
     fillRanks();
     syncRank();
   }
@@ -222,10 +247,12 @@ export function createBitsView(): View {
         'best',
         t('bits.s_best'),
         best ? `<button type="button" class="link" data-bits-open="${esc(best.key)}">${esc(best.name)}</button>` : '—',
-        best ? t('bits.s_bestSub', { cpb: fmtCoins(best.coinsPerBit), perCookie: fmtCoins(m.coinsPerCookie) }) : t('bits.s_bestNone'),
+        best ? t('bits.s_bestSub', { cpb: fmtCoins(best.coinsPerBit) }) : t('bits.s_bestNone'),
       ),
+      stat('basket', t('bits.s_basket'), esc(fmtCoins(m.coinsPerCookie)), t('bits.s_basketSub', { h: fmtHours(BITS.basketHours) })),
       stat('profit', t('bits.s_profit'), esc(fmtCoins(m.profitPerCookie)), t('bits.s_profitSub'), profitCls),
     ].join('');
+    $('.bits-basket-body').innerHTML = basketHtml(m.basket);
   }
 
   function renderHint(s: AppState): void {
@@ -265,6 +292,7 @@ export function createBitsView(): View {
     st.innerHTML = ready ? '' : `<div class="empty card">${esc(t('bits.waiting'))}</div>`;
     table.el.hidden = !ready;
     $('.bits-stats').hidden = !ready;
+    $('.bits-basket').hidden = !ready;
     if (!res) return;
     renderStats(res, s.settings);
     const v = qs.get();
@@ -290,16 +318,16 @@ export function createBitsView(): View {
     mount(el, c, route) {
       root = el;
       ctx = c;
-      prefs = loadPrefs();
+      migrateBitsPrefs(c.store);
       el.innerHTML = `<div class="bits-view kit-split">
         <header class="bits-head"><h1 tabindex="-1"></h1><p class="bits-intro muted small"></p></header>
         <div class="bits-rank card">
           <label class="field"><span class="field-label bits-rank-lbl"></span><select data-bits-rank data-testid="bits-rank"></select></label>
           <label class="field"><span class="field-label bits-custom-lbl"></span><input type="text" inputmode="decimal" autocomplete="off" data-bits-custom data-testid="bits-custom"></label>
-          <button type="button" class="btn btn-sm btn-ghost" data-bits-clear hidden></button>
           <span class="bits-using small" role="status" data-bits-using data-testid="bits-using"></span>
         </div>
         <div class="bits-stats"></div>
+        <section class="bits-basket card" hidden><h2 class="bits-basket-h"></h2><div class="bits-basket-body"></div></section>
         <div class="bits-hint" hidden></div>
         <div class="bits-bar"></div>
         <div class="bits-state" hidden></div>
@@ -355,22 +383,29 @@ export function createBitsView(): View {
       const onClick = (ev: MouseEvent) => {
         const target = ev.target instanceof Element ? ev.target : null;
         if (target?.closest('[data-bits-ah-on]')) c.store.set((s) => ({ settings: { ...s.settings, ahEnabled: true } }));
-        if (target?.closest('[data-bits-clear]')) setPrefs({ ...prefs, custom: null });
         const best = target?.closest<HTMLElement>('[data-bits-open]');
         const r = best ? memo?.res.rows.find((x) => x.key === best.dataset.bitsOpen) : null;
         if (r) open(r);
       };
-      // picking a rank drops the custom multiplier: the last thing edited is what applies
-      const onRank = () => setPrefs({ rank: $<HTMLSelectElement>('[data-bits-rank]').value, custom: null });
+      // a rank sets its multiplier; "Custom" leaves the value for the input
+      const onRank = () => {
+        const name = $<HTMLSelectElement>('[data-bits-rank]').value;
+        const m = BITS.fameRanks.find(([n]) => n === name)?.[2];
+        if (m != null) setMultiplier(m);
+        else $<HTMLInputElement>('[data-bits-custom]').focus();
+      };
       const customInp = $<HTMLInputElement>('[data-bits-custom]');
       const onCustom = () => {
         const n = parseNumberInput(customInp.value);
-        if (n === undefined || (n != null && !(n > 0))) {
+        if (n === null) return;
+        if (n === undefined || !validMultiplier(n)) {
           customInp.setAttribute('aria-invalid', 'true');
+          customInp.title = t('bits.customInvalid');
           return;
         }
         customInp.removeAttribute('aria-invalid');
-        if (n !== prefs.custom) setPrefs({ ...prefs, custom: n });
+        customInp.removeAttribute('title');
+        setMultiplier(n);
       };
       const rankSel = $<HTMLSelectElement>('[data-bits-rank]');
       el.addEventListener('click', onClick);
@@ -386,8 +421,17 @@ export function createBitsView(): View {
       subs.push(state.onChange(() => schedule()));
       subs.push(
         c.store.subscribe((s, prev) => {
-          if (s.snapshot !== prev.snapshot || s.catalog !== prev.catalog || s.settings !== prev.settings || s.ah !== prev.ah || s.election !== prev.election)
+          if (
+            s.snapshot !== prev.snapshot ||
+            s.catalog !== prev.catalog ||
+            s.settings !== prev.settings ||
+            s.ah !== prev.ah ||
+            s.ahSales !== prev.ahSales ||
+            s.election !== prev.election
+          ) {
+            if (s.settings.bitsMultiplier !== prev.settings.bitsMultiplier) syncRank();
             schedule();
+          }
         }),
       );
       subs.push(

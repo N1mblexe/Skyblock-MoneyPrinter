@@ -1,13 +1,15 @@
-// AH flip finder (#/ahflip): lowest BIN -> relist under the second-lowest BIN, after AH fees (src/domain/ahFlips.ts).
-// Rows are recomputed when the AH scan, the catalog or the mayor changes; filters live in the URL.
+// AH flip finder (#/ahflip): lowest BIN -> relist under the second-lowest BIN, after AH fees, or pets bought below
+// George's price (src/domain/ahFlips.ts). Rows are recomputed when the AH scan, the sales feed, the catalog, the mayor
+// or a setting they read changes; filters (and the mode) live in the URL.
 import { LS_VIEWPREFS } from '../../../config.ts';
-import { computeAhFlips, type AhFlipRow } from '../../../domain/ahFlips.ts';
+import { computeAhFlips, computeGeorgeFlips, type AhFlipRow } from '../../../domain/ahFlips.ts';
+import { salesLookup } from '../../../domain/market.ts';
 import { onLangChange, t } from '../../../i18n/index.ts';
 import { isDerpy } from '../../../state/derived.ts';
 import type { AppState, View, ViewContext } from '../../../types/contracts.ts';
 import { riskBadge } from '../../cells.ts';
 import { esc, rafDebounce } from '../../dom.ts';
-import { fmtAge, fmtCoins, fmtInt, fmtPct } from '../../format.ts';
+import { fmtAge, fmtCoins, fmtHours, fmtInt, fmtNum, fmtPct } from '../../format.ts';
 import {
   bindQueryState,
   createDetailPanel,
@@ -20,12 +22,28 @@ import {
   type QueryState,
 } from '../../kit/index.ts';
 import './ahflip.css';
-import { AHFLIP_SCHEMA, ahListingCount, filterAhFlips, type AhFlipQuery } from './model.ts';
+import { AHFLIP_SCHEMA, ahListingCount, filterAhFlips, type AhFlipMode, type AhFlipQuery } from './model.ts';
 
 export { AHFLIP_SCHEMA, filterAhFlips };
 
-function columns(): KitColumn<AhFlipRow>[] {
+/** Name-cell markers: a max-level key, a stack bought whole. */
+function markers(r: AhFlipRow): string {
+  const out: string[] = [];
+  if (r.maxLevel) out.push(`<span class="badge" data-ahf-max>${esc(t('ahflip.maxLevel'))}</span>`);
+  if (r.stack > 1) out.push(`<span class="badge" data-ahf-stack>${esc(t('ahflip.stack', { n: fmtInt(r.stack) }))}</span>`);
+  return out.length ? ` ${out.join(' ')}` : '';
+}
+
+/** Sell time: hours to sell the bought stack on the AH (marked when no sales are measured), instant for George. */
+function hoursHtml(r: AhFlipRow): string {
+  if (r.venue === 'george') return esc(t('ahflip.instant'));
+  const h = esc(fmtHours(r.sellHours));
+  return r.salesPerHour == null ? `<span class="muted" title="${esc(t('ahflip.tip_hoursGuess'))}">~${h}</span>` : h;
+}
+
+function columns(mode: () => AhFlipMode): KitColumn<AhFlipRow>[] {
   const coins = (k: 'buy' | 'next' | 'profit') => (r: AhFlipRow) => esc(fmtCoins(r[k]));
+  const george = () => mode() === 'george';
   return [
     {
       key: 'name',
@@ -35,10 +53,18 @@ function columns(): KitColumn<AhFlipRow>[] {
       priority: 0,
       csv: (r) => r.id,
       html: (r) =>
-        `<span>${esc(r.name)}</span><span class="id-sub">${esc(r.listingName && r.listingName !== r.name ? r.listingName : r.id)}</span>`,
+        `<span>${esc(r.name)}${markers(r)}</span><span class="id-sub">${esc(r.listingName && r.listingName !== r.name ? r.listingName : r.id)}</span>`,
     },
     { key: 'buy', label: () => t('ahflip.col_buy'), get: (r) => r.buy, align: 'right', priority: 2, html: coins('buy') },
-    { key: 'next', label: () => t('ahflip.col_next'), title: () => t('ahflip.tip_next'), get: (r) => r.next, align: 'right', priority: 2, html: coins('next') },
+    {
+      key: 'next',
+      label: () => t(george() ? 'ahflip.col_george' : 'ahflip.col_next'),
+      title: () => t(george() ? 'ahflip.tip_george' : 'ahflip.tip_next'),
+      get: (r) => r.next,
+      align: 'right',
+      priority: 2,
+      html: coins('next'),
+    },
     {
       key: 'profit',
       label: () => t('ahflip.col_profit'),
@@ -49,7 +75,25 @@ function columns(): KitColumn<AhFlipRow>[] {
     },
     { key: 'margin', label: () => t('ahflip.col_margin'), get: (r) => r.margin, align: 'right', priority: 1, html: (r) => esc(fmtPct(r.margin)) },
     { key: 'gap', label: () => t('ahflip.col_gap'), title: () => t('ahflip.tip_gap'), get: (r) => r.gap, align: 'right', priority: 3, html: (r) => esc(fmtPct(r.gap)) },
-    { key: 'count', label: () => t('ahflip.col_count'), get: (r) => r.count, align: 'right', priority: 3, html: (r) => esc(fmtInt(r.count)) },
+    {
+      key: 'count',
+      label: () => t(george() ? 'ahflip.col_units' : 'ahflip.col_count'),
+      title: () => (george() ? t('ahflip.tip_units') : ''),
+      get: (r) => (r.venue === 'george' ? r.units : r.count),
+      align: 'right',
+      priority: 3,
+      html: (r) => esc(fmtInt(r.venue === 'george' ? r.units : r.count)),
+    },
+    { key: 'hours', label: () => t('ahflip.col_hours'), title: () => t('ahflip.tip_hours'), get: (r) => r.sellHours, align: 'right', priority: 2, html: hoursHtml },
+    {
+      key: 'pph',
+      label: () => t('ahflip.col_pph'),
+      title: () => t(george() ? 'ahflip.tip_pphGeorge' : 'ahflip.tip_pph'),
+      get: (r) => r.profitPerHour,
+      align: 'right',
+      priority: 3,
+      html: (r) => esc(fmtCoins(r.profitPerHour)),
+    },
     {
       key: 'risk',
       label: () => t('ahflip.col_risk'),
@@ -62,28 +106,44 @@ function columns(): KitColumn<AhFlipRow>[] {
   ];
 }
 
-/** Detail panel body: the trade with its fees, the in-game command, the caveat. */
+/** Detail panel body: the trade with its fees (or George's price), the sell time, the in-game command, the caveat. */
 export function ahFlipDetail(r: AhFlipRow, derpy: boolean, hasItemPage: boolean): string {
   const kv = (k: string, v: string) => `<div><dt>${esc(t(k))}</dt><dd>${v}</dd></div>`;
   const money = (n: number) => esc(fmtCoins(n));
-  return `<div class="ahf-detail">
-    <p class="ahf-badges">${riskBadge(r.risk)} <span class="id-sub">${esc(r.id)}</span></p>
-    <dl class="kv">
-      ${kv('ahflip.d_buy', money(r.buy))}
+  const george = r.venue === 'george';
+  const notes: string[] = [];
+  if (r.stack > 1) notes.push(t('ahflip.d_stackNote', { n: fmtInt(r.stack), total: fmtCoins(r.buy * r.stack) }));
+  if (r.sellRef != null) notes.push(t('ahflip.d_medianCap', { ref: fmtCoins(r.sellRef) }));
+  if (!george && r.salesPerHour == null) notes.push(t('ahflip.d_noSales'));
+  if (derpy && !george) notes.push(t('ahflip.derpy'));
+  const body = george
+    ? `${kv('ahflip.d_buy', money(r.buy))}
+      ${kv('ahflip.d_george', money(r.sellAt))}
+      ${kv('ahflip.d_profit', `<strong class="pos">${money(r.profit)}</strong>`)}
+      ${kv('ahflip.d_margin', esc(fmtPct(r.margin)))}
+      ${kv('ahflip.d_units', esc(fmtInt(r.units)))}
+      ${kv('ahflip.d_unitsProfit', money(r.plan.profitPerUnit * r.units))}`
+    : `${kv('ahflip.d_buy', money(r.buy))}
       ${kv('ahflip.d_sellAt', money(r.sellAt))}
       ${kv('ahflip.d_fee', `−${money(r.listingFee)}`)}
       ${kv('ahflip.d_tax', `−${money(r.claimTax)}`)}
       ${kv('ahflip.d_profit', `<strong class="pos">${money(r.profit)}</strong>`)}
       ${kv('ahflip.d_margin', esc(fmtPct(r.margin)))}
       ${kv('ahflip.d_count', esc(fmtInt(r.count)))}
+      ${kv('ahflip.d_hours', hoursHtml(r))}
+      ${r.salesPerHour != null ? kv('ahflip.d_sales', esc(t('ahflip.perHour', { n: fmtNum(r.salesPerHour, 2) }))) : ''}`;
+  return `<div class="ahf-detail">
+    <p class="ahf-badges">${riskBadge(r.risk)}${markers(r)} <span class="id-sub">${esc(r.id)}</span></p>
+    <dl class="kv">
+      ${body}
       ${r.listingName ? kv('ahflip.d_listing', esc(r.listingName)) : ''}
     </dl>
-    ${derpy ? `<p class="note small">${esc(t('ahflip.derpy'))}</p>` : ''}
+    ${notes.map((n) => `<p class="note small">${esc(n)}</p>`).join('')}
     <p class="ahf-actions">
       ${r.uuid ? `<button type="button" class="btn btn-sm" data-ahf-copy title="${esc(t('ahflip.copyCmdTitle'))}">${esc(t('ahflip.copyCmd'))}</button>` : ''}
       ${hasItemPage ? `<a class="btn btn-sm btn-ghost" href="#/item/${encodeURIComponent(r.id)}">${esc(t('ahflip.openItem'))} →</a>` : ''}
     </p>
-    <p class="note small">${esc(t('ahflip.caveat'))}</p>
+    <p class="note small">${esc(t(george ? 'ahflip.georgeCaveat' : 'ahflip.caveat'))}</p>
   </div>`;
 }
 
@@ -97,15 +157,26 @@ export function createAhFlipView(): View {
   let detailEl: HTMLElement | null = null;
   let openKey: string | null = null;
   const subs: (() => void)[] = [];
-  let memo: { ah: AppState['ah']; catalog: AppState['catalog']; derpy: boolean; rows: AhFlipRow[] } | null = null;
+  /** rows per mode, for the inputs they were computed from */
+  let memo: { deps: readonly unknown[]; rows: AhFlipRow[] } | null = null;
+  let lastRows: AhFlipRow[] = [];
+  let mode: AhFlipMode = 'relist';
 
   const $ = <E extends Element = HTMLElement>(sel: string) => root!.querySelector<E>(sel)!;
 
-  function rows(s: AppState): AhFlipRow[] {
+  function rows(s: AppState, m: AhFlipMode): AhFlipRow[] {
     const derpy = isDerpy(s.election);
     if (!s.ah || !s.catalog) return [];
-    if (memo?.ah !== s.ah || memo.catalog !== s.catalog || memo.derpy !== derpy)
-      memo = { ah: s.ah, catalog: s.catalog, derpy, rows: computeAhFlips(s.ah, s.catalog, { derpy }) };
+    const { ah, catalog, ahSales: sales } = s;
+    const { conservative, cycleHours, share } = s.settings;
+    const deps = [m, ah, catalog, derpy, sales, conservative, cycleHours, share];
+    if (!memo || memo.deps.length !== deps.length || memo.deps.some((d, i) => d !== deps[i])) {
+      const out =
+        m === 'george'
+          ? computeGeorgeFlips(ah, catalog, { cycleHours })
+          : computeAhFlips(ah, catalog, { derpy, conservative, share, ...(sales ? { sales: salesLookup(sales) } : {}) });
+      memo = { deps, rows: out };
+    }
     return memo.rows;
   }
 
@@ -144,7 +215,13 @@ export function createAhFlipView(): View {
     table.el.hidden = false;
     tools.hidden = false;
     const v = qs.get();
-    const all = rows(s);
+    const m: AhFlipMode = v.mode === 'george' ? 'george' : 'relist';
+    if (m !== mode) {
+      mode = m;
+      table.refresh();
+    }
+    const all = rows(s, m);
+    lastRows = all;
     const res = filterAhFlips(
       all,
       { q: v.q, minProfit: v.minProfit, minMargin: v.minMargin, minCount: v.minCount, pets: v.pets, hideSuspect: s.settings.hideSuspicious && !v.suspect },
@@ -159,7 +236,7 @@ export function createAhFlipView(): View {
       n: fmtInt(ahListingCount(s.ah!)),
     });
     if (openKey && panel?.isOpen()) {
-      const r = all.find((x) => x.id === openKey);
+      const r = all.find((x) => x.key === openKey);
       if (r) showDetail(r, false);
     }
   }
@@ -167,7 +244,7 @@ export function createAhFlipView(): View {
   const schedule = rafDebounce(render);
 
   async function copyCmd(): Promise<void> {
-    const r = openKey ? memo?.rows.find((x) => x.id === openKey) : null;
+    const r = openKey ? lastRows.find((x) => x.key === openKey) : null;
     if (!r?.uuid || !ctx) return;
     const cmd = `/viewauction ${r.uuid}`;
     try {
@@ -194,6 +271,15 @@ export function createAhFlipView(): View {
       qs = state;
       bar = createFilterBar(
         [
+          {
+            kind: 'segment',
+            key: 'mode',
+            label: () => t('ahflip.mode'),
+            options: [
+              { value: 'relist', label: () => t('ahflip.mode_relist') },
+              { value: 'george', label: () => t('ahflip.mode_george') },
+            ],
+          },
           { kind: 'search', key: 'q', label: () => t('ahflip.search'), placeholder: () => t('ahflip.searchPh') },
           { kind: 'number', key: 'minProfit', label: () => t('ahflip.minProfit') },
           { kind: 'number', key: 'minMargin', label: () => t('ahflip.minMargin'), suffix: '%' },
@@ -210,13 +296,13 @@ export function createAhFlipView(): View {
       panel = createDetailPanel({ returnFocus: () => table?.el.querySelector<HTMLElement>('[data-key][tabindex="0"]') ?? null });
       detailEl = document.createElement('div');
       table = createKitTable<AhFlipRow>({
-        columns: columns(),
-        rowKey: (r) => r.id,
+        columns: columns(() => mode),
+        rowKey: (r) => r.key,
         sort: state.get().sort,
         onSortChange: (s) => qs?.set({ sort: s }),
         emptyText: () => t('ahflip.empty'),
         onActivate: (r) => {
-          openKey = r.id;
+          openKey = r.key;
           table?.setSelected(openKey);
           showDetail(r, true);
         },
@@ -242,7 +328,14 @@ export function createAhFlipView(): View {
       subs.push(state.onChange(() => schedule()));
       subs.push(
         c.store.subscribe((s, prev) => {
-          if (s.ah !== prev.ah || s.catalog !== prev.catalog || s.settings !== prev.settings || s.election !== prev.election || s.ahProgress !== prev.ahProgress)
+          if (
+            s.ah !== prev.ah ||
+            s.ahSales !== prev.ahSales ||
+            s.catalog !== prev.catalog ||
+            s.settings !== prev.settings ||
+            s.election !== prev.election ||
+            s.ahProgress !== prev.ahProgress
+          )
             schedule();
         }),
       );
@@ -272,6 +365,8 @@ export function createAhFlipView(): View {
       qs = null;
       openKey = null;
       memo = null;
+      lastRows = [];
+      mode = 'relist';
       if (root) root.textContent = '';
       root = null;
       ctx = null;

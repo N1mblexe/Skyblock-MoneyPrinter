@@ -1,6 +1,7 @@
 import type { Messages } from '../en/index.ts';
 
-// 'risk' namespace: risk levels, flag explanations and price-source badges (src/ui/cells.ts).
+// 'risk' namespace: risk levels, flag explanations, the sides a row's risk covers, price-source badges and the
+// conservative-estimate notes (src/ui/cells.ts).
 export const risk: Messages['risk'] = {
   ok: 'Temiz',
   caution: 'Dikkat',
@@ -22,4 +23,20 @@ export const risk: Messages['risk'] = {
   srcInsta: 'Insta',
   srcNpc: 'NPC',
   srcCraft: 'Craft',
+  srcAh: 'AH',
+  srcMix: 'NPC + bazaar',
+  scope_both: 'İşlemin kullandığı iki bazaar tarafı da kontrol edilir: alış ve satış.',
+  scope_buy: 'Yalnızca bazaar alış tarafı kontrol edilir (satış NPC’ye): makas ve ölü alış uyarıları alışı değil satışı ilgilendirir.',
+  scope_sell: 'Yalnızca bazaar satış tarafı kontrol edilir (alış NPC dükkanından).',
+  scope_book: 'Çıktı kitabının satış tarafı, artı girdi kitabındaki fiyat sıçraması ve ortalama fiyat sapması (ölü alış ya da geniş makas alıcıya zarar vermez).',
+  scope_fusion: 'Bazaar’dan alınan girdilerin alış tarafı ve çıktının satış tarafı; NPC’den alınan girdilerin piyasa riski yoktur.',
+  scope_item: 'Burada iki taraf da kontrol edilir. Strateji sayfaları yalnızca işlem yaptıkları tarafları kontrol eder, oradaki satır bundan temiz görünebilir.',
+  consBadge: 'Ayarlı',
+  consTip: 'Son fiyat geçmişine göre ayarlandı (temkinli tahmin). Ayrıntılar için satırı aç.',
+  consTitle: 'Temkinli ayarlar',
+  consBuy: 'Alış fiyatı anlık veride {from} → {to}: son medyandan düşük değil, yeniden emir maliyeti dahil.',
+  consSell: 'Satış fiyatı anlık veride {from} → {to}: son medyandan yüksek değil, yeniden emir maliyeti düşüldü.',
+  consRate: 'Dolum hızı × {mul}: işlem hacmi son zamanlarda haftalık ortalamasının altında.',
+  consChurn: 'Yeniden emir ≈ adet başı {churn}: en iyi fiyat burada sık değişiyor, birkaç kez geçilmeyi bekle.',
+  consNote: 'Ayarlar’da temkinli tahminler açık; ham anlık sayıları görmek için kapat.',
 };

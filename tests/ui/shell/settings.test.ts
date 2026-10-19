@@ -93,6 +93,8 @@ describe('settings drawer', () => {
     expect(s().npcDailyLimit).toBe(1280);
     change(h, 'ahEnabled', false);
     expect(s().ahEnabled).toBe(false);
+    change(h, 'conservative', !s().conservative);
+    expect(s().conservative).toBe(!defaultSettings.conservative);
     change(h, 'notify', true);
     expect(s().notify).toBe(true);
     change(h, 'hideSuspicious', false);

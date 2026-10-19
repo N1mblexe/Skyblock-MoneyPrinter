@@ -1,12 +1,15 @@
 // npm run sanity [-- --offline] : end-to-end check of the domain layer against the real bazaar + generated catalog.
 // --offline reads the cached bazaar ($BAZAAR_CACHE_DIR or .cache/bazaar.json) instead of fetching it.
 import { existsSync, readFileSync } from 'node:fs';
+import { scanAuctions, type RawAhPage } from '../src/api/auctions.ts';
 import { fetchBazaar } from '../src/api/bazaarClient.ts';
 import { toSnapshot, validateRaw } from '../src/api/normalize.ts';
 import { catalogFromFile } from '../src/data/catalog.ts';
+import { computeBookCombines } from '../src/domain/books.ts';
 import { computeCrafts } from '../src/domain/craft.ts';
 import { computeFlips } from '../src/domain/flip.ts';
 import { computeNpcFlips } from '../src/domain/npc.ts';
+import { slotsFor } from '../src/domain/pricing.ts';
 import { median } from '../src/domain/stats.ts';
 import { defaultSettings } from '../src/state/appState.ts';
 import type { CalcCtx, CatalogFile } from '../src/types/contracts.ts';
@@ -57,11 +60,39 @@ check(top.every((r) => r.profitPerHour <= (defaultSettings.capital * r.margin) /
 // ---- crafts
 const crafts = computeCrafts(ctx);
 const priced = crafts.filter((r) => r.unpriced.length === 0);
-console.log(`\ncrafts: ${crafts.length} bazaar-output recipes, ${priced.length} fully priced, ${priced.filter((r) => r.profit > 0).length} profitable`);
-check(priced.length >= 380, `≥380 priceable recipes (legacy tool matched 322) — got ${priced.length}`);
+const craftsOnly = priced.filter((r) => r.recipe.kind !== 'shop');
+console.log(`\ncrafts: ${crafts.length} recipes, ${priced.length} fully priced, ${priced.filter((r) => r.profit > 0).length} profitable`);
+check(craftsOnly.length >= 380, `≥380 priceable craft / forge recipes (legacy tool matched 322) — got ${craftsOnly.length}`);
 check(crafts.every((r) => Number.isFinite(r.cost) && Number.isFinite(r.value) && (r.margin === null || Number.isFinite(r.margin))), 'no NaN/Infinity in craft rows');
 const topCraft = priced.filter((r) => r.risk.level !== 'suspect').sort((a, b) => b.profitPerHour - a.profitPerHour).slice(0, 5);
 for (const r of topCraft) console.log(`  ${r.name.padEnd(32)} cost ${Math.round(r.cost).toLocaleString('en').padStart(12)} value ${Math.round(r.value).toLocaleString('en').padStart(12)} ${Math.round(r.profitPerHour).toLocaleString('en')}/h`);
+
+// shop trades (NPC offers that cost items) price as crafts: the Craft page's "Shop trades" source
+const shops = crafts.filter((r) => r.recipe.kind === 'shop');
+const shopPriced = shops.filter((r) => r.unpriced.length === 0);
+console.log(`shop trades: ${shops.length} recipes, ${shopPriced.length} fully priced, ${shopPriced.filter((r) => r.profit > 0).length} profitable`);
+check(shopPriced.length >= 80, `≥80 priced shop-trade recipes (got ${shopPriced.length} of ${shops.length})`);
+check(shopPriced.every((r) => Number.isFinite(r.profitPerHour) && Number.isFinite(r.outCraftsPerHour)), 'shop-trade rows have finite rates and profit/h');
+
+// AH-sold outputs (off-bazaar items valued from the AH) get a finite sales rate: the fixture AH page stands in for a scan
+const ahPage = { ...(JSON.parse(readFileSync('tests/fixtures/ah-page.json', 'utf8')) as RawAhPage), page: 0, totalPages: 1 };
+const ah = await scanAuctions(async () => ahPage, () => {});
+const ahCrafts = computeCrafts({ ...ctx, ah: (id) => ah.lowestBin[id] ?? null }).filter((r) => r.valueSource === 'ah' && r.unpriced.length === 0);
+console.log(`AH-sold crafts (fixture AH page): ${ahCrafts.length}, sell bound ${[...new Set(ahCrafts.map((r) => r.tp.limitedBy))].join('/')}`);
+check(ahCrafts.length > 0, `some crafts sell on the AH with the fixture scan (got ${ahCrafts.length})`);
+check(
+  ahCrafts.every((r) => Number.isFinite(r.outCraftsPerHour) && r.outCraftsPerHour > 0 && Number.isFinite(r.profitPerHour) && Number.isFinite(r.tp.unitsPerHour)),
+  'AH-sold crafts have finite sales rates and profit/h',
+);
+
+// ---- books: a combine's batch takes the order slots of its order legs (it used to take none)
+const books = computeBookCombines(ctx);
+const ordered = books.filter((r) => r.tp.batchQty > 0 && (r.plan?.orderUnits.length ?? 0) > 0);
+console.log(`\nbook combines: ${books.length}, ${ordered.length} with a batch and order legs`);
+check(
+  ordered.length > 0 && ordered.every((r) => (r.tp.slots ?? 0) >= 1 && r.tp.slots === slotsFor(r.tp.batchQty, r.plan!.orderUnits)),
+  `book combines with order legs take their order slots (${ordered.filter((r) => (r.tp.slots ?? 0) >= 1).length} of ${ordered.length} take ≥1)`,
+);
 
 // ---- npc
 const npc = computeNpcFlips(ctx);

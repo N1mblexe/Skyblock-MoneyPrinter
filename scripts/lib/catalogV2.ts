@@ -405,3 +405,19 @@ export function buildBookRules(
   }
   return out;
 }
+
+// ------------------------------------------------------------------ George
+const GEORGE_KEY = new RegExp(`^[A-Z0-9_]+;[0-${MAX_KAT_TIER}]$`);
+
+/**
+ * NEU constants/george.json (`{ prices: { "TYPE;IDX": coins } }`) -> catalog.george: what George pays for a pet, keyed
+ * like Kat steps and AH pet ids (rarity index COMMON=0 ... MYTHIC=5). Keys of another shape or above MYTHIC, and
+ * non-positive prices, are dropped and reported. Sorted by key.
+ */
+export function extractGeorge(json: unknown): { george: Record<string, number>; dropped: string[] } {
+  const dropped: string[] = [];
+  const prices = isObj(json) && isObj(json.prices) ? json.prices : {};
+  const ok: [string, number][] = [];
+  for (const [k, v] of Object.entries(prices)) (GEORGE_KEY.test(k) && posNum(v) ? ok.push([k, v]) : dropped.push(k));
+  return { george: Object.fromEntries(ok.sort((a, b) => a[0].localeCompare(b[0]))), dropped };
+}

@@ -45,7 +45,7 @@ export const flip: Messages['flip'] = {
   tip_item: 'Ürün adı ve bazaar ID’si. Satıra tıklayınca ayrıntı paneli açılır.',
   tip_spark: 'Son 24 saatteki en düşük sell offer (alış) fiyatı. Yeşil: yükseliyor, kırmızı: düşüyor.',
   tip_buyAt:
-    'Ürünü alacağın birim fiyat. Buy order modunda en yüksek buy order + 0,1 (en az NPC satış fiyatının 0,9 katı, en çok en düşük sell offer); insta modunda sell offer’lardan ortalama.',
+    'Ürünü alacağın birim fiyat. Buy order modunda en yüksek buy order + 0,1 (en az NPC satış fiyatının 0,9 katı; en düşük sell offer’a ulaşacak bir emir yerine insta-buy olur); insta modunda sell offer’lardan ortalama.',
   tip_sellAt: 'Ürünü satacağın birim fiyat (vergiden önce). Sell offer modunda en düşük sell offer − 0,1; insta modunda buy order’lardan ortalama.',
   tip_profit: 'Vergi düşüldükten sonra satış − alış, adet başına.',
   tip_margin: 'Adet başı kârın alış fiyatına oranı.',
@@ -67,18 +67,21 @@ export const flip: Messages['flip'] = {
   lim_depth: 'Derinlik',
   lim_forge: 'Forge',
   lim_npcLimit: 'NPC limiti',
+  lim_ahSales: 'AH satışları',
   lim_slots: 'Slot',
   limHelp_volume: 'Pazarın dolum hacminden senin payın: daha fazlası bir döngüde dolmaz.',
   limHelp_capital: 'Sermayen bu kadarını almaya yetiyor; sermayeyi artırırsan parti büyür.',
   limHelp_depth: 'Order book’ta bu kadar ürün var; daha büyük parti fiyatı bozar.',
   limHelp_forge: 'Forge slotların ancak bu kadar üretebiliyor.',
   limHelp_npcLimit: 'NPC dükkanının günlük alım limiti.',
+  limHelp_ahSales: 'Müzayede evinin saatte kaç tane sattığı (son satışlardan ölçülür, yoksa temkinli bir tahmin).',
   limHelp_slots: 'Bazaar sipariş slotların doldu; slot sayısını Ayarlar’dan değiştirebilirsin.',
 
   clampedNpc: 'NPC tabanı',
   clampedAsk: 'Ask sınırı',
   clampedNpcTip: 'Buy order fiyatı NPC satış fiyatının 0,9 katına yükseltildi: daha ucuz teklifler gerçekte dolmuyor.',
-  clampedAskTip: 'Buy order fiyatı en düşük sell offer’a eşitlendi (makas yok); fiilen insta-buy gibi dolar.',
+  clampedAskTip:
+    'Buy order en düşük sell offer’a ulaşırdı (makas yok), bu yüzden yerine insta-buy yapılır: fiyat sell offer’lar yürünerek bulunur, derinlikle sınırlıdır ve sipariş slotu kullanmaz.',
 
   // detail panel
   planTitle: 'Adım adım plan',
@@ -132,5 +135,7 @@ export const flip: Messages['flip'] = {
     '<strong>Nasıl okunur:</strong> Fiyatlar order book’un tepesinden gelir (en yüksek buy order + 0,1 ile alırsın, en düşük sell offer − 0,1 ile satarsın); quick_status ortalamaları kullanılmaz. Vergi sadece bazaar satışlarından düşülür. Buy order’ların en az NPC satış fiyatının 0,9 katına dolduğu varsayılır; ham maddelerdeki 0,1’lik “ölü” teklifler gerçekte dolmaz.',
   notePph:
     '<strong>Kâr / saat bir tahmindir:</strong> parti büyüklüğü hacim payın, sermaye, order book derinliği ve sipariş slotlarından en dar olanıyla sınırlanır (“Sınırlayan” sütunu). Tutarlılık ve değişim sütunları bu tarayıcıda toplanan fiyat geçmişinden gelir. Şüpheli satırlar (ölü teklif, aşırı makas, geniş makas + düşük hacim, fiyat sıçraması) “Şüphelileri gizle” açıkken gizlenir.',
+  noteCons:
+    '<strong>Temkinli tahminler</strong> (varsayılan açık, Ayarlar) son fiyat geçmişini kullanır: “Ayarlı” işaretli satır son medyandan ucuza almaz, pahalıya satmaz, hacim haftalık ortalamanın altındayken daha yavaş dolar ve geçilmenin maliyetini öder. Yeterli geçmişi olmayan satırlar anlık sayıları korur.',
   noteSettings: 'Vergi, sermaye, hacim payı, döngü süresi, slotlar ve alış/satış modu <strong>Ayarlar</strong> panelinden değişir.',
 };

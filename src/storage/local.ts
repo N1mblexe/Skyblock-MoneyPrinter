@@ -155,7 +155,7 @@ export const loadAlertLog = (): AlertEvent[] => loadList(LS_ALERT_LOG, parseEven
 export const saveAlertLog = (l: AlertEvent[]): void => lsSet(LS_ALERT_LOG, l.slice(0, ALERTS.logMax));
 
 // ---- market alerts
-const OPP_SCOPE = new Set(['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat']);
+const OPP_SCOPE = new Set(['flip', 'craft', 'forge', 'chain', 'book', 'npc', 'kat', 'ahflip']);
 const OPP_METRICS = new Set(['profitPerHour', 'profit', 'margin']);
 
 export function parseOppRule(x: Record<string, unknown>): OppAlertRule | null {

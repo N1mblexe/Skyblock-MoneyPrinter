@@ -1,23 +1,23 @@
 // Kat upgrades: buy a pet on the AH, take it up one or more rarities at Kat (coins + items + a wait), sell it on the AH.
 // Kat's coin price drops KAT.levelDiscount per pet level. The pet keeps its XP through an upgrade, but higher rarities
 // need more XP per level, so its level is recomputed at each rarity (a level 100 Epic is a lower-level Legendary).
-// Kat flowers / bouquets can skip the wait (one item per upgrade, so skipping is priced per step).
-import { AH, AH_FLIP, KAT } from '../config.ts';
-import type { AhPrice, AhSnapshot, CalcCtx, KatStep, PetLeveling, QuoteSource, RiskFlag, RiskReport, Throughput } from '../types/contracts.ts';
-import { petName } from './ahFlips.ts';
-import { createCraftPricer } from './craft.ts';
+// Kat flowers / bouquets can skip the wait (one item per upgrade, so skipping is priced per step). The upgraded pet
+// sells on the AH or to George, whichever pays more.
+import { AH, AH_FLIP, AH_SALES, KAT } from '../config.ts';
+import type { AhPrice, AhSnapshot, CalcCtx, KatStep, PetLeveling, PlanInputs, QuoteSource, RiskFlag, RiskReport, Throughput } from '../types/contracts.ts';
+import { isPetMaxKey, petName } from './ahFlips.ts';
+import { bitsItemCosts } from './bits.ts';
+import { getPricer } from './craft.ts';
 import { petLevelFromName } from './ids.ts';
+import { ahRate, coreOf, salesOf } from './market.ts';
 import { ahNet } from './pricing.ts';
 import { reportFromFlags } from './risk.ts';
 
 /** Rarity names by index (PetLeveling.offsets keys); game data, so not translated. */
 export const KAT_RARITIES = ['COMMON', 'UNCOMMON', 'RARE', 'EPIC', 'LEGENDARY', 'MYTHIC'] as const;
 
-/**
- * Hours on top of Kat's wait for the two AH legs: the BIN buy is instant, but the finished pet has to sell. One hour
- * is an optimistic guess for a pet listed at the lowest BIN; it mostly keeps instant (fully skipped) upgrades finite.
- */
-export const KAT_TRADE_HOURS = 1;
+/** Hours assumed to sell the upgraded pet without measured AH sales, 1 / AH_SALES.defaultPerHour (alias of KAT.defaultSellHours). */
+export const KAT_TRADE_HOURS = KAT.defaultSellHours;
 
 /** AH scan version Kat rows need (pet `exp` and the `@MAX` keys): the page and derived.kat() both gate on it. */
 export const KAT_MIN_SCAN = 3;
@@ -30,8 +30,17 @@ const DEFAULT_MAX_LEVEL = 100;
 export type KatBand = 'any' | 'max';
 export const KAT_BANDS: readonly KatBand[] = ['any', 'max'];
 
-/** 'flowers': skip each step's wait with Kat Flowers / Bouquets. */
-export type KatSkip = 'none' | 'flowers';
+/**
+ * 'flowers': skip each step's wait with Kat Flowers / Bouquets; 'best': skip the steps whose skip raises the profit
+ * per hour (the planner's choice).
+ */
+export type KatSkip = 'none' | 'flowers' | 'best';
+export const KAT_SKIPS: readonly KatSkip[] = ['best', 'none', 'flowers'];
+/** The skip option derived.kat() (the planner's Kat rows) uses; the Kat page shows those rows for it. */
+export const KAT_DERIVED_SKIP: KatSkip = 'best';
+
+/** Where the upgraded pet is sold. */
+export type KatSellVenue = 'ah' | 'george';
 
 export interface KatOptions {
   /** default 'none' */
@@ -48,8 +57,8 @@ export interface KatItemLine {
   /** per-unit cost (0 when unpriced) */
   unit: number;
   total: number;
-  /** null when no market has it */
-  source: QuoteSource | 'ah' | null;
+  /** null when no market has it; 'bits': bought with bits from Booster Cookies */
+  source: QuoteSource | 'bits' | null;
 }
 
 export interface KatStepLine {
@@ -95,12 +104,25 @@ export interface KatRow {
   maxLevel: number;
   /** false when the XP table or the listing's XP is missing and the level is a guess by band */
   levelKnown: boolean;
-  /** AH key the sale is priced from (`PET;j@MAX` for a max-level pet when listed, else `PET;j`) */
+  /**
+   * AH key the sale is priced from: `PET;j@MAX` for a max-level pet when listed, else the level band (`PET;j@L89`,
+   * scan v4) when the level is known and listed, else `PET;j`
+   */
   sellKey: string;
-  /** lowest BIN of sellKey (your listing price), and what it leaves after the listing fee and claim tax */
+  sellVenue: KatSellVenue;
+  /** your list price (lowest BIN of sellKey − undercut, capped at the median sold when conservative) or George's */
   sell: number;
+  /** what the sale leaves after the AH listing fee and claim tax (George: his price) */
   sellNet: number;
   sellCount: number;
+  /** hours to sell: 1 / ahRate of sellKey's measured sales, else KAT.defaultSellHours; 0 for George */
+  sellHours: number;
+  /** sellKey's measured AH sales per hour (0: none sold, so no AH sale); null while unmeasured */
+  salesPerHour: number | null;
+  /** George's price for the upgraded pet, null when he has none */
+  george: number | null;
+  /** the list price before the median-sold cap, when the cap lowered it */
+  sellRef?: number;
   coins: number;
   itemsCost: number;
   skipCost: number;
@@ -111,7 +133,7 @@ export interface KatRow {
   /** Kat's wait summed over steps, and after skipping */
   baseHours: number;
   katHours: number;
-  /** katHours + KAT_TRADE_HOURS */
+  /** katHours + sellHours */
   hours: number;
   /** sellNet − capital (0 when unpriced) */
   profit: number;
@@ -123,6 +145,8 @@ export interface KatRow {
   risk: RiskReport;
   /** ids without a price (items, or the sell key); such rows have profit 0 */
   unpriced: string[];
+  /** planner inputs: one pet per run, no order slots */
+  plan: PlanInputs;
 }
 
 const maxKey = (key: string) => key + AH.petMaxSuffix;
@@ -221,27 +245,48 @@ function stepIndex(steps: readonly KatStep[]): Map<string, Map<number, KatStep>>
   return m;
 }
 
+/** A step before the skip choice: its line without skip items, and what skipping it would cost and leave. */
+interface StepDraft {
+  line: KatStepLine;
+  skip: { lines: KatItemLine[]; cost: number; hours: number } | null;
+}
+
+const withSkip = (d: StepDraft): KatStepLine => (d.skip ? { ...d.line, hours: d.skip.hours, skip: d.skip.lines, skipCost: d.skip.cost } : d.line);
+
+/** `${key}@L<upTo>`: the scan v4 level-band key holding `level` (api/auctions.ts petBandKey), null above the bands. */
+export function bandKey(key: string, level: number): string | null {
+  const upTo = AH.petBands.find((b) => level <= b);
+  return upTo === undefined ? null : `${key}@L${upTo}`;
+}
+
 /**
  * Every Kat upgrade run in the catalog with an AH price for the pet you start from: each chain of consecutive steps
- * i -> j of one pet, bought at the cheapest listing of any level ('any') or at max level ('max'). Rows with an
- * unpriced item or no sell price are kept with `unpriced` set.
+ * i -> j of one pet, bought at the cheapest listing of any level ('any') or at max level ('max'). Items are priced
+ * like craft inputs (the shared craft pricer, then the AH), bits-shop items at no more than their bits through
+ * Booster Cookies. Rows with an unpriced item or no sale are kept with `unpriced` set.
  */
 export function computeKatFlips(ctx: CalcCtx, opts: KatOptions = {}): KatRow[] {
   const { catalog } = ctx;
   const ah = ctx.ah;
   if (!ah) return [];
-  const pricer = createCraftPricer(ctx);
+  const pricer = getPricer(ctx);
+  const core = coreOf(ctx);
+  const bitsCost = bitsItemCosts(ctx);
   const priceMemo = new Map<string, { unit: number; source: KatItemLine['source'] }>();
+  const skipMode = opts.skip ?? 'none';
 
-  /** Unit price of an item: bazaar in your cost mode / NPC / sub-craft (as crafts price inputs), else AH lowest BIN. */
+  /** Unit price of an item: as crafts price inputs (bazaar, NPC, sub-craft), else the AH; capped by its bits cost. */
   const priceOf = (id: string): { unit: number; source: KatItemLine['source'] } => {
     let p = priceMemo.get(id);
     if (p) return p;
     const line = pricer.price({ key: `kat:${id}`, output: `kat:${id}`, outCount: 1, inputs: [{ id, qty: 1 }], kind: 'craft' }).lines[0]!;
-    const a = ah(id);
+    // a pricer without AH sources leaves AH-only items unpriced
+    const a = line.unit > 0 ? null : core.ahBuy(id);
     if (line.unit > 0) p = { unit: line.unit, source: line.source };
-    else if (a && a.price > 0 && Number.isFinite(a.price)) p = { unit: a.price, source: 'ah' };
+    else if (a) p = { unit: a.price, source: 'ah' };
     else p = { unit: 0, source: null };
+    const b = bitsCost.get(id);
+    if (b != null && (p.source == null || b < p.unit)) p = { unit: b, source: 'bits' };
     priceMemo.set(id, p);
     return p;
   };
@@ -268,7 +313,7 @@ export function computeKatFlips(ctx: CalcCtx, opts: KatOptions = {}): KatRow[] {
         // safe guess), a max-level one for 'max'; either way the level is a guess
         const expKnown = buy.exp != null && (band === 'any' || buy.exp > 0);
         const exp = expKnown ? buy.exp! : band === 'max' && startCurve ? expForLevel(startCurve, startCurve.max) : 0;
-        const steps: KatStepLine[] = [];
+        const steps: StepDraft[] = [];
         let curves = !!startCurve;
         let level = startCurve ? levelFromExp(startCurve, exp) : band === 'max' ? maxLevelOf(catalog.petLeveling, pet) : 1;
         for (let to = from + 1; byFrom.has(to - 1); to++) {
@@ -277,25 +322,28 @@ export function computeKatFlips(ctx: CalcCtx, opts: KatOptions = {}): KatRow[] {
           if (!curve) curves = false;
           const levelAfter = curves && curve ? levelFromExp(curve, exp) : level;
           const items = step.items.map((it) => lineOf(it.id, it.qty));
-          const skip = opts.skip === 'flowers' ? planSkip(step.hours, unitOrNull(KAT.flowerId), unitOrNull(KAT.bouquetId)) : null;
+          const plan = skipMode !== 'none' ? planSkip(step.hours, unitOrNull(KAT.flowerId), unitOrNull(KAT.bouquetId)) : null;
           steps.push({
-            from: step.from,
-            to: step.to,
-            levelBefore: level,
-            levelAfter,
-            baseCoins: step.coins,
-            coins: katCoins(step.coins, level),
-            items,
-            itemsCost: items.reduce((s, l) => s + l.total, 0),
-            baseHours: step.hours,
-            hours: skip ? skip.hours : step.hours,
-            skip: skip ? skip.items.map((it) => lineOf(it.id, it.qty)) : [],
-            skipCost: skip?.cost ?? 0,
+            line: {
+              from: step.from,
+              to: step.to,
+              levelBefore: level,
+              levelAfter,
+              baseCoins: step.coins,
+              coins: katCoins(step.coins, level),
+              items,
+              itemsCost: items.reduce((s, l) => s + l.total, 0),
+              baseHours: step.hours,
+              hours: step.hours,
+              skip: [],
+              skipCost: 0,
+            },
+            skip: plan && plan.items.length > 0 ? { lines: plan.items.map((it) => lineOf(it.id, it.qty)), cost: plan.cost, hours: plan.hours } : null,
           });
           level = levelAfter;
           const req = KAT.tamingReq[to] ?? 0;
           if (opts.taming != null && req > opts.taming) break;
-          rows.push(buildRow(ctx, { pet, from, to, band, buyKey, buy, steps: steps.slice(), level, levelKnown: curves && expKnown }));
+          rows.push(buildRow(ctx, { pet, from, to, band, buyKey, buy, steps: steps.slice(), level, levelKnown: curves && expKnown }, skipMode));
         }
       }
     }
@@ -313,52 +361,145 @@ interface RowInput {
   to: number;
   band: KatBand;
   buyKey: string;
-  buy: NonNullable<ReturnType<NonNullable<CalcCtx['ah']>>>;
-  steps: KatStepLine[];
+  buy: AhPrice;
+  steps: StepDraft[];
   /** level at `to` */
   level: number;
   levelKnown: boolean;
 }
 
-function buildRow(ctx: CalcCtx, x: RowInput): KatRow {
-  const { catalog } = ctx;
+/** How the upgraded pet sells: on the AH (lowest BIN of sellKey − undercut) or to George, whichever nets more. */
+interface Sale {
+  sellKey: string;
+  venue: KatSellVenue;
+  /** list price (AH) or George's price; 0 without either */
+  price: number;
+  net: number;
+  hours: number;
+  count: number;
+  salesPerHour: number | null;
+  /** the list price before the median-sold cap */
+  ref?: number;
+  /** AH listing used (null for George or no listing) */
+  listing: AhPrice | null;
+  george: number | null;
+}
+
+/**
+ * The sale of a pet at `level` and rarity `to`: the most specific AH key listed (`@MAX` at max level, else the scan v4
+ * level band when the level is known, else the plain key), listed AH_FLIP.undercut under its lowest BIN and, with
+ * conservatism on, at no more than the median sold; it takes 1 / ahRate hours (measured sales, else
+ * AH_SALES.defaultPerHour: KAT.defaultSellHours). A key that sold nothing over the coverage has no AH sale (price 0:
+ * unpriced unless George buys it). George's price floors it: when he pays more than the AH nets, the pet goes to him
+ * at once.
+ */
+function saleOf(ctx: CalcCtx, x: RowInput, maxLevel: number): Sale {
   const ah = ctx.ah!;
+  const plainKey = `${x.pet};${x.to}`;
+  let sellKey = plainKey;
+  let listing = ah(plainKey);
+  const atMax = x.level >= maxLevel ? ah(maxKey(plainKey)) : null;
+  if (atMax && atMax.price > 0 && maxOk(atMax, maxLevel)) {
+    sellKey = maxKey(plainKey);
+    listing = atMax;
+  } else if (x.levelKnown && x.level < maxLevel) {
+    const bk = bandKey(plainKey, x.level);
+    const b = bk ? ah(bk) : null;
+    if (b && b.price > 0) {
+      sellKey = bk!;
+      listing = b;
+    }
+  }
+  const sales = salesOf(ctx, sellKey);
+  const perHour = sales?.perHour ?? null;
+  const rate = ahRate(perHour, ctx.settings.share);
+  // measured 0: the pet doesn't sell on the AH
+  let price = listing && listing.price > 0 && rate > 0 ? Math.max(0, listing.price - AH_FLIP.undercut) : 0;
+  let ref: number | undefined;
+  if (price > 0 && ctx.settings.conservative && sales && sales.n >= AH_SALES.minSales && sales.median > 0 && sales.median < price) {
+    ref = price;
+    price = sales.median;
+  }
+  const g = ctx.catalog.george[plainKey];
+  const george = g != null && g > 0 ? g : null;
+  const net = price > 0 ? ahNet(price, ctx.derpy) : 0;
+  const base = { sellKey, count: listing?.count ?? 0, salesPerHour: perHour, george };
+  if (george != null && george > net) return { ...base, venue: 'george', price: george, net: george, hours: 0, listing: null };
+  const sale: Sale = { ...base, venue: 'ah', price, net, hours: rate > 0 ? 1 / rate : 0, listing: price > 0 ? listing : null };
+  if (ref != null) sale.ref = ref;
+  return sale;
+}
+
+/**
+ * Which steps to skip with flowers: 'flowers' every step that can be, 'best' the set with the most profit per hour
+ * (the cheapest skips per saved hour first, any prefix of them), 'none' none.
+ */
+function chooseSkips(steps: readonly StepDraft[], mode: KatSkip, profit: number, hours: number, priced: boolean): KatStepLine[] {
+  if (mode === 'none' || (mode === 'best' && !priced)) return steps.map((d) => d.line);
+  if (mode === 'flowers') return steps.map(withSkip);
+  const cands = steps
+    .map((d, i) => ({ i, cost: d.skip?.cost ?? 0, saved: d.skip ? d.line.baseHours - d.skip.hours : 0 }))
+    .filter((c) => c.saved > 0)
+    .sort((a, b) => a.cost / a.saved - b.cost / b.saved);
+  let best = 0;
+  let bestPph = profit / hours;
+  let p = profit;
+  let h = hours;
+  cands.forEach((c, k) => {
+    p -= c.cost;
+    h -= c.saved;
+    const pph = h > 0 ? p / h : p > 0 ? Infinity : -Infinity;
+    if (pph > bestPph) {
+      bestPph = pph;
+      best = k + 1;
+    }
+  });
+  const on = new Set(cands.slice(0, best).map((c) => c.i));
+  return steps.map((d, i) => (on.has(i) ? withSkip(d) : d.line));
+}
+
+function buildRow(ctx: CalcCtx, x: RowInput, mode: KatSkip): KatRow {
+  const { catalog } = ctx;
   const flags: RiskFlag[] = [];
   const maxLevel = petCurve(catalog.petLeveling, x.pet, x.to)?.max ?? maxLevelOf(catalog.petLeveling, x.pet);
-  const plainKey = `${x.pet};${x.to}`;
-  const atMax = x.level >= maxLevel ? ah(maxKey(plainKey)) : null;
-  const sellKey = atMax && atMax.price > 0 && maxOk(atMax, maxLevel) ? maxKey(plainKey) : plainKey;
-  const sellAh = sellKey === plainKey ? ah(plainKey) : atMax;
-  // the plain key's lowest BIN is whatever level is cheapest: maybe not the level you sell
-  if (sellKey === plainKey || !x.levelKnown) flags.push('AH_VARIANT');
-  if (x.buy.count < KAT.minCount || (sellAh && sellAh.count < KAT.minCount)) flags.push('AH_THIN');
+  const sale = saleOf(ctx, x, maxLevel);
+  // a plain or band key's lowest BIN is whatever level is cheapest in it: maybe not the level you sell (George pays
+  // the same for any level)
+  if (sale.venue === 'ah' && (!isPetMaxKey(sale.sellKey) || !x.levelKnown)) flags.push('AH_VARIANT');
+  if (x.buy.count < KAT.minCount || (sale.venue === 'ah' && sale.listing && sale.count < KAT.minCount)) flags.push('AH_THIN');
   if (x.buy.next != null && x.buy.next / x.buy.price > AH_FLIP.gapRatio) flags.push('AH_GAP');
 
-  const unpriced = [...new Set(x.steps.flatMap((s) => [...s.items, ...s.skip].filter((l) => l.source == null).map((l) => l.id)))];
-  const sell = sellAh && sellAh.price > 0 ? sellAh.price : 0;
-  if (!sell) unpriced.push(sellKey);
-  const sum = (f: (s: KatStepLine) => number) => x.steps.reduce((a, s) => a + f(s), 0);
-  const coins = sum((s) => s.coins);
-  const itemsCost = sum((s) => s.itemsCost);
-  const skipCost = sum((s) => s.skipCost);
+  const itemUnpriced = [...new Set(x.steps.flatMap((s) => s.line.items.filter((l) => l.source == null).map((l) => l.id)))];
+  const sold = sale.net > 0;
+  const priced = itemUnpriced.length === 0 && sold;
+  const sumOf = (steps: readonly KatStepLine[], f: (s: KatStepLine) => number) => steps.reduce((a, s) => a + f(s), 0);
+  const plain = x.steps.map((d) => d.line);
+  const noSkipCapital = x.buy.price + sumOf(plain, (s) => s.coins + s.itemsCost);
+  const steps = chooseSkips(x.steps, mode, sale.net - noSkipCapital, sumOf(plain, (s) => s.hours) + sale.hours, priced);
+
+  const unpriced = [...itemUnpriced];
+  if (!sold) unpriced.push(sale.sellKey);
+  const coins = sumOf(steps, (s) => s.coins);
+  const itemsCost = sumOf(steps, (s) => s.itemsCost);
+  const skipCost = sumOf(steps, (s) => s.skipCost);
   const upgradeCost = coins + itemsCost + skipCost;
   const capital = x.buy.price + upgradeCost;
-  const sellNet = sell ? ahNet(sell, ctx.derpy) : 0;
-  const katHours = sum((s) => s.hours);
-  const hours = katHours + KAT_TRADE_HOURS;
-  const priced = unpriced.length === 0;
-  const profit = priced ? sellNet - capital : 0;
+  const katHours = sumOf(steps, (s) => s.hours);
+  const hours = katHours + sale.hours;
+  const profit = priced ? sale.net - capital : 0;
+  // fully skipped and sold to George: instant; one pet per minute keeps the rate finite
+  const rateHours = Math.max(hours, 1 / 60);
   const tp: Throughput = {
-    unitsPerHour: 1 / hours,
+    unitsPerHour: 1 / rateHours,
     batchQty: 1,
     capitalUsed: capital,
     fillHours: hours,
     limitedBy: 'kat',
     buyHours: 0,
-    sellHours: KAT_TRADE_HOURS,
+    sellHours: sale.hours,
     slots: 0,
   };
-  return {
+  const row: KatRow = {
     key: `${x.pet};${x.from}>${x.to}:${x.band}`,
     id: x.buyKey,
     pet: x.pet,
@@ -370,28 +511,35 @@ function buildRow(ctx: CalcCtx, x: RowInput): KatRow {
     buyCount: x.buy.count,
     ...(x.buy.uuid ? { uuid: x.buy.uuid } : {}),
     ...(x.buy.name ? { listingName: x.buy.name } : {}),
-    levelStart: x.steps[0]!.levelBefore,
+    levelStart: x.steps[0]!.line.levelBefore,
     levelEnd: x.level,
     maxLevel,
     levelKnown: x.levelKnown,
-    sellKey,
-    sell,
-    sellNet,
-    sellCount: sellAh?.count ?? 0,
+    sellKey: sale.sellKey,
+    sellVenue: sale.venue,
+    sell: sale.price,
+    sellNet: sale.net,
+    sellCount: sale.count,
+    sellHours: sale.hours,
+    salesPerHour: sale.salesPerHour,
+    george: sale.george,
     coins,
     itemsCost,
     skipCost,
     upgradeCost,
     capital,
-    baseHours: sum((s) => s.baseHours),
+    baseHours: sumOf(steps, (s) => s.baseHours),
     katHours,
     hours,
     profit,
     margin: priced ? profit / capital : 0,
-    profitPerHour: profit / hours,
+    profitPerHour: profit / rateHours,
     tp,
-    steps: x.steps,
+    steps,
     risk: reportFromFlags(flags),
     unpriced,
+    plan: { unitCost: capital, buyCost: capital, profitPerUnit: profit, unitsPerHour: 1 / rateHours, maxUnits: 1, orderUnits: [], uses: [] },
   };
+  if (sale.ref != null) row.sellRef = sale.ref;
+  return row;
 }

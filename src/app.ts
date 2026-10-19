@@ -1,4 +1,5 @@
 // Bootstrap wiring: settings -> history/cache -> catalog -> shell -> router/views -> poller.
+import { createAhSalesPoller } from './api/ahSales.ts';
 import { createAhScanner } from './api/auctions.ts';
 import { createElectionPoller } from './api/election.ts';
 import { createPoller } from './api/poller.ts';
@@ -37,6 +38,7 @@ import type { AppState, Route, Snapshot, ToastKind, View, ViewContext } from './
 import { toast as kitToast } from './ui/kit/index.ts';
 import { createRouter, parseHash, routeToHash } from './ui/router.ts';
 import { mountShell } from './ui/shell.ts';
+import { migrateBitsPrefs } from './ui/views/bits/bitsView.ts';
 import { views } from './ui/views/index.ts';
 
 
@@ -67,6 +69,8 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     if (s.alerts !== prev.alerts) saveAlerts(s.alerts);
     if (s.alertLog !== prev.alertLog) saveAlertLog(s.alertLog);
   });
+  // the old Bits page's rank prefs feed settings.bitsMultiplier (Kat prices bits items with it), so move them at boot
+  migrateBitsPrefs(store);
 
   const toast = (msg: string, kind: ToastKind = 'info') => void kitToast(msg, kind);
   const watch = {
@@ -80,16 +84,21 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     },
   };
 
-  /** Store a new snapshot and append it to history. */
+  /**
+   * Append a snapshot to history, then show it: one store update (snapshot + historyTick), so every derived result
+   * is computed once per snapshot and the alert runner sees stats that include it. A failed history write still
+   * shows the snapshot. The latest-snapshot cache is written in the background.
+   */
   async function applySnapshot(snap: Snapshot, status: AppState['status']): Promise<void> {
-    store.set({ snapshot: snap, status, lastError: null });
+    let recorded = true;
     try {
       await history.record(snap);
-      await history.saveLatest(snap);
-      store.set((s) => ({ historyTick: s.historyTick + 1 }));
     } catch (e) {
+      recorded = false;
       console.warn('history write failed', e);
     }
+    store.set((s) => ({ snapshot: snap, status, lastError: null, historyTick: recorded ? s.historyTick + 1 : s.historyTick }));
+    history.saveLatest(snap).catch((e: unknown) => console.warn('saving latest snapshot failed', e));
   }
 
   // History + last snapshot from IndexedDB, so the page is useful before the first fetch finishes.
@@ -131,7 +140,9 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   // ---- shell + views
   let current: View | null = null;
   const navigate = (r: Route) => router.navigate(r);
-  const shell = mountShell(root, { store, refresh, navigate, manualLoad, history, toast, scanAh: () => void ah.scanNow() });
+  // the sales poller is created below; the Data section only calls these on user action, after bootstrap
+  const salesStore = { info: () => ahSales.info(), clear: () => ahSales.clear() };
+  const shell = mountShell(root, { store, refresh, navigate, manualLoad, history, toast, scanAh: () => void ah.scanNow(), ahSales: salesStore });
   const setQuery = (patch: Record<string, string | undefined>) => {
     const cur = router.current();
     const query: Record<string, string> = { ...cur.query };
@@ -175,6 +186,13 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
     onError: (e) => console.warn('AH scan failed', e),
     enabled: () => store.get().settings.ahEnabled,
   });
+  // realized AH sales; follows the "Auction house scan" toggle like the scanner. Turning the AH off keeps the last
+  // summary in the store, as it keeps store.ah: derived ignores both while settings.ahEnabled is off.
+  const ahSales = createAhSalesPoller({
+    onUpdate: (s) => store.set({ ahSales: s }),
+    onError: (e) => console.warn('AH sales fetch failed', e),
+    enabled: () => store.get().settings.ahEnabled,
+  });
   const election = createElectionPoller({
     onInfo: (info) => store.set({ election: info }),
     onError: (e) => console.warn('election fetch failed', e),
@@ -192,14 +210,23 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   void refresh();
 
   void ah.loadCached().then((c) => c && !store.get().ah && store.set({ ah: c }));
-  if (settings.ahEnabled) ah.start();
+  // loadCached() emits the stored summary through onUpdate
+  ahSales.loadCached().catch((e: unknown) => console.warn('loading AH sales failed', e));
+  if (settings.ahEnabled) {
+    ah.start();
+    ahSales.start();
+  }
   election.start();
   store.subscribe((s, prev) => {
     if (s.settings.ahEnabled === prev.settings.ahEnabled) return;
     if (s.settings.ahEnabled) {
       ah.start();
       void ah.scanNow();
-    } else ah.stop();
+      ahSales.start();
+    } else {
+      ah.stop();
+      ahSales.stop();
+    }
   });
 
   store.subscribe((s, prev) => {

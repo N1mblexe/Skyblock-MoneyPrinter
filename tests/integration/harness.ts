@@ -11,6 +11,15 @@ import { IDBFactory } from 'fake-indexeddb';
 import { expect, vi, type MockInstance } from 'vitest';
 import type { AppState, Store } from '../../src/types/contracts.ts';
 
+/**
+ * Every test boots the whole app (a fresh module graph, the strategies over the fixtures). Alone a boot takes well
+ * under a second (the first in a file ~1.5 s, with the transforms), but with the whole suite running in parallel
+ * on a loaded machine the 5 s default was sometimes hit; 30 s still fails a hang fast. waitFor's own budget below
+ * is raised for the same reason. Real slowness shows in `npx vitest run tests/integration --reporter=verbose`.
+ */
+export const INTEGRATION_TIMEOUT_MS = 30_000;
+vi.setConfig({ testTimeout: INTEGRATION_TIMEOUT_MS });
+
 const ROOT = resolve(process.cwd());
 const readJson = (rel: string): unknown => JSON.parse(readFileSync(resolve(ROOT, rel), 'utf8'));
 
@@ -22,6 +31,16 @@ export const BAZAAR_FIXTURE = readJson('tests/fixtures/bazaar.json') as {
 const CATALOG = readJson('public/data/catalog.json');
 const AH_PAGE = readJson('tests/fixtures/ah-page.json');
 const ELECTION = readJson('tests/fixtures/election.json');
+export const AH_ENDED = readJson('tests/fixtures/ah-ended.json') as { lastUpdated: number; auctions: { timestamp: number }[] };
+
+/**
+ * The auctions_ended fixture moved to `now` (lastUpdated and every sale), as Hypixel would serve it: a repeat poll
+ * brings the same auction ids within the poller's dedupe window, and the sales never age out of AH_SALES.windowMs.
+ */
+export function endedNow(now = Date.now()): typeof AH_ENDED {
+  const shift = now - AH_ENDED.lastUpdated;
+  return { ...AH_ENDED, lastUpdated: now, auctions: AH_ENDED.auctions.map((a) => ({ ...a, timestamp: a.timestamp + shift })) };
+}
 
 export const clone = <T>(x: T): T => structuredClone(x);
 
@@ -32,6 +51,8 @@ export interface NetStub {
   fetch: ReturnType<typeof vi.fn>;
   /** bazaar payload served from now on; null -> HTTP 503 */
   setBazaar(p: BazaarPayload | null): void;
+  /** serve the auctions_ended fixture (endedNow, the default) or, when false, HTTP 503 */
+  setEnded(up: boolean): void;
   calls(part: string): number;
 }
 
@@ -51,13 +72,16 @@ export function freshBazaar(at = Date.now() - 5_000): BazaarPayload {
   return b;
 }
 
-/** Stub fetch per URL: bazaar, catalog, AH, election. Anything else -> 404 (and recorded). */
+/** Stub fetch per URL: bazaar, catalog, AH sales, AH, election. Anything else -> 404 (and recorded). */
 export function stubNetwork(): NetStub {
   let bazaar: BazaarPayload | null = freshBazaar();
+  let ended = true;
   const fn = vi.fn(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     if (url.includes('/skyblock/bazaar')) return bazaar ? jsonResponse(bazaar) : jsonResponse({ success: false }, 503);
     if (url.includes('data/catalog.json')) return jsonResponse(CATALOG);
+    // before the /skyblock/auctions match, which would catch it
+    if (url.includes('/skyblock/auctions_ended')) return ended ? jsonResponse(endedNow()) : jsonResponse({ success: false }, 503);
     if (url.includes('/skyblock/auctions')) return jsonResponse(AH_PAGE);
     if (url.includes('/skyblock/election')) return jsonResponse(ELECTION);
     return jsonResponse({ success: false }, 404);
@@ -67,6 +91,9 @@ export function stubNetwork(): NetStub {
     fetch: fn,
     setBazaar(p) {
       bazaar = p;
+    },
+    setEnded(up) {
+      ended = up;
     },
     calls: (part) => fn.mock.calls.filter(([u]) => String(typeof u === 'string' ? u : (u as Request).url ?? u).includes(part)).length,
   };
@@ -302,7 +329,7 @@ export function teardownApp(): void {
 }
 
 /** Poll `cond` on real timers (macrotasks) until true or `ms` passes. */
-export async function waitFor(cond: () => boolean, what = 'condition', ms = 4000): Promise<void> {
+export async function waitFor(cond: () => boolean, what = 'condition', ms = 10_000): Promise<void> {
   const end = performance.now() + ms;
   while (!cond()) {
     if (performance.now() > end) throw new Error(`timed out waiting for ${what}`);

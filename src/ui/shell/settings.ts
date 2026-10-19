@@ -21,6 +21,7 @@ type FieldName =
   | 'hideSuspicious'
   | 'autoRefresh'
   | 'ahEnabled'
+  | 'conservative'
   | 'notify';
 
 const TAXES: TaxRate[] = [0.0125, 0.01125, 0.01];
@@ -104,6 +105,7 @@ function read(name: FieldName, c: Control): Partial<Settings> | null {
     case 'hideSuspicious':
     case 'autoRefresh':
     case 'ahEnabled':
+    case 'conservative':
     case 'notify':
       return { [name]: c.checked };
   }
@@ -126,6 +128,7 @@ function values(s: Settings): Record<FieldName, string | boolean> {
     hideSuspicious: s.hideSuspicious,
     autoRefresh: s.autoRefresh,
     ahEnabled: s.ahEnabled,
+    conservative: s.conservative,
     notify: s.notify,
   };
 }
@@ -243,6 +246,7 @@ export function createSettingsForm(store: Store<AppState>): SettingsForm {
           check('hideSuspicious', t('common.hideSuspicious'), t('common.hideSuspiciousHelp')) +
           check('autoRefresh', t('common.autoRefresh'), t('common.autoRefreshHelp')) +
           check('ahEnabled', t('common.ahEnabled'), t('common.ahEnabledHelp')) +
+          check('conservative', t('common.conservative'), t('common.conservativeHelp')) +
           `</div>`,
       ) +
       section('display', t('shell.sec_display'), `<div class="settings-segs">${segs()}</div>`) +

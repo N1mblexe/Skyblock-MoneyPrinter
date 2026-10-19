@@ -1,6 +1,7 @@
 // npm run data [-- --offline]  ->  public/data/catalog.json (CatalogFile)
 // Sources: Hypixel bazaar (product ids), Hypixel items API (names/tiers/NPC sell/category/auctionable),
-// NEU repo tarball (recipes, NPC shops, SkyMart, enchanting-table levels, attribute shards, Kat upgrades, pet XP),
+// NEU repo tarball (recipes, shop recipes and trades, NPC shops, SkyMart, enchanting-table levels, attribute shards,
+// Kat upgrades, pet XP, George pet prices),
 // scripts/data/{book-rules,extra-recipes,bits-rules}.json.
 // Cache: .cache/ or $BAZAAR_CACHE_DIR. With --offline nothing is fetched and nothing is written to the cache.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -9,13 +10,17 @@ import type { CatalogFile, CatalogItemEntry, CatalogRecipeEntry } from '../src/t
 import type { RawBazaar, RawItem, RawItems } from '../src/types/api.ts';
 import { deriveName, neuToBazaarId, stripFormatting } from '../src/domain/ids.ts';
 import { readTar } from './lib/untar.ts';
-import { extractKatSteps, extractNpcOffers, extractRecipes, extractShopOffers, type NeuItem, type ShopOfferRaw } from './lib/neu.ts';
+import { extractKatSteps, extractNpcOffers, extractRecipes, extractShopOffers, extractShopRecipes, type NeuItem, type ShopOfferRaw } from './lib/neu.ts';
+import { makePriceable, selectRecipes, type SelectReason } from './lib/selection.ts';
+import { CRAFT_RECURSION_DEPTH } from '../src/config.ts';
+import { LIMITS, acceptanceFailures } from './lib/acceptance.ts';
 import { CACHE_FILES, cacheDir, cachePath } from './lib/cache.ts';
 import {
   BITS_CURRENCY,
   buildBookRules,
   buildKatSteps,
   buildShops,
+  extractGeorge,
   extractPetLeveling,
   extractShardMeta,
   itemApiFlags,
@@ -48,13 +53,8 @@ const OUT = 'public/data/catalog.json';
 const BOOK_RULES = 'scripts/data/book-rules.json';
 const EXTRA_RECIPES = 'scripts/data/extra-recipes.json';
 const BITS_RULES = 'scripts/data/bits-rules.json';
-const SUBCRAFT_DEPTH = 3;
-const LIMITS = {
-  bazaarRecipes: 440, forge: 100, nb: 400, ns: 2000, bytes: 600 * 1024, priceableTarget: 380,
-  copperToBazaar: 7, shards: 100, booksT: 30, kat: 200, bits: 50,
-};
 /** NEU constants read for v2 (path suffix inside the tarball). */
-const NEU_CONSTANTS = ['bazaarstocks', 'attribute_shards', 'enchants', 'skymart', 'pets'] as const;
+const NEU_CONSTANTS = ['bazaarstocks', 'attribute_shards', 'enchants', 'skymart', 'pets', 'george'] as const;
 type NeuConstant = (typeof NEU_CONSTANTS)[number];
 const CONSTANT_RE = new RegExp(`^[^/]+/constants/(${NEU_CONSTANTS.join('|')})\\.json$`);
 
@@ -212,15 +212,29 @@ async function main() {
       all.push(r);
     }
   }
+  // shop recipes: npc_shop offers that cost items (coins become the input SKYBLOCK_COIN) and NEU trades
+  let rawShopRecipes = 0;
+  for (const it of neuItems) {
+    for (const raw of extractShopRecipes(it)) {
+      rawShopRecipes++;
+      const o = norm(raw.output);
+      const merged = new Map<string, number>();
+      for (const s of raw.inputs) inc(merged, norm(s.id), s.qty);
+      if (merged.has(o)) continue;
+      const i = [...merged].map(([id, q]) => [id, round(q)] as [string, number]).sort((a, b) => a[0].localeCompare(b[0]));
+      const key = `shop|${o}|${raw.count}|${i.map(([id, q]) => `${id}*${q}`).join(',')}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      all.push({ key, o, c: raw.count, i, k: 'shop', s: raw.shop });
+    }
+  }
   // hand-kept recipes for outputs NEU has none for (scripts/data/extra-recipes.json)
-  const extra = mergeExtraRecipes(parseExtraRecipes(JSON.parse(readFileSync(EXTRA_RECIPES, 'utf8')) as unknown), (id) => all.some((r) => r.o === id));
+  const extra = mergeExtraRecipes(parseExtraRecipes(JSON.parse(readFileSync(EXTRA_RECIPES, 'utf8')) as unknown), (id) => all.some((r) => r.o === id && r.k !== 'shop'));
   for (const x of extra.added) {
     all.push({ key: `craft|${x.output}|${x.outCount}|${x.inputs.map(([id, q]) => `${id}*${q}`).join(',')}`, o: x.output, c: x.outCount, i: x.inputs, k: 'craft' });
   }
   if (extra.added.length) console.log(`  extra recipes added: ${extra.added.map((x) => x.output).join(', ')}`);
   if (extra.skipped.length) console.warn(`  extra recipes skipped (NEU has a recipe now): ${extra.skipped.join(', ')}`);
-  const byOut = new Map<string, R[]>();
-  for (const r of all) byOut.set(r.o, [...(byOut.get(r.o) ?? []), r]);
 
   // ---------------------------------------------------------------- NPC buy prices (coin-only shops, cheapest)
   const nb = new Map<string, number>();
@@ -274,47 +288,33 @@ async function main() {
   // ---------------------------------------------------------------- v2: attribute shard metadata
   const shardMeta = extractShardMeta(constants.get('attribute_shards'), bz);
 
-  // ---------------------------------------------------------------- selection
-  // every recipe with a bazaar output, plus every forge recipe (forge view; value may come from NPC sell)
-  const included = new Set<R>(all.filter((r) => bz.has(r.o) || r.k === 'forge'));
-  const bazaarOutput = all.filter((r) => bz.has(r.o)).length;
-  let frontier = [...included];
-  const subcraftedIds = new Set<string>();
-  for (let depth = 1; depth <= SUBCRAFT_DEPTH && frontier.length; depth++) {
-    const next: R[] = [];
-    for (const r of frontier) {
-      for (const [id] of r.i) {
-        if (bz.has(id) || nb.has(id) || subcraftedIds.has(id)) continue;
-        subcraftedIds.add(id);
-        for (const sub of byOut.get(id) ?? []) {
-          if (included.has(sub)) continue;
-          included.add(sub);
-          next.push(sub);
-        }
-      }
-    }
-    frontier = next;
-  }
-  const recipes = [...included].sort((a, b) => a.o.localeCompare(b.o) || a.k.localeCompare(b.k) || a.key.localeCompare(b.key));
+  // ---------------------------------------------------------------- v2: George's pet prices
+  const george = extractGeorge(constants.get('george'));
+  const georgePets = new Set(Object.keys(george.george).map((k) => k.split(';')[0]!));
+  const georgeNameless = [...georgePets].filter((p) => !petNames[p]);
+  const katNoGeorge = [...new Set(kat.steps.flatMap((s) => [`${s.p};${s.f}`, `${s.p};${s.t}`]))].filter((k) => !george.george[k]);
+
+  // ---------------------------------------------------------------- selection (scripts/lib/selection.ts)
+  const auctionable = (id: string) => !untradeable.has(id) && (itemApiFlags(api.get(id)).ah === 1 || listedAh.has(id));
+  const selected = selectRecipes(all, {
+    bazaar: (id) => bz.has(id),
+    npcSellable: (id) => (api.get(id)?.npc_sell_price ?? 0) > 0,
+    auctionable,
+    npcBuyable: (id) => nb.has(id),
+    hasRarity: (id) => !!api.get(id)?.tier,
+    depth: CRAFT_RECURSION_DEPTH,
+  });
+  const reasons = new Map<SelectReason, number>();
+  for (const why of selected.values()) inc(reasons, why);
+  const bazaarOutput = all.filter((r) => bz.has(r.o) && r.k !== 'shop').length;
+  const recipes = [...selected.keys()].sort((a, b) => a.o.localeCompare(b.o) || a.k.localeCompare(b.k) || a.key.localeCompare(b.key));
   const inclByOut = new Map<string, R[]>();
   for (const r of recipes) inclByOut.set(r.o, [...(inclByOut.get(r.o) ?? []), r]);
 
-  // priceability at build time (bazaar / nb / sub-craft within depth)
-  const memo = new Map<string, boolean>();
-  const priceable = (id: string, depth: number, stack: Set<string>): boolean => {
-    if (bz.has(id) || nb.has(id)) return true;
-    if (depth >= SUBCRAFT_DEPTH || stack.has(id)) return false;
-    const mk = `${id}@${depth}`;
-    const m = memo.get(mk);
-    if (m !== undefined) return m;
-    stack.add(id);
-    const ok = (inclByOut.get(id) ?? []).some((r) => r.i.every(([x]) => priceable(x, depth + 1, stack)));
-    stack.delete(id);
-    memo.set(mk, ok);
-    return ok;
-  };
+  // priceability today (bazaar / nb / sub-craft within depth; AH-priced ingredients come in wave 2)
+  const priceable = makePriceable((id) => bz.has(id) || nb.has(id), (id) => inclByOut.get(id) ?? [], CRAFT_RECURSION_DEPTH);
   const bzRecipes = recipes.filter((r) => bz.has(r.o));
-  const fullyPriceable = bzRecipes.filter((r) => r.i.every(([x]) => priceable(x, 0, new Set([r.o])))).length;
+  const fullyPriceable = bzRecipes.filter((r) => r.i.every(([x]) => priceable(x, new Set([r.o])))).length;
 
   // unresolved ingredient ids (not bazaar, no nb, no included recipe)
   const unresolved = new Map<string, number>();
@@ -369,13 +369,19 @@ async function main() {
     ...(neuCommit ? { neuCommit } : {}),
     itemsApiUpdated: itemsApi.lastUpdated,
     items,
-    recipes: recipes.map(({ key: _k, ...r }) => r),
+    // AH crafts go without their requirement text (`r`), to stay within the size budget
+    recipes: recipes.map((full) => {
+      const { key: _k, ...r } = full;
+      if (selected.get(full) === 'ah') delete r.r;
+      return r;
+    }),
     shops,
     books,
     kat: kat.steps,
     ...(petLeveling.leveling ? { petLeveling: petLeveling.leveling } : {}),
     petNames,
     untradeable: [...untradeable].sort(),
+    george: george.george,
   };
   const json = JSON.stringify(file);
   mkdirSync(dirname(OUT), { recursive: true });
@@ -388,7 +394,12 @@ async function main() {
     uniqueRecipes: all.length,
     included: recipes.length,
     bazaarOutput,
-    subcraft: recipes.filter((r) => !bz.has(r.o) && r.k === 'craft').length,
+    subcraft: reasons.get('subcraft') ?? 0,
+    ahCraft: reasons.get('ah') ?? 0,
+    shopRecipes: recipes.filter((r) => r.k === 'shop').length,
+    tradeRecipes: recipes.filter((r) => r.k === 'shop' && r.s === 'trade').length,
+    nonBazaarOutput: recipes.filter((r) => !bz.has(r.o)).length,
+    ahOutput: recipes.filter((r) => !bz.has(r.o) && auctionable(r.o)).length,
     forge: recipes.filter((r) => r.k === 'forge').length,
     forgeBazaarOutput: bzRecipes.filter((r) => r.k === 'forge').length,
     npcOffers: offers,
@@ -409,6 +420,7 @@ async function main() {
     katPets: katPets.size,
     petNames: Object.keys(petNames).length,
     bitsOffers: bitsShop.length,
+    george: Object.keys(george.george).length,
     bytes: Buffer.byteLength(json),
   };
   const byCurrency = new Map<string, number>();
@@ -435,26 +447,25 @@ async function main() {
   const pl = petLeveling.leveling;
   console.log(`Pets: ${Object.keys(petNames).length} names, ${pl ? `${pl.l.length} levels, ${Object.keys(pl.o).length} rarity offsets, custom ${Object.keys(pl.c).join(', ') || '-'}` : 'no XP table'}`);
   if (petLeveling.ignored.length) console.log(`  pet leveling overrides not carried: ${petLeveling.ignored.join(', ')}`);
+  console.log(`George: ${Object.keys(george.george).length} prices over ${georgePets.size} pets; Kat pet tiers without a George price: ${katNoGeorge.join(', ') || 'none'}`);
+  if (george.dropped.length) console.log(`  george keys dropped (not TYPE;0-5 or no positive price): ${george.dropped.join(', ')}`);
+  if (georgeNameless.length) console.warn(`  George pets with no display name: ${georgeNameless.join(', ')}`);
+  const kinds = new Map<string, number>();
+  for (const r of recipes) inc(kinds, r.k === 'shop' ? `shop (${r.s === 'trade' ? 'trade' : 'npc_shop'})` : r.k);
+  console.log(`Recipes by kind: ${[...kinds].map(([k, v]) => `${k}=${v}`).join(', ')}; by rule: ${[...reasons].map(([k, v]) => `${k}=${v}`).join(', ')}`);
+  console.log(`  shop recipes: ${rawShopRecipes} raw (npc_shop with items + trade), ${all.filter((r) => r.k === 'shop').length} unique`);
   console.log(`Bits shop: ${bitsShop.length} offers (${untradeable.size} untradeable, ${listedAh.size} AH-only by bits-rules)`);
 
   console.log('\nSummary:');
   for (const [k, v] of Object.entries(stats)) console.log(`  ${k.padEnd(18)} ${v}`);
   console.log(`  wrote ${OUT} (${(stats.bytes / 1024).toFixed(1)} KB)`);
 
-  const fails: string[] = [];
-  if (stats.bazaarOutput < LIMITS.bazaarRecipes) fails.push(`bazaar-output recipes ${stats.bazaarOutput} < ${LIMITS.bazaarRecipes}`);
-  if (stats.forge < LIMITS.forge) fails.push(`forge recipes ${stats.forge} < ${LIMITS.forge}`);
-  if (stats.bazaarNamed !== bz.size) fails.push(`named bazaar ids ${stats.bazaarNamed} / ${bz.size}`);
-  if (stats.withNb < LIMITS.nb) fails.push(`items with nb ${stats.withNb} < ${LIMITS.nb}`);
-  if (stats.withNs < LIMITS.ns) fails.push(`items with ns ${stats.withNs} < ${LIMITS.ns}`);
-  if (stats.bytes > LIMITS.bytes) fails.push(`size ${stats.bytes} > ${LIMITS.bytes}`);
-  if (stats.copperToBazaar < LIMITS.copperToBazaar) fails.push(`copper offers to bazaar ids ${stats.copperToBazaar} < ${LIMITS.copperToBazaar}`);
-  if (stats.shards < LIMITS.shards) fails.push(`shards with metadata ${stats.shards} < ${LIMITS.shards}`);
-  if (stats.booksWithT < LIMITS.booksT) fails.push(`books with table max ${stats.booksWithT} < ${LIMITS.booksT}`);
-  if (stats.katSteps < LIMITS.kat) fails.push(`kat steps ${stats.katSteps} < ${LIMITS.kat}`);
-  if (stats.bitsOffers < LIMITS.bits) fails.push(`bits offers ${stats.bitsOffers} < ${LIMITS.bits}`);
-  if (!pl) fails.push('no pet leveling table (constants/pets.json)');
-  if (books.ENCHANTMENT_SHARPNESS?.m !== 5) fails.push(`books.ENCHANTMENT_SHARPNESS.m = ${books.ENCHANTMENT_SHARPNESS?.m} (expected 5)`);
+  const fails = acceptanceFailures({
+    ...stats,
+    bazaarProducts: bz.size,
+    hasPetLeveling: !!pl,
+    sharpnessMax: books.ENCHANTMENT_SHARPNESS?.m,
+  });
   if (fullyPriceable < LIMITS.priceableTarget) console.warn(`  note: fully priceable ${fullyPriceable} < target ${LIMITS.priceableTarget} (not fatal)`);
   if (fails.length) {
     console.error(`\nACCEPTANCE FAILED:\n  ${fails.join('\n  ')}`);

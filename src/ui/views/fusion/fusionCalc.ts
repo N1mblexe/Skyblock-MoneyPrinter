@@ -1,26 +1,34 @@
 // Pure helpers for the fusion view: cached name resolution, per-term unit prices, suggestions, sort order.
 // Recipe results themselves come from ctx.derived.fusion().
-import { afterTax, buyQuote, sellQuote } from '../../../domain/pricing.ts';
+import { coreOf } from '../../../domain/market.ts';
+import { afterTax, sellQuote } from '../../../domain/pricing.ts';
 import { resolveUserInput, searchItems } from '../../../domain/search.ts';
-import type { CalcCtx, Catalog, FusionRow, ItemInfo, Settings, Snapshot } from '../../../types/contracts.ts';
+import type { CalcCtx, Catalog, FusionRow, ItemInfo, QuoteSource, Settings, Snapshot } from '../../../types/contracts.ts';
 
 const isShard = (id: string) => id.startsWith('SHARD_');
 const RESOLVE_CACHE_MAX = 1000;
 
-export type Resolver = (text: string) => string | null;
+/** 'buy' (an input: a bazaar product or an NPC shop item) or 'sell' (the output: a bazaar product). */
+export type Resolver = (text: string, side?: 'buy' | 'sell') => string | null;
 
-/** resolveUserInput over snapshot products ∪ catalog bazaar items, memoized per text. */
+/**
+ * resolveUserInput over snapshot products ∪ catalog bazaar items (plus, for inputs, items an NPC shop sells, as
+ * domain/fusion.ts resolves them), memoized per side and text.
+ */
 export function createResolver(catalog: Catalog, snap: Snapshot | null): Resolver {
   const ids = new Set(snap ? Object.keys(snap.products) : []);
   for (const i of Object.values(catalog.items)) if (i.bazaar) ids.add(i.id);
-  const cache = new Map<string, string | null>();
-  return (text) => {
+  const inputIds = new Set(ids);
+  for (const i of Object.values(catalog.items)) if (i.npcBuy != null && i.npcBuy > 0) inputIds.add(i.id);
+  const caches = { buy: new Map<string, string | null>(), sell: new Map<string, string | null>() };
+  return (text, side = 'sell') => {
     const key = text.trim();
     if (!key) return null;
+    const cache = caches[side];
     let id = cache.get(key);
     if (id === undefined) {
       if (cache.size > RESOLVE_CACHE_MAX) cache.clear();
-      id = resolveUserInput(catalog, key, ids);
+      id = resolveUserInput(catalog, key, side === 'buy' ? inputIds : ids);
       cache.set(key, id);
     }
     return id;
@@ -33,24 +41,42 @@ export interface TermDetail {
   name: string | null;
   /** unit buy price (inputs) or pre-tax unit sell price (output); null if unpriced */
   unit: number | null;
+  /** where an input is bought: an NPC shop when cheaper than the bazaar (else the bazaar quote's source) */
+  source: QuoteSource | null;
   shard: ItemInfo['shard'] | null;
 }
 
-/** Resolved id, display name, unit price and shard metadata of one recipe term. */
+/**
+ * Resolved id, display name, unit price, source and shard metadata of one recipe term, priced like
+ * domain/fusion.ts through the context's market core: an input at the cheaper of the bazaar and an NPC shop.
+ */
 export function termDetail(ctx: CalcCtx, text: string, side: 'buy' | 'sell', resolve: Resolver): TermDetail {
-  const { snap, catalog, settings } = ctx;
-  const id = resolve(text);
-  const p = id ? snap.products[id] : undefined;
-  const q = p
-    ? side === 'buy'
-      ? buyQuote(p, settings.costMode, undefined, catalog.items[id!]?.npcSell)
-      : sellQuote(p, settings.sellMode)
-    : null;
+  const { catalog } = ctx;
+  const core = coreOf(ctx);
+  const id = resolve(text, side);
+  let unit: number | null = null;
+  let source: QuoteSource | null = null;
+  if (id && side === 'buy') {
+    const bz = core.buy(id);
+    const bzOk = bz != null && bz.quote.price > 0 && Number.isFinite(bz.quote.price);
+    const npc = core.npcBuy(id);
+    if (npc && (!bzOk || npc.price < bz!.quote.price)) {
+      unit = npc.price;
+      source = 'npc';
+    } else if (bzOk) {
+      unit = bz!.quote.price;
+      source = bz!.quote.source;
+    }
+  } else if (id) {
+    const s = core.sell(id);
+    if (s && Number.isFinite(s.quote.price)) unit = s.quote.price;
+  }
   return {
     text,
     id,
     name: id ? catalog.name(id) : null,
-    unit: q && Number.isFinite(q.price) ? q.price : null,
+    unit,
+    source,
     shard: (id && catalog.items[id]?.shard) || null,
   };
 }

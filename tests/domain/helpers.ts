@@ -54,6 +54,7 @@ export function buildCatalog(f: CatalogFile): Catalog {
     petLeveling: null,
     petNames: {},
     untradeable: new Set<string>(),
+    george: {},
   };
 }
 
@@ -117,6 +118,9 @@ export const baseSettings: Settings = {
   notify: false,
   ahEnabled: true,
   taming: 60,
+  // raw snapshot numbers: domain tests pin the base model; conservatism has its own tests
+  conservative: false,
+  bitsMultiplier: 1,
 };
 
 export function ctx(over: Partial<Settings> = {}, extra: Partial<CalcCtx> = {}): CalcCtx {

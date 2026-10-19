@@ -7,7 +7,7 @@ import { lsGet, lsSet } from '../storage/local.ts';
 import { esc } from './dom.ts';
 import { createDrawer, currentPalette, hotkeyLabel, openPalette, registerHotkeys, toast as kitToast, type Drawer, type HotkeyMap } from './kit/index.ts';
 import { routeToHash } from './router.ts';
-import { createDataPanel } from './shell/dataPanel.ts';
+import { createDataPanel, type SalesStoreAccess } from './shell/dataPanel.ts';
 import { icon } from './shell/icons.ts';
 import { createManualLoad } from './shell/manualLoad.ts';
 import { createAhStatus, createMayorChip } from './shell/marketChips.ts';
@@ -30,6 +30,8 @@ export interface ShellContext {
   manualLoad(text: string): string | null;
   /** price history (Data section: size + clear); the section degrades without it */
   history?: HistoryRepo;
+  /** the AH sales store (Data section: size + clear); the box is hidden without it */
+  ahSales?: SalesStoreAccess;
   /** start an auction-house scan now (palette command; hidden without it) */
   scanAh?: () => void;
   /** toast function (defaults to the kit toast) */
@@ -167,7 +169,7 @@ export function mountShell(root: HTMLElement, ctx: ShellContext): ShellHandle {
   const settingsDrawer = createDrawer({ title: () => t('common.settings'), side: 'right', onClose: () => form.flush() });
   settingsDrawer.el.classList.add('settings-drawer');
   settingsDrawer.el.dataset.testid = 'settings-drawer';
-  const data = createDataPanel({ store, history: ctx.history, toast });
+  const data = createDataPanel({ store, history: ctx.history, sales: ctx.ahSales, toast });
   settingsDrawer.body.append(form.el, data.el);
   const manual = createManualLoad((text) => ctx.manualLoad(text));
   data.manualSlot.append(manual.el);

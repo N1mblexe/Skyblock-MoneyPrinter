@@ -12,6 +12,7 @@
     "data": "tsx scripts/build-data.ts",
     "fixture": "tsx scripts/capture-fixture.ts",
     "sanity": "tsx scripts/sanity.ts",
+    "bench": "tsx scripts/bench.ts",
     "smoke": "tsx scripts/smoke.ts",
     "screenshots": "tsx scripts/screenshots.ts",
     "icons": "tsx scripts/icons.ts",
@@ -30,5 +31,8 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.4"
+  },
+  "dependencies": {
+    "fflate": "0.8.3"
   }
 }

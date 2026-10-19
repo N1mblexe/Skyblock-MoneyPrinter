@@ -1,9 +1,10 @@
-// Shared cell renderers for views (risk badge, item name cell, price-source badge). Owner: lead.
+// Shared cell renderers for views (risk badge and scope, item name cell, price-source badge, conservative
+// adjustments). Owner: lead.
 import { RISK } from '../config.ts';
 import { t } from '../i18n/index.ts';
-import type { QuoteSource, RiskFlag, RiskReport } from '../types/contracts.ts';
+import type { ConsInfo, QuoteSource, RiskFlag, RiskReport } from '../types/contracts.ts';
 import { esc } from './dom.ts';
-import { fmtPct } from './format.ts';
+import { fmtCoins, fmtNum, fmtPct } from './format.ts';
 
 /** Text explanation of one flag. */
 export const riskFlagText = (f: RiskFlag): string =>
@@ -27,9 +28,45 @@ export function itemCell(id: string, name: string, link = false): string {
   return `${label}<span class="id-sub">${esc(id)}</span>`;
 }
 
-const SRC_KEY: Record<QuoteSource, string> = { order: 'srcOrder', insta: 'srcInsta', npc: 'srcNpc', craft: 'srcCraft' };
+const SRC_KEY: Record<QuoteSource, string> = { order: 'srcOrder', insta: 'srcInsta', npc: 'srcNpc', craft: 'srcCraft', ah: 'srcAh', mix: 'srcMix' };
 
 /** Price source badge (buy order / insta / NPC / craft). */
 export function sourceBadge(s: QuoteSource): string {
   return `<span class="badge src-${s}">${esc(t(`risk.${SRC_KEY[s]}`))}</span>`;
+}
+
+/** The bazaar sides a row's risk covers (domain/risk.ts assessRisk `use`). */
+export type RiskScope = 'both' | 'buy' | 'sell' | 'book' | 'fusion' | 'item';
+
+/** One muted line naming the sides a risk report checked. */
+export const riskScopeHtml = (scope: RiskScope): string => `<p class="muted small risk-scope">${esc(t(`risk.scope_${scope}`))}</p>`;
+
+/** True when conservatism changed something on the row. */
+const hasCons = (c: ConsInfo | undefined): c is ConsInfo =>
+  !!c && (c.buyRef != null || c.sellRef != null || c.rateMul != null || (c.churn != null && c.churn > 0));
+
+/** Small "adjusted" badge for a name cell when conservatism changed the row ('' otherwise). */
+export function consBadge(c: ConsInfo | undefined): string {
+  if (!hasCons(c)) return '';
+  return ` <span class="badge cons-badge" title="${esc(t('risk.consTip'))}">${esc(t('risk.consBadge'))}</span>`;
+}
+
+/** A per-unit price with the bazaar's 0.1 tick visible (compact coins from 100k up). */
+const fmtTick = (n: number | undefined): string => (n != null && Number.isFinite(n) && Math.abs(n) < 100_000 ? fmtNum(n, 1) : fmtCoins(n));
+
+/**
+ * What conservatism changed on a row, one line each ('' when nothing): the buy / sell price moved from the snapshot
+ * quote (`now` = the row's adjusted per-unit prices, before tax), the fill-rate multiplier and the re-listing cost.
+ */
+export function consListHtml(c: ConsInfo | undefined, now: { buy?: number; sell?: number } = {}): string {
+  if (!hasCons(c)) return '';
+  const lines: string[] = [];
+  if (c.buyRef != null) lines.push(t('risk.consBuy', { from: fmtTick(c.buyRef), to: fmtTick(now.buy) }));
+  if (c.sellRef != null) lines.push(t('risk.consSell', { from: fmtTick(c.sellRef), to: fmtTick(now.sell) }));
+  if (c.rateMul != null) lines.push(t('risk.consRate', { mul: fmtNum(c.rateMul, 2) }));
+  if (c.churn != null && c.churn > 0) lines.push(t('risk.consChurn', { churn: fmtCoins(c.churn) }));
+  return (
+    `<ul class="dp-flags cons-list" data-testid="cons-list">${lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` +
+    `<p class="muted small">${esc(t('risk.consNote'))}</p>`
+  );
 }

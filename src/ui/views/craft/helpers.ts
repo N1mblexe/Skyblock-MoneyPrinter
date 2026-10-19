@@ -5,7 +5,7 @@ import { afterTax, buyQuote, sellQuote } from '../../../domain/pricing.ts';
 import { matchesQuery } from '../../../domain/search.ts';
 import { lsGet, lsSet } from '../../../storage/local.ts';
 import { t } from '../../../i18n/index.ts';
-import type { Catalog, ChainRow, CraftRow, Product } from '../../../types/contracts.ts';
+import type { Catalog, ChainRow, CraftRow, Product, Recipe } from '../../../types/contracts.ts';
 import { fmtInt, locale } from '../../format.ts';
 import type { QuerySchema, QueryValues } from '../../kit/index.ts';
 
@@ -13,6 +13,14 @@ export type KindFilter = 'all' | 'craft' | 'forge';
 /** Recipes shown by a recipes pane: the Craft page or the Forge page. */
 export type RecipeKind = 'craft' | 'forge';
 export type MarketFilter = 'all' | 'bazaar' | 'off';
+/** Craft page: crafting recipes, shop trades (items bought from an NPC with other items), or both. */
+export type SourceFilter = 'craft' | 'shop' | 'all';
+
+/** Recipe kinds a recipes pane lists: the Forge page its forges, the Craft page crafts and / or shop trades. */
+export function kindsOf(kind: RecipeKind, src: SourceFilter): ReadonlySet<Recipe['kind']> {
+  if (kind === 'forge') return new Set(['forge']);
+  return new Set(src === 'all' ? ['craft', 'shop'] : [src]);
+}
 
 /** Sortable table column keys (also the valid `sort` keys in the URL). */
 export const SORT_KEYS = ['name', 'duration', 'count', 'cost', 'value', 'profit', 'margin', 'outRate', 'inRate', 'limited', 'slots', 'pph', 'risk'] as const;
@@ -20,8 +28,10 @@ export const SORT_KEYS = ['name', 'duration', 'count', 'cost', 'value', 'profit'
 /** Filters + sort, mirrored in the URL (#/craft?q=…, #/forge?q=…) and in localStorage (one key per page). */
 export const SCHEMA = {
   q: { kind: 'string', def: '' },
+  /** Craft page only: crafting recipes, shop trades or both */
+  src: { kind: 'enum', def: 'craft', values: ['craft', 'shop', 'all'] },
   market: { kind: 'enum', def: 'all', values: ['all', 'bazaar', 'off'] },
-  /** min output volume, crafts/week (outCraftsPerHour * 168) */
+  /** min output volume of bazaar-sold rows, crafts/week (outCraftsPerHour * 168) */
   minVol: { kind: 'number', def: 1000, min: 0 },
   /** min margin, percent */
   minMargin: { kind: 'number', def: 1 },
@@ -65,7 +75,7 @@ export function migrateLegacyPrefs(): void {
 
 export interface FilterOpts {
   q: string;
-  /** crafts/week; null = no minimum */
+  /** crafts/week of bazaar-sold rows; null = no minimum */
   minVol: number | null;
   /** percent; null = no minimum */
   minMargin: number | null;
@@ -115,7 +125,8 @@ export function filterCrafts(all: readonly CraftRow[], o: FilterOpts, catalog: C
         continue;
       }
     } else {
-      if (!(r.outCraftsPerHour * 168 >= minWeek)) continue;
+      // a bazaar market's volume; AH and NPC sales are bounded in profit/hour instead (AH sales rate, no limit)
+      if (r.valueSource === 'bazaar' && !(r.outCraftsPerHour * 168 >= minWeek)) continue;
       if (r.margin == null || r.margin < minM) continue;
       if (!(r.profitPerHour >= minP)) continue;
     }

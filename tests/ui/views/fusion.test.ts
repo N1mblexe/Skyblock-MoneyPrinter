@@ -439,3 +439,44 @@ describe('fusion view: chips, states, lifecycle', () => {
     expect(displayOrder(rows, 'pph')).toEqual([3, 0, 1, 2]);
   });
 });
+
+describe('fusion view: NPC-sourced inputs and side-aware risk', () => {
+  /** the fixture catalog with SHARD_SALMON also sold by an NPC (cheaper than the bazaar) and an NPC-only item */
+  function npcCatalog(): Catalog {
+    const c = catalogFromFile(catalogRaw as unknown as CatalogFile);
+    c.items.SHARD_SALMON = { ...c.items.SHARD_SALMON!, npcBuy: 1 };
+    c.items.NPC_ONLY_DUST = { id: 'NPC_ONLY_DUST', name: 'Npc Only Dust', bazaar: false, npcBuy: 3 };
+    return c;
+  }
+  const subs = (row: number) => [...rowsEls()[row]!.querySelectorAll<HTMLElement>('.fu-sub')];
+
+  it('an input an NPC sells cheaper is bought there and marked NPC', async () => {
+    mount({ catalog: npcCatalog(), fusion: [RECIPE] });
+    await flush();
+    const [a, b, out] = subs(0);
+    expect(a!.querySelector('.src-npc')!.textContent).toBe('NPC');
+    expect(a!.textContent).toContain(fmtCoins(1));
+    // the bazaar-bought input shows its order source; the output has no source badge
+    expect(b!.querySelector('.src-order')).not.toBeNull();
+    expect(out!.querySelector('.badge[class*="src-"]')).toBeNull();
+    // the row's cost uses the NPC price: 2 x 1 + Wiki Tiki
+    const row = ctx.derived.fusion()[0]!;
+    expect(Number(stat(0, 'cost').dataset.raw)).toBeCloseTo(row.cost!, 6);
+    expect(stat(0, 'risk').closest('.fu-stat')!.getAttribute('title')).toMatch(/NPC’den alınan girdilerin piyasa riski yoktur/);
+  });
+
+  it('resolves NPC-only items as inputs, never as the output', async () => {
+    mount({ catalog: npcCatalog(), fusion: [{ ...RECIPE, a: 'Npc Only Dust', out: 'Npc Only Dust' }] });
+    await flush();
+    const [a, , out] = subs(0);
+    expect(a!.querySelector('a[href="#/item/NPC_ONLY_DUST"]')).not.toBeNull();
+    expect(a!.querySelector('.src-npc')).not.toBeNull();
+    expect(out!.textContent).toBe(t('fusion.notFound'));
+  });
+
+  it('the notes explain NPC inputs', async () => {
+    mount();
+    await flush();
+    expect(root.querySelector('.fu-note')!.textContent).toContain('NPC işaretli');
+  });
+});

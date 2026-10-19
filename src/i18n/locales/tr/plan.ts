@@ -2,7 +2,8 @@ import type { Messages } from '../en/index.ts';
 
 export const plan: Messages['plan'] = {
   title: 'Planlayıcı',
-  intro: 'Sermayeni ve sipariş slotlarını flip, craft, zincir, kitap, NPC ve Kat fırsatları arasında saatlik kârı en yükseğe çıkaracak şekilde paylaştırır.',
+  intro:
+    'Sermayeni, sipariş slotlarını ve paylaştıkları pazar hacmini flip, craft, zincir, kitap, NPC, Kat ve AH flip fırsatları arasında saatlik kârı en yükseğe çıkaracak şekilde paylaştırır.',
 
   // inputs
   capital: 'Sermaye (coin)',
@@ -19,6 +20,7 @@ export const plan: Messages['plan'] = {
   kindBook: 'Kitap',
   kindNpc: 'NPC',
   kindKat: 'Kat',
+  kindAhflip: 'AH flip',
   fillModel: 'Dolum modeli: {v}',
   openSettings: 'Ayarlarda değiştir',
   inputsAria: 'Plan girdileri',
@@ -66,10 +68,18 @@ export const plan: Messages['plan'] = {
   why_share: 'sermayenin %{pct} sınırında',
   why_capital: 'kalan sermayeyi kullanıyor',
   why_kat: 'Kat\'ta tek pet',
+  why_market: 'pazarı paylaşıyor',
+  why_slots: 'sipariş slotu kalmadı',
   whyLong_volume: 'Pazarın bir döngüde doldurabileceği adedin tamamı ({n}) alındı; daha fazlası dolmaz.',
   whyLong_share: 'Tek bir ürüne sermayenin en fazla %{pct} kadarı ayrılır; bu sınıra ulaştı.',
   whyLong_capital: 'Daha iyi fırsatlardan sonra kalan sermaye buna gitti; sermaye artarsa büyür.',
   whyLong_kat: 'Kat aynı anda yalnızca bir peti yükseltir; plan en fazla bir Kat yükseltmesi içerir.',
+  whyLong_market: 'Başka seçimler de aynı pazarı ({res}) kullanıyor; birlikte, payına düşen ve bir döngüde dolan hacmin tamamını alıyorlar.',
+  whyLong_slots: 'Bir adet daha için yeni bir sipariş slotu gerekiyor ve tüm slotlar dolu.',
+  res_bid: '{name} insta-satımları',
+  res_ask: '{name} insta-alımları',
+  res_npc: '{name} NPC günlük limiti',
+  res_forge: 'forge slotları',
 
   // detail panel
   detailAlloc: 'Dağılım',
@@ -82,7 +92,7 @@ export const plan: Messages['plan'] = {
   dProfitShare: 'Toplam kârdaki payı',
   dPerCoin: 'Coin başına kâr / saat',
   dUnitCost: 'Adet başına bağlanan coin',
-  dUnitCostPipe: 'Paralel dolumda alım maliyetinin 2 katı.',
+  dUnitCostPipe: 'Alım maliyetinden fazla: paralel dolumda bir parti satılırken sonraki parti alınır.',
   dProfitUnit: 'Adet başına kâr',
   dMargin: 'Marj',
   dUph: 'Adet / saat (sermaye sınırı olmadan)',
@@ -102,6 +112,9 @@ export const plan: Messages['plan'] = {
   tab_book: 'Kitaplar',
   tab_npc: 'NPC',
   tab_kat: 'Kat yükseltme',
+  tab_ahflip: 'AH flipleri',
+  attention: 'Pozisyon başına maliyet (coin/sa)',
+  attentionHelp: 'Planın açtığı her pozisyon için düşülür: yüksek değerler daha az ama daha büyük pozisyon verir.',
   watch: 'İzle',
   unwatch: 'İzlemeyi bırak',
 

@@ -4,6 +4,8 @@ export const API_BAZAAR = 'https://api.hypixel.net/v2/skyblock/bazaar';
 export const API_ITEMS = 'https://api.hypixel.net/v2/resources/skyblock/items';
 export const API_AUCTIONS = 'https://api.hypixel.net/v2/skyblock/auctions';
 export const API_ELECTION = 'https://api.hypixel.net/v2/resources/skyblock/election';
+/** sales from the last 60 s (the CDN may repeat a window for up to 5 min) */
+export const API_AUCTIONS_ENDED = 'https://api.hypixel.net/v2/skyblock/auctions_ended';
 export const CATALOG_URL = `${import.meta.env?.BASE_URL ?? '/'}data/catalog.json`;
 
 // ---- fetching / polling
@@ -25,6 +27,7 @@ export const OLD_AFTER_MS = 10 * 60_000;
 // ---- history
 export const HISTORY_DB_NAME = 'bazaar-masasi';
 export const AH_DB_NAME = 'bazaar-masasi-ah';
+export const AH_SALES_DB_NAME = 'bazaar-masasi-ahsales';
 export const HISTORY_RAW_KEEP_MS = 3 * 3600_000;
 export const HISTORY_Q15_BUCKET_MS = 15 * 60_000;
 export const HISTORY_Q15_KEEP_MS = 7 * 24 * 3600_000;
@@ -109,6 +112,27 @@ export const OPTIMIZER = {
   /** never put more than this share of capital into one item */
   maxShareOfCapitalPerItem: 0.5,
   excludeSuspect: true,
+  /** profit/hour weight per risk level in the planner's objective */
+  riskWeight: { ok: 1, caution: 0.8, suspect: 0.5 } as Readonly<Record<'ok' | 'caution' | 'suspect', number>>,
+  /** default coins/hour charged per open position (the Plan page can change it): favours fewer, bigger positions */
+  attentionPerPosition: 0,
+  /** bisection steps on the capital price */
+  lambdaIters: 40,
+  /** pieces of each row's concave profit curve (insta slippage) */
+  segments: 4,
+} as const;
+
+/**
+ * History-based conservatism (settings.conservative). It needs at least `minPoints` history points (else the
+ * snapshot numbers are used as they are). The volume trend scales fill rates within `trendClamp`; a top order is
+ * assumed to be re-listed at most `maxRelists` times per leg.
+ */
+export const CONSERVATIVE = {
+  minPoints: 12,
+  trendClamp: [0.5, 1] as const,
+  maxRelists: 6,
+  /** price move per re-list after being outbid / undercut, as a share of the price (at least PRICE_TICK) */
+  relistStep: 0.002,
 } as const;
 
 export const ALERTS = {
@@ -120,8 +144,15 @@ export const AH = {
   pollMs: 10 * 60_000,
   /** parallel page fetches per scan */
   concurrency: 4,
-  /** fewer BIN listings than this adds an AH thin-market risk flag */
-  minCount: 2,
+  /** fewer BIN listings than this adds an AH thin-market risk flag (shared by crafts, AH flips, Kat and bits) */
+  minCount: 3,
+  /** scan v4: per-item prices kept per id (lowest first) */
+  keepPrices: 8,
+  /**
+   * scan v4: pets are also filed by level band, `${petKey}@L<upTo>` for the band holding the listing's level (the
+   * last band is `@MAX`): [1-49], [50-89], [90-99]
+   */
+  petBands: [49, 89, 99] as const,
   /**
    * Seller fees (hypixelskyblock.minecraft.wiki/w/Auction_House, checked 2026-10): a BIN listing fee by price tier
    * (`[upTo, rate]`, first match), and a claim tax of up to 1 % on sales above 1M that never takes the payout below
@@ -141,6 +172,23 @@ export const AH = {
   petMaxSuffix: '@MAX',
 } as const;
 
+/** Realized AH sales (/v2/skyblock/auctions_ended, src/api/ahSales.ts). */
+export const AH_SALES = {
+  pollMs: 60_000,
+  /** sales older than this are dropped */
+  windowMs: 7 * 24 * 3600_000,
+  /** newest sale prices kept per id */
+  maxPrices: 64,
+  /** each response covers this much time before its lastUpdated */
+  windowSpanMs: 60_000,
+  /** perHour is null below this coverage */
+  minCoverageHours: 2,
+  /** fewer sales than this: the median is not used as a price */
+  minSales: 3,
+  /** AH sales per hour assumed while there is no measured rate (conservative) */
+  defaultPerHour: 0.25,
+} as const;
+
 /**
  * Kat pet upgrades (src/domain/kat.ts). Rules from hypixelskyblock.minecraft.wiki/w/Kat (checked 2026-10): the coin
  * cost drops 0.3 % per pet level, XP is kept (the level is recomputed at the new rarity), a Kat Flower skips 1 day and
@@ -158,7 +206,9 @@ export const KAT = {
   /** highest Taming level in the game: the default of settings.taming (no upgrade ruled out) */
   maxTaming: 60,
   /** fewer BIN listings than this on either side adds a thin-market flag */
-  minCount: 3,
+  minCount: AH.minCount,
+  /** hours assumed to sell the upgraded pet without a measured AH sales rate: the next sale at AH_SALES.defaultPerHour */
+  defaultSellHours: 1 / AH_SALES.defaultPerHour,
 } as const;
 
 /**
@@ -169,6 +219,8 @@ export const BITS = {
   currency: 'SKYBLOCK_BIT',
   cookieId: 'BOOSTER_COOKIE',
   perCookie: 4800,
+  /** the cookie basket fills each offer up to what its market absorbs in this many hours */
+  basketHours: 24,
   fameRanks: [
     ['New Player', 0, 1],
     ['Settler', 20_000, 1.1],
@@ -199,7 +251,9 @@ export const BITS = {
 /** AH flip finder (src/domain/ahFlips.ts): buy the lowest BIN, relist just under the second-lowest. */
 export const AH_FLIP = {
   /** fewer BIN listings than this: no flip row (too few to trust the second price) */
-  minCount: 3,
+  minCount: AH.minCount,
+  /** AH flips are a planner kind, left out of plans unless switched on (sell times are uncertain) */
+  plannerDefault: false,
   /** relist this many coins under the second-lowest BIN */
   undercut: 1,
   /** second price more than this many times the lowest: AH_GAP risk flag */

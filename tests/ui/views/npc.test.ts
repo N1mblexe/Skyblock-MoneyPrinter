@@ -94,10 +94,10 @@ describe('npc view: flips', () => {
     const ids = rowIds();
     expect(ids).toContain('ENCHANTED_GOLD');
     expect(ids[0]).toBe('ENCHANTED_GOLD_BLOCK');
-    expect(ids).not.toContain('GOLD_INGOT'); // dead 0.1 bid -> suspect
-    const btn = q<HTMLButtonElement>('[data-testid="npc-hidden"]');
-    expect(btn.hidden).toBe(false);
-    expect(btn.textContent).toMatch(/gizli/);
+    // side-aware risk: GOLD_INGOT's dead 0.1 bid only matters when selling on the bazaar, so no bz2npc row is suspect
+    expect(ids).toContain('GOLD_INGOT');
+    expect(q('tr[data-key="bz2npc:GOLD_INGOT"]').querySelector('.npc-floor')).not.toBeNull();
+    expect(q<HTMLButtonElement>('[data-testid="npc-hidden"]').hidden).toBe(true);
     const tr = q(`tr[data-key="bz2npc:ENCHANTED_GOLD"]`);
     expect(tr.textContent).toContain('456');
     expect(tr.textContent).toContain('480');
@@ -128,13 +128,17 @@ describe('npc view: flips', () => {
   it('hidden-count toggle reveals suspects and writes the URL', async () => {
     mount();
     await flush();
-    q<HTMLButtonElement>('[data-testid="npc-hidden"]').click();
+    segBtn('npc2bz').click(); // MELON npc2bz sells into a 0.7 / 4.9 book: suspect
+    await flush();
+    const btn = q<HTMLButtonElement>('[data-testid="npc-hidden"]');
+    expect(btn.hidden).toBe(false);
+    expect(btn.textContent).toMatch(/gizli/);
+    expect(rowIds()).not.toContain('MELON');
+    btn.click();
     await flush();
     expect(setQueryCalls()).toContainEqual({ hidden: '1' });
-    expect(rowIds()).toContain('GOLD_INGOT');
-    const tr = q(`tr[data-key="bz2npc:GOLD_INGOT"]`);
-    expect(tr.querySelector('.npc-floor')).not.toBeNull();
-    expect(tr.classList.contains('npc-suspect')).toBe(true);
+    expect(rowIds()).toContain('MELON');
+    expect(q('tr[data-key="npc2bz:MELON"]').classList.contains('npc-suspect')).toBe(true);
   });
 
   it('segment switch writes setQuery and persists across remounts', async () => {
@@ -397,6 +401,68 @@ describe('npc view: language and lifecycle', () => {
     setLang('en');
     await flush();
     expect(root.childElementCount).toBe(0);
+  });
+});
+
+describe('npc view: instant NPC leg, side-aware risk, ask cap and conservatism', () => {
+  const panel = () => q('.kit-panel');
+
+  it('NPC -> bazaar: the NPC purchase is instant and capped; only the sell side is risk-checked', async () => {
+    mount({ snapshot, catalog }, { id: 'npc', query: { dir: 'npc2bz', hidden: '1' } });
+    await flush();
+    q<HTMLElement>('tr[data-key="npc2bz:MELON"] td.num').click();
+    const steps = panel().querySelector('.npc-steps')!.textContent!;
+    expect(steps).toMatch(/hemen al/);
+    expect(steps).toMatch(/sipariş slotu yok/);
+    const kv = panel().querySelector('dl.kv')!.textContent!;
+    expect(kv).toContain('Alış süresianında');
+    // npcDailyLimit / 24 per hour, x cycleHours per cycle
+    const perHour = defaultSettings.npcDailyLimit / 24;
+    expect(kv).toContain(`NPC alımı≈ saatte ${perHour.toLocaleString('tr-TR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`);
+    expect(panel().querySelector('.risk-scope')!.textContent).toMatch(/Yalnızca bazaar satış tarafı/);
+  });
+
+  it('bazaar -> NPC: only the buy side is risk-checked; the NPC sale is instant', async () => {
+    mount();
+    await flush();
+    q<HTMLElement>('tr[data-key="bz2npc:ENCHANTED_GOLD"] td.num').click();
+    expect(panel().querySelector('.risk-scope')!.textContent).toMatch(/Yalnızca bazaar alış tarafı/);
+    expect(panel().querySelector('dl.kv')!.textContent).toContain('Satış süresianında');
+    expect(panel().querySelector('[data-testid="npc-clamp"]')).toBeNull();
+  });
+
+  it('a buy order that would reach the ask is shown and planned as an insta-buy', async () => {
+    const p = snapshot.products.ENCHANTED_GOLD!;
+    const ask = p.bid! + 0.1;
+    const snap: Snapshot = {
+      ...snapshot,
+      products: { ...snapshot.products, ENCHANTED_GOLD: { ...p, ask, asks: [{ price: ask, amount: 100_000, orders: 5 }] } },
+    };
+    mount({ snapshot: snap, catalog });
+    await flush();
+    const tr = q('tr[data-key="bz2npc:ENCHANTED_GOLD"]');
+    expect(tr.querySelector('.src-insta')).not.toBeNull();
+    expect(tr.querySelector('.flip-clamp')!.textContent).toBe('Ask sınırı');
+    expect(tr.querySelector('.npc-floor')).toBeNull();
+    q<HTMLElement>('tr[data-key="bz2npc:ENCHANTED_GOLD"] td.num').click();
+    expect(panel().querySelector('.npc-steps li')!.textContent).toMatch(/insta-buy/i);
+    expect(q('[data-testid="npc-clamp"]').textContent).toMatch(/sipariş slotu kullanmaz/);
+  });
+
+  it('marks rows adjusted by recent history and lists the changes', async () => {
+    const p = snapshot.products.ENCHANTED_GOLD!;
+    store = createStore<AppState>({ ...initialState({ ...defaultSettings }), snapshot, catalog });
+    const stats = (id: string) =>
+      id === 'ENCHANTED_GOLD' ? { n: 30, medianAsk: p.ask!, medianBid: p.bid! + 5, madAsk: 50, madBid: 50, change24h: null } : null;
+    ctx = fakeViewCtx(store, fakeHistory({ stats }));
+    view = createNpcView();
+    view.mount(root, ctx, { id: 'npc' });
+    await flush();
+    expect(q('tr[data-key="bz2npc:ENCHANTED_GOLD"] .cons-badge')).not.toBeNull();
+    q<HTMLElement>('tr[data-key="bz2npc:ENCHANTED_GOLD"] td.num').click();
+    const line = panel().querySelector('[data-testid="cons-list"] li')!.textContent!;
+    expect(line).toMatch(/^Alış fiyatı anlık veride/);
+    expect(line).toContain(fmtCoins(p.bid! + 0.1).replace(/\D.*$/, ''));
   });
 });
 

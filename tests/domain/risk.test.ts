@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { assessRisk, combineRisk, reportFromFlags } from '../../src/domain/risk.ts';
+import { assessRisk, bookOf, combineRisk, INGREDIENT_FLAGS, reportFromFlags } from '../../src/domain/risk.ts';
 import type { RiskFlag } from '../../src/types/contracts.ts';
 import { makeProduct, P, stats } from './helpers.ts';
 
@@ -138,6 +138,70 @@ describe('assessRisk flags (synthetic)', () => {
     expect(r.flags).toEqual(['FEW_ORDERS', 'QUICK_DIVERGENCE', 'VOLUME_IMBALANCE']);
     expect(r.score).toBe(3);
     expect(r.level).toBe('suspect');
+  });
+});
+
+describe('assessRisk: side-aware (use)', () => {
+  it('bookOf: buy orders and insta-sells use the bids, insta-buys and sell offers the asks', () => {
+    expect(bookOf('buy', 'order')).toBe('bid');
+    expect(bookOf('sell', 'insta')).toBe('bid');
+    expect(bookOf('buy', 'insta')).toBe('ask');
+    expect(bookOf('sell', 'offer')).toBe('ask');
+  });
+
+  it('spread and dead-bid flags only when selling on the bazaar', () => {
+    const dead = makeProduct({ bids: [{ price: 1, amount: 10, orders: 10 }], quick: { sellPrice: 1 } });
+    expect(flagsOf(dead, stats(), { buy: 'order' })).not.toContain('DEAD_BID');
+    expect(flagsOf(dead, stats(), { sell: 'offer' })).toContain('DEAD_BID');
+    const wide = makeProduct({ asks: [{ price: 170, amount: 5000, orders: 10 }], quick: { buyPrice: 170 } });
+    expect(flagsOf(wide, stats({ medianAsk: 170 }), { buy: 'insta' })).toEqual([]);
+    expect(flagsOf(wide, stats({ medianAsk: 170 }), { sell: 'insta' })).toEqual(['WIDE_SPREAD']);
+    const extreme = makeProduct({ asks: [{ price: 400, amount: 5000, orders: 10 }], quick: { buyPrice: 400 } });
+    expect(flagsOf(extreme, stats({ medianAsk: 400 }), { buy: 'order' })).toEqual([]);
+    expect(flagsOf(extreme, stats({ medianAsk: 400 }), { sell: 'offer' })).toEqual(['WIDE_SPREAD', 'EXTREME_SPREAD']);
+  });
+
+  it('LOW_VOLUME on the flow that fills the used sides', () => {
+    // few insta-buys: sell offers and insta-buys are thin, buy orders and insta-sells are not
+    const p = makeProduct({ instaBuysWeek: 900, instaSellsWeek: 90_000 });
+    expect(flagsOf(p, stats(), { buy: 'order' })).not.toContain('LOW_VOLUME');
+    expect(flagsOf(p, stats(), { sell: 'insta' })).not.toContain('LOW_VOLUME');
+    expect(flagsOf(p, stats(), { sell: 'offer' })).toContain('LOW_VOLUME');
+    expect(flagsOf(p, stats(), { buy: 'insta' })).toContain('LOW_VOLUME');
+    expect(flagsOf(p, stats(), { buy: 'order', sell: 'offer' })).toContain('LOW_VOLUME');
+  });
+
+  it('FEW_ORDERS, THIN_TOP and QUICK_DIVERGENCE on the used book only', () => {
+    const fewAsks = makeProduct({ quick: { buyOrders: 2 } });
+    expect(flagsOf(fewAsks, stats(), { buy: 'order' })).toEqual([]);
+    expect(flagsOf(fewAsks, stats(), { sell: 'offer' })).toEqual(['FEW_ORDERS']);
+    const thinBid = makeProduct({
+      bids: [
+        { price: 100, amount: 10, orders: 1 },
+        { price: 70, amount: 5000, orders: 10 },
+      ],
+    });
+    expect(flagsOf(thinBid, stats(), { buy: 'order' })).toEqual(['THIN_TOP']);
+    expect(flagsOf(thinBid, stats(), { buy: 'insta' })).toEqual([]);
+    const divAsk = makeProduct({ quick: { buyPrice: 300 } });
+    expect(flagsOf(divAsk, stats(), { buy: 'insta' })).toEqual(['QUICK_DIVERGENCE']);
+    expect(flagsOf(divAsk, stats(), { sell: 'insta' })).toEqual([]);
+  });
+
+  it('VOLUME_IMBALANCE only when the smaller flow is used', () => {
+    const p = makeProduct({ instaBuysWeek: 1_000_000, instaSellsWeek: 90_000 });
+    expect(flagsOf(p, stats(), { buy: 'order' })).toEqual(['VOLUME_IMBALANCE']); // bids fill from the small flow
+    expect(flagsOf(p, stats(), { sell: 'offer' })).toEqual([]);
+  });
+
+  it('PRICE_SPIKE and NO_HISTORY either way; an empty use checks no book', () => {
+    expect(flagsOf(makeProduct(), stats({ medianBid: 200 }), { buy: 'order' })).toEqual(['PRICE_SPIKE']);
+    expect(flagsOf(makeProduct(), null, { sell: 'offer' })).toEqual(['NO_HISTORY']);
+    expect(flagsOf(makeProduct({ instaBuysWeek: 1, instaSellsWeek: 1, quick: { buyOrders: 0 } }), stats(), {})).toEqual([]);
+  });
+
+  it('INGREDIENT_FLAGS: the flags that matter on an input bought by order', () => {
+    expect([...INGREDIENT_FLAGS].sort()).toEqual(['PRICE_SPIKE', 'QUICK_DIVERGENCE']);
   });
 });
 

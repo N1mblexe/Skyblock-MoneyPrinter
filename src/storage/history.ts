@@ -6,8 +6,7 @@ import {
   HISTORY_RECENT_MS,
   LATEST_BOOK_DEPTH,
 } from '../config.ts';
-import { marketStatFromColumns } from '../domain/marketStats.ts';
-import { pctChange } from '../domain/stats.ts';
+import { marketStatFromColumns, priceStatsFromColumns } from '../domain/marketStats.ts';
 import type { HistoryPoint, HistoryRange, HistoryRepo, MarketStat, PriceStats, Product, Snapshot } from '../types/contracts.ts';
 import { openDb, reqP, txDone } from './db.ts';
 
@@ -23,8 +22,9 @@ import { openDb, reqP, txDone } from './db.ts';
 const DB_VERSION = 1;
 const FIELDS = 6;
 const LATEST_KEY = 'latest';
-const CHANGE_MIN_SPAN_MS = 20 * 3600_000;
-/** ids per block in marketStats (keeps the column buffers cache-sized) */
+/** the default Settings.taxRate (state/appState.ts) */
+export const DEFAULT_TAX = 0.0125;
+/** ids per block in statsAll (keeps the column buffers cache-sized) */
 const STATS_CHUNK = 256;
 
 interface IdsRec {
@@ -41,6 +41,10 @@ interface Q15Rec {
   at: number;
   v: number;
   data: Float32Array;
+}
+interface StatsAll {
+  price: ReadonlyMap<string, PriceStats>;
+  market: ReadonlyMap<string, MarketStat>;
 }
 interface Version {
   ids: string[];
@@ -88,19 +92,6 @@ function dropBefore<T>(arr: T[], cut: number, key: (t: T) => number): void {
   if (n) arr.splice(0, n);
 }
 
-/** median + MAD on a scratch typed array (sorted in place); same results as domain/stats median/mad, much faster. */
-function medMad(xs: Float64Array): [number, number] {
-  const n = xs.length;
-  if (n === 0) return [NaN, NaN];
-  const mid = n >> 1;
-  xs.sort();
-  const med = n % 2 ? xs[mid]! : (xs[mid - 1]! + xs[mid]!) / 2;
-  for (let i = 0; i < n; i++) xs[i] = Math.abs(xs[i]! - med);
-  xs.sort();
-  const madv = n % 2 ? xs[mid]! : (xs[mid - 1]! + xs[mid]!) / 2;
-  return [med, madv];
-}
-
 const warn = (what: string, e: unknown) => console.warn(`history: ${what}`, e);
 
 /**
@@ -125,9 +116,15 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
 
   // derived-data cache, invalidated on every record()
   let rev = 0;
-  const cache = new Map<string, { key: string; points: HistoryPoint[]; stats: PriceStats | null | undefined }>();
-  /** marketStats memo per taxRate */
-  const statsMemo = new Map<number, { key: string; stats: ReadonlyMap<string, MarketStat> }>();
+  /** recent() points, built only for the ids asked */
+  const pointsCache = new Map<string, { key: string; points: HistoryPoint[] }>();
+  /** statsAll memo per taxRate */
+  const statsMemo = new Map<number, { key: string; all: StatsAll }>();
+  /**
+   * taxRate of the latest statsAll call: stats(id) reads that sweep. Starts at the default Settings.taxRate, so a
+   * stats(id) before the first statsAll(taxRate) sweeps once for both (not once at a made-up rate, then again).
+   */
+  let lastTax = DEFAULT_TAX;
 
   function addVersion(v: number, ids: string[]): void {
     versions.set(v, { ids, index: new Map(ids.map((id, i) => [id, i])) });
@@ -313,75 +310,41 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     return recs;
   }
 
-  function cacheEntry(id: string) {
+  function recentPoints(id: string): HistoryPoint[] {
     const key = cacheKey();
-    let e = cache.get(id);
+    let e = pointsCache.get(id);
     if (!e || e.key !== key) {
       const points: HistoryPoint[] = [];
       for (const r of recentRecords(key)) {
         const p = pointOf(r, r.ts, id);
         if (p) points.push(p);
       }
-      e = { key, points, stats: undefined };
-      cache.set(id, e);
+      e = { key, points };
+      pointsCache.set(id, e);
     }
-    return e;
-  }
-
-  /**
-   * Stats baseline: medians/MADs use the recent points thinned to the last point per 15-min bucket (like q15),
-   * minus points newer than now - 15 min, so a fresh multi-hour spike in the dense raw data can't become the
-   * median it is compared against. n counts those baseline points. change24h uses the full-resolution points.
-   */
-  function computeStats(points: readonly HistoryPoint[]): PriceStats | null {
-    if (points.length === 0) return null;
-    const cut = now() - HISTORY_Q15_BUCKET_MS;
-    const asks = new Float64Array(points.length);
-    const bids = new Float64Array(points.length);
-    let n = 0;
-    let na = 0;
-    let nb = 0;
-    let first: HistoryPoint | null = null;
-    let last: HistoryPoint | null = null;
-    for (let i = 0; i < points.length; i++) {
-      const p = points[i]!;
-      if (Number.isFinite(p.ask) && Number.isFinite(p.bid)) {
-        first ??= p;
-        last = p;
-      }
-      // points are sorted: p is its bucket's last point iff the next one is in another bucket
-      const next = points[i + 1];
-      if (next && bucketOf(next.ts) === bucketOf(p.ts)) continue;
-      if (p.ts > cut) continue;
-      n++;
-      if (Number.isFinite(p.ask)) asks[na++] = p.ask;
-      if (Number.isFinite(p.bid)) bids[nb++] = p.bid;
-    }
-    const [medianAsk, madAsk] = medMad(asks.subarray(0, na));
-    const [medianBid, madBid] = medMad(bids.subarray(0, nb));
-    const mid = (p: HistoryPoint) => (p.bid + p.ask) / 2;
-    const change24h = first && last && last.ts - first.ts >= CHANGE_MIN_SPAN_MS ? pctChange(mid(first), mid(last)) : null;
-    return { n, medianAsk, medianBid, madAsk, madBid, change24h };
+    return e.points;
   }
 
   function invalidate(): void {
     rev++;
-    cache.clear();
+    pointsCache.clear();
     recentList = null;
     statsMemo.clear();
   }
 
   /**
-   * MarketStat for every id in the recent (24h) records without building point objects: ids are processed in
-   * blocks of STATS_CHUNK; for each block one sweep over the records copies the block's Float32 cells into per-id
-   * column buffers (cache-sized), then marketStatFromColumns summarises each id from subarray views.
-   * Every record cell is read once. ~20 ms for 2,200 ids x 280 records on a desktop (see the bench test).
+   * PriceStats and MarketStat for every id in the recent (24h) records without building point objects: ids are
+   * processed in blocks of STATS_CHUNK; for each block one sweep over the records copies the block's Float32 cells
+   * into per-id column buffers (cache-sized), then priceStatsFromColumns and marketStatFromColumns summarise each id
+   * from subarray views. Every record cell is read once. ~20 ms for 2,200 ids x 280 records on a desktop (see the
+   * bench test).
    */
-  function computeMarketStats(taxRate: number, key: string): ReadonlyMap<string, MarketStat> {
+  function computeAll(taxRate: number, key: string): StatsAll {
     const recs = recentRecords(key);
     const R = recs.length;
     const out = new Map<string, MarketStat>();
-    if (R === 0) return out;
+    const price = new Map<string, PriceStats>();
+    if (R === 0) return { price, market: out };
     // global id numbering across the id versions in use
     const gIndex = new Map<string, number>();
     const gIds: string[] = [];
@@ -411,6 +374,7 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     const sw = new Float32Array(C * R);
     const t = now();
     const scratch = new Float64Array(2 * R);
+    const scratchP = new Float64Array(2 * R);
     for (let g0 = 0; g0 < N; g0 += C) {
       const g1 = Math.min(N, g0 + C);
       cnt.fill(0);
@@ -446,10 +410,23 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
           buyWeek: bw.subarray(lo, lo + n),
           sellWeek: sw.subarray(lo, lo + n),
         };
-        out.set(gIds[g]!, marketStatFromColumns(gIds[g]!, cols, n, t, taxRate, scratch));
+        const id = gIds[g]!;
+        out.set(id, marketStatFromColumns(id, cols, n, t, taxRate, scratch));
+        price.set(id, priceStatsFromColumns(cols, n, t, scratchP)!);
       }
     }
-    return out;
+    return { price, market: out };
+  }
+
+  /** Memoized like recent(): a new record or a new minute (the 24h window slides) -> recompute. */
+  function statsAll(taxRate: number): StatsAll {
+    lastTax = taxRate;
+    const key = cacheKey();
+    const hit = statsMemo.get(taxRate);
+    if (hit?.key === key) return hit.all;
+    const all = computeAll(taxRate, key);
+    statsMemo.set(taxRate, { key, all });
+    return all;
   }
 
   async function doClear(): Promise<void> {
@@ -538,7 +515,7 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     }
   }
 
-  return {
+  const repo: HistoryRepo = {
     init: ensureInit,
 
     record(s: Snapshot): Promise<void> {
@@ -558,14 +535,12 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       return q15PlusNewest(recs, id, from);
     },
 
-    recent(id: string): HistoryPoint[] {
-      return cacheEntry(id).points;
-    },
+    recent: recentPoints,
 
     stats(id: string): PriceStats | null {
-      const e = cacheEntry(id);
-      if (e.stats === undefined) e.stats = computeStats(e.points);
-      return e.stats;
+      // PriceStats don't depend on the tax rate: the latest sweep's map while it is current (every statsAll call sets
+      // lastTax, so no other sweep can be current when that one isn't); otherwise one sweep at that rate
+      return statsAll(lastTax).price.get(id) ?? null;
     },
 
     async saveLatest(s: Snapshot): Promise<void> {
@@ -599,13 +574,7 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     },
 
     marketStats(taxRate: number): ReadonlyMap<string, MarketStat> {
-      // keyed like recent(): new record or a new minute (the 24h window slides) -> recompute
-      const key = cacheKey();
-      const hit = statsMemo.get(taxRate);
-      if (hit?.key === key) return hit.stats;
-      const stats = computeMarketStats(taxRate, key);
-      statsMemo.set(taxRate, { key, stats });
-      return stats;
+      return statsAll(taxRate).market;
     },
 
     /**
@@ -625,5 +594,8 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
       queue = p.catch(() => undefined);
       return p;
     },
+
+    statsAll,
   };
+  return repo;
 }

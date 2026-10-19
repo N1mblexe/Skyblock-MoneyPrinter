@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { STATS } from '../../src/config.ts';
-import { marketStatFromColumns, marketStatFromPoints, medianInPlace, medMadInPlace } from '../../src/domain/marketStats.ts';
-import { mad, median } from '../../src/domain/stats.ts';
+import { marketStatFromColumns, marketStatFromPoints, priceStatsFromColumns, priceStatsFromPoints } from '../../src/domain/marketStats.ts';
+import { mad, median, medianInPlace, medMadInPlace } from '../../src/domain/stats.ts';
 import type { HistoryPoint } from '../../src/types/contracts.ts';
 
 const MIN = 60_000;
@@ -132,6 +132,8 @@ describe('marketStatFromPoints', () => {
       consistency: null,
       buyVolTrend: null,
       sellVolTrend: null,
+      bidMovesPerHour: null,
+      askMovesPerHour: null,
     });
   });
 
@@ -205,5 +207,111 @@ describe('marketStatFromPoints', () => {
     const a = marketStatFromColumns('A', cols, pts.length, now, TAX, new Float64Array(200));
     const b = marketStatFromPoints('A', pts, now, TAX);
     expect(a).toEqual(b);
+  });
+
+  describe('moves per hour', () => {
+    it('counts best-price changes between consecutive finite points of the last 3h, per hour spanned', () => {
+      // 25h of 15-min points, then every minute for the last 2h: only the last 3h count
+      const pts: HistoryPoint[] = [];
+      for (let t = T0; t < T0 + 23 * H; t += 15 * MIN) pts.push(pt(t, 1, 1)); // churn outside the window ignored below
+      for (let k = 0; k <= 120; k++) pts.push(pt(T0 + 23 * H + k * MIN, k % 2 ? 10 : 11, k < 60 ? 20 : 21));
+      for (let i = 0; i < 92; i++) pts[i]!.bid = i % 2 ? 5 : 6;
+      const now = T0 + 25 * H;
+      const s = marketStatFromPoints('A', pts, now, TAX);
+      // window [22h, 25h]: points at 22:00, 22:15, 22:30, 22:45 (bid 6/5 alternating, ask 1) then 23:00..25:00
+      const win = pts.filter((p) => p.ts >= now - 3 * H);
+      let bm = 0;
+      let am = 0;
+      for (let i = 1; i < win.length; i++) {
+        if (win[i]!.bid !== win[i - 1]!.bid) bm++;
+        if (win[i]!.ask !== win[i - 1]!.ask) am++;
+      }
+      const hours = (win[win.length - 1]!.ts - win[0]!.ts) / H;
+      expect(hours).toBe(3);
+      expect(s.bidMovesPerHour).toBeCloseTo(bm / hours, 12);
+      expect(s.askMovesPerHour).toBeCloseTo(am / hours, 12);
+      expect(am).toBe(2); // 1 -> 20 at 23:00, 20 -> 21 at 24:00
+    });
+
+    it('skips pairs with a missing side, ignores points after now; null with < 2 points or a zero span', () => {
+      const pts = [pt(T0, 10, 20), pt(T0 + MIN, NaN, 21), pt(T0 + 2 * MIN, 11, 21), pt(T0 + 3 * MIN, 12, 22), pt(T0 + 9 * MIN, 99, 99)];
+      const s = marketStatFromPoints('A', pts, T0 + 3 * MIN, TAX);
+      expect(s.bidMovesPerHour).toBeCloseTo(1 / (3 / 60), 12); // only 11 -> 12 (the NaN breaks two pairs)
+      expect(s.askMovesPerHour).toBeCloseTo(2 / (3 / 60), 12);
+      expect(marketStatFromPoints('A', [pt(T0, 1, 2)], T0, TAX).bidMovesPerHour).toBeNull();
+      expect(marketStatFromPoints('A', [pt(T0, 1, 2), pt(T0, 3, 4)], T0, TAX).askMovesPerHour).toBeNull();
+      expect(marketStatFromPoints('A', [pt(T0, 1, 2), pt(T0 + MIN, 3, 4)], T0 - MIN, TAX).bidMovesPerHour).toBeNull(); // all after now
+      expect(marketStatFromPoints('A', [pt(T0, 1, 2), pt(T0 + MIN, 1, 2)], T0 + MIN, TAX).bidMovesPerHour).toBe(0);
+      expect(marketStatFromPoints('A', [pt(T0, 1, 2), pt(T0 + MIN, 3, 4)], T0 + 4 * H, TAX).bidMovesPerHour).toBeNull(); // older than 3h
+    });
+  });
+});
+
+/** The per-item PriceStats of history.ts before the columnar sweep, kept as the reference. */
+function referenceStats(points: readonly HistoryPoint[], now: number) {
+  if (points.length === 0) return null;
+  const B = 15 * MIN;
+  const bucketOf = (ts: number) => Math.floor(ts / B) * B;
+  const cut = now - B;
+  const asks: number[] = [];
+  const bids: number[] = [];
+  let n = 0;
+  let first: HistoryPoint | null = null;
+  let last: HistoryPoint | null = null;
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i]!;
+    if (Number.isFinite(p.ask) && Number.isFinite(p.bid)) {
+      first ??= p;
+      last = p;
+    }
+    const next = points[i + 1];
+    if (next && bucketOf(next.ts) === bucketOf(p.ts)) continue;
+    if (p.ts > cut) continue;
+    n++;
+    if (Number.isFinite(p.ask)) asks.push(p.ask);
+    if (Number.isFinite(p.bid)) bids.push(p.bid);
+  }
+  const mid = (p: HistoryPoint) => (p.bid + p.ask) / 2;
+  const change24h = first && last && last.ts - first.ts >= 20 * H && mid(first) > 0 ? (mid(last) - mid(first)) / mid(first) : null;
+  const ma = median(asks);
+  const mb = median(bids);
+  return { n, medianAsk: ma, medianBid: mb, madAsk: mad(asks, ma), madBid: mad(bids, mb), change24h };
+}
+
+describe('priceStatsFromColumns', () => {
+  it('equals the per-item reference on randomized histories', () => {
+    let seed = 12345;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+    for (let trial = 0; trial < 200; trial++) {
+      const pts: HistoryPoint[] = [];
+      let t = T0 + Math.floor(rnd() * 15) * MIN;
+      const len = Math.floor(rnd() * 300);
+      const dense = rnd() < 0.5;
+      for (let i = 0; i < len; i++) {
+        const bid = rnd() < 0.1 ? NaN : Math.fround(100 + rnd() * 50);
+        const ask = rnd() < 0.1 && Number.isFinite(bid) ? NaN : Math.fround(150 + rnd() * 50);
+        pts.push(pt(t, bid, ask));
+        t += dense && rnd() < 0.7 ? Math.floor(rnd() * 3 + 1) * MIN : Math.floor(rnd() * 40 + 1) * MIN;
+      }
+      const now = (pts[pts.length - 1]?.ts ?? T0) + Math.floor(rnd() * 30) * MIN;
+      const want = referenceStats(pts, now);
+      const got = priceStatsFromColumns(
+        { ts: Float64Array.from(pts, (p) => p.ts), bid: Float32Array.from(pts, (p) => p.bid), ask: Float32Array.from(pts, (p) => p.ask) },
+        pts.length,
+        now,
+        new Float64Array(1000),
+      );
+      expect(got, `trial ${trial}`).toEqual(want);
+      expect(priceStatsFromPoints(pts, now)).toEqual(want);
+    }
+  });
+
+  it('null without points; NaN medians when no baseline point is old enough', () => {
+    expect(priceStatsFromPoints([], T0)).toBeNull();
+    const s = priceStatsFromPoints([pt(T0, 1, 2), pt(T0 + MIN, 1, 2)], T0 + MIN)!;
+    expect(s.n).toBe(0);
+    expect(s.medianAsk).toBeNaN();
+    expect(s.madBid).toBeNaN();
+    expect(s.change24h).toBeNull();
   });
 });

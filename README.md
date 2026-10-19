@@ -31,7 +31,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
   <tr>
     <td width="33%" valign="top">
       <h3>📡 Live prices</h3>
-      Bazaar order books every 60 s, a full auction-house lowest-BIN scan every 10 min, and the current mayor's perks.
+      Bazaar order books every 60 s, a full auction-house lowest-BIN scan every 10 min, completed AH sales every 60 s, and the current mayor's perks.
     </td>
     <td width="33%" valign="top">
       <h3>🔁 Flip finder</h3>
@@ -39,7 +39,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
     </td>
     <td width="33%" valign="top">
       <h3>⚒️ Craft &amp; forge</h3>
-      Cheapest source for each ingredient (bazaar, NPC or sub-craft, 3 levels deep), sold to the bazaar, an NPC or the AH. A <b>Chains</b> tab finds multi-step ladders like Wheat → Ench. Wheat → Ench. Hay Bale.
+      Cheapest source for each ingredient (bazaar, NPC, AH or sub-craft, 3 levels deep), switching to a faster one when it earns more per hour, sold to the bazaar, an NPC or the AH. NPC shop trades are recipes too. A <b>Chains</b> tab finds multi-step ladders like Wheat → Ench. Wheat → Ench. Hay Bale.
     </td>
   </tr>
   <tr>
@@ -72,7 +72,7 @@ Find flips, crafts, forges and book combines, then let the planner spread your c
   </tr>
 </table>
 
-Plus AH flips (lowest BIN vs the next, after AH fees), Kat pet upgrades (buy, upgrade the rarity, sell), the best Bits shop offers and what a bit costs in cookies, a separate Forge page, market alerts for any opportunity, an installable offline app, NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
+Plus history-based conservatism (prices checked against recent medians, re-listing and slowing markets priced in; one switch in Settings), AH flips (lowest BIN vs the next, after AH fees, with sell times from real AH sales) and George flips (pets listed below what George pays), Kat pet upgrades (buy, upgrade the rarity, sell on the AH or to George), the best Bits shop offers, what a bit costs in cookies and the basket one cookie buys, a separate Forge page, market alerts for any opportunity, an installable offline app, NPC flips, currency-shop values (bits, copper, motes, …), shard-fusion recipes, side-aware risk flags on suspicious markets, a command palette, keyboard-first navigation, a mobile layout and an English / Turkish UI.
 
 ## 📸 Screenshots
 
@@ -134,13 +134,13 @@ The app opens in English. Switch to Turkish with the **EN / TR** buttons in the 
 | 📊 **Overview** | <kbd>g</kbd> <kbd>o</kbd> | Best flips, crafts and book combines, price movers, watchlist, alerts and the mayor at a glance |
 | 🔁 **Flips** | <kbd>g</kbd> <kbd>f</kbd> | Buy and sell the same bazaar product |
 | 📚 **Books** | <kbd>g</kbd> <kbd>b</kbd> | Combine 2^(L−k) level-k books into one level-L book |
-| 🔨 **AH flips** | <kbd>g</kbd> <kbd>a</kbd> | Lowest BIN vs the next one, after AH fees; copies `/viewauction` |
-| ⚒️ **Craft** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft, sell the result; the Chains tab covers multi-step ladders |
+| 🔨 **AH flips** | <kbd>g</kbd> <kbd>a</kbd> | Lowest BIN vs the next one, after AH fees, or pets below George's price; copies `/viewauction` |
+| ⚒️ **Craft** | <kbd>g</kbd> <kbd>c</kbd> | Buy ingredients, craft, sell the result; NPC shop trades as a filter; the Chains tab covers multi-step ladders |
 | 🔥 **Forge** | <kbd>g</kbd> <kbd>h</kbd> | Forge recipes, limited by forge time and your forge slots |
 | 🧬 **Fusion** | <kbd>g</kbd> <kbd>u</kbd> | Your own shard-fusion recipes, editable, with import and export |
 | 🏪 **NPC & Shops** | <kbd>g</kbd> <kbd>n</kbd> | Bazaar ↔ NPC flips and currency-shop offers valued in coins |
-| 🐱 **Kat upgrades** | <kbd>g</kbd> <kbd>k</kbd> | Buy a pet at the lowest BIN, take it up rarities at Kat, sell it; level discount, flowers and Taming included |
-| 🪙 **Bits shop** | <kbd>g</kbd> <kbd>i</kbd> | Coins per bit for every Bits shop offer, and what a bit costs as Booster Cookies at your fame rank |
+| 🐱 **Kat upgrades** | <kbd>g</kbd> <kbd>k</kbd> | Buy a pet at the lowest BIN, take it up rarities at Kat, sell it on the AH or to George; level discount, flowers and Taming included |
+| 🪙 **Bits shop** | <kbd>g</kbd> <kbd>i</kbd> | Coins per bit for every Bits shop offer, what a bit costs as Booster Cookies at your fame rank, and the best basket for one cookie |
 | 💰 **Sell or craft?** | <kbd>g</kbd> <kbd>v</kbd> | What you own: insta-sell, sell offer, NPC, AH or craft it up first, best first |
 | 📒 **Trades** | <kbd>g</kbd> <kbd>t</kbd> | My orders (outbid/undercut alerts, re-price, fill estimate) and a trade journal with profit per day/week |
 | 🎯 **Planner** | <kbd>g</kbd> <kbd>p</kbd> | Spread capital and order slots over every opportunity |
@@ -173,28 +173,31 @@ flowchart LR
     subgraph Hypixel["Hypixel public API"]
         BZ["Bazaar<br/>every 60 s"]
         AH["Auction house<br/>every 10 min"]
+        AS["AH sales<br/>every 60 s"]
         EL["Election<br/>every 30 min"]
     end
     CAT[("catalog.json<br/>recipes · NPC prices · shops")]
 
     BZ --> P["Pollers<br/>(AH scan in a Web Worker)"]
     AH --> P
+    AS --> P
     EL --> P
     P --> S["App state"]
     CAT --> S
     S --> D["Domain engine<br/>quotes · tax · fill rates · risk"]
     D --> V["Pages<br/>flips · crafts · books · NPC · planner"]
-    S <--> DB[("IndexedDB<br/>7-day price history")]
+    S <--> DB[("IndexedDB<br/>7-day price history · AH scan · AH sales")]
     DB --> D
 ```
 
 Every number is an estimate built from the live order book:
 
-- **Quotes come from the top of the book.** A buy order costs the best bid + 0.1 (never below 0.9 × the NPC price, never above the ask); a sell offer gets the ask − 0.1. Insta modes walk the book, so slippage is included.
+- **Quotes come from the top of the book.** A buy order costs the best bid + 0.1 (never below 0.9 × the NPC price; at the ask it becomes an insta-buy); a sell offer gets the ask − 0.1. Insta modes walk the book, so slippage is included.
 - **Tax** (1.25 / 1.125 / 1 %) applies only to bazaar sales.
 - **Fill rate** is your share of the weekly volume, split with the competing orders at the top of the book.
-- **Throughput** per cycle is capped by volume, capital, book depth, forge slots, order slots and the NPC daily limit.
-- **Risk flags** (dead bid, extreme spread, price spike, low volume, …) mark rows as *caution* or *suspect*; suspect rows are hidden by default.
+- **Conservatism** (on by default) checks quotes against the last day's medians, scales fill rates by the volume trend, and charges for re-listing and for large orders ahead of you, once there is enough history.
+- **Throughput** per cycle is capped by volume, capital, book depth, forge slots, order slots, the NPC daily limit and AH sales per hour.
+- **Risk flags** (dead bid, extreme spread, price spike, low volume, …) mark rows as *caution* or *suspect*, checked only on the sides of the book a trade uses; suspect rows are hidden by default.
 
 📐 The full model, with formulas, is in **[docs/estimates.md](docs/estimates.md)**.
 
@@ -202,7 +205,7 @@ Every number is an estimate built from the live order book:
 <summary><b>⚠️ What isn't modelled</b></summary>
 <br>
 
-- Anything that makes one AH item worth more than another with the same id (stars, reforges, enchantments, pet level)
+- Anything that makes one AH item worth more than another with the same id (stars, reforges, enchantments; pet level only by level band)
 - Collection and recipe requirements
 - Changes to the order book while your orders fill
 - The anvil XP cost of combining books
@@ -213,7 +216,7 @@ Every number is an estimate built from the live order book:
 
 ## 🔒 Privacy
 
-All data stays in your browser: settings, watchlist and alerts in `localStorage`, price history and the last AH scan in IndexedDB. There is no backend, account or tracking.
+All data stays in your browser: settings, watchlist and alerts in `localStorage`, price history, the last AH scan and the AH sales in IndexedDB. There is no backend, account or tracking.
 
 ## 🛠️ Development
 
@@ -223,6 +226,7 @@ Built with **vanilla TypeScript + Vite**, no UI framework. The calculation code 
 npm test               # unit tests (vitest)
 npm run build          # typecheck + production build
 npm run smoke          # headless browser test of the build
+npm run bench          # time every calculation (-- --report: top rows and plan profit)
 npm run screenshots    # regenerate the images in this README
 npm run pwa:check      # offline check of the installable app (after GITHUB_PAGES=1 npm run build)
 ```

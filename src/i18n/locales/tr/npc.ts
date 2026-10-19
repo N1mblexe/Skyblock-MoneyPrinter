@@ -10,7 +10,7 @@ export const npc: Messages['npc'] = {
   dirDesc_bz2npc:
     'Bazaar’dan al (Alırken ayarına göre buy order ya da insta-buy), NPC tüccarına sabit fiyatından sat. NPC satışında vergi yok.',
   dirDesc_npc2bz:
-    'NPC dükkanından sabit fiyatından al, bazaar’da sat (Satarken ayarına göre sell offer ya da insta-sell). Vergi düşülür. NPC alımı ürün başına günde {limit} adetle sınırlı.',
+    'NPC dükkanından sabit fiyatından al, bazaar’da sat (Satarken ayarına göre sell offer ya da insta-sell). Vergi düşülür. NPC alımı anında yapılır, ürün başına günde {limit} adetle sınırlı.',
   dirDesc_shops:
     'Bit, copper, mote gibi para birimleriyle alınan dükkan teklifleri. Her teklifin coin değeri hesaplanır; para birimini en çok coin’e çeviren teklif en üstte.',
 
@@ -71,6 +71,7 @@ export const npc: Messages['npc'] = {
   lim_depth: 'emir defteri derinliği',
   lim_forge: 'forge slotu',
   lim_npcLimit: 'NPC günlük limiti',
+  lim_ahSales: 'AH satışları',
   lim_slots: 'sipariş slotu',
 
   coin: 'Coin',
@@ -81,7 +82,7 @@ export const npc: Messages['npc'] = {
 
   noteTitle: 'Nasıl hesaplanır?',
   noteLimits:
-    'NPC dükkanlarında ürün başına günlük alım limiti var: şu an {limit} adet/gün (Ayarlar → NPC günlük limit). NPC → Bazaar yönünde saatlik adet bu limit, bazaar hacmi, sermaye ve sipariş slotlarıyla sınırlanır; limit bağlayıcı olduğunda “Sınırlayan” sütununda “NPC günlük limiti” yazar.',
+    'NPC dükkanlarında ürün başına günlük alım limiti var: şu an {limit} adet/gün (Ayarlar → NPC günlük limit). NPC → Bazaar yönünde alım anında olur (bekleme ve sipariş slotu yok) ama bir döngüde en fazla limit ÷ 24 × döngü saati alınabilir; saatlik adet bununla, bazaar hacmi, sermaye ve sipariş slotlarıyla sınırlanır, limit bağlayıcı olduğunda “Sınırlayan” sütununda “NPC günlük limiti” yazar. Risk yalnızca işlem yapılan bazaar tarafını kontrol eder: Bazaar → NPC için alış, NPC → Bazaar için satış tarafı.',
   noteFloor:
     'Bazaar → NPC yönünde buy order’ların en az 0,9 × NPC satış fiyatına mal olduğu varsayılır; 0,1’lik “ölü” alış emirleri gerçekte dolmaz.',
   notePricing:
@@ -101,6 +102,10 @@ export const npc: Messages['npc'] = {
   d_buyHours: 'Alış süresi',
   d_sellHours: 'Satış süresi',
   d_npcLimit: 'NPC günlük limit',
+  d_npcCap: 'NPC alımı',
+  d_npcCapVal: '≈ saatte {n} · döngü başı {cycle}',
+  d_instant: 'anında',
+  d_ahSales: 'AH satışları',
   d_valueSource: 'Değer kaynağı',
   d_unpriced: 'Bu teklifin çıktısı için fiyat yok (bazaar’da değil, NPC satış fiyatı da yok).',
   d_curOnBazaar: '{cur} bazaar’da ≈ {ask} coin (insta-buy). Para birimini bazaar’dan alıp bu teklife harcarsan 1 coin ≈ {ratio} coin olur.',
@@ -109,13 +114,14 @@ export const npc: Messages['npc'] = {
   step_buyOrder: 'Bazaar’da adet başı {price} coin’den buy order ver ({batch} adet, {slots} slot).',
   step_instaBuy: 'Bazaar’dan adet başı ≈ {price} coin’e insta-buy yap ({batch} adet).',
   step_sellNpc: 'NPC tüccarına adet başı {price} coin’e sat (vergi yok).',
-  step_buyNpc: 'NPC dükkanından adet başı {price} coin’e {batch} adet al (günde en fazla {limit}).',
+  step_buyNpc: 'NPC dükkanından adet başı {price} coin’e {batch} adet hemen al (günde en fazla {limit}, saatte ≈ {perHour}; sipariş slotu yok).',
   step_sellOffer: 'Bazaar’da sell offer koy; vergi sonrası adet başı {price} coin ({slots} slot).',
   step_instaSell: 'Bazaar’a insta-sell yap; vergi sonrası adet başı ≈ {price} coin.',
   step_profit: 'Kâr: adet başı {profit}, saatte ≈ {pph}.',
   step_shopBuy: '{shop} dükkanında {cost} {cur} öde, {out}× {item} al.',
   step_shopSellBz: 'Bazaar’da sat: vergi sonrası toplam ≈ {value} coin.',
   step_shopSellNpc: 'NPC’ye sat: toplam {value} coin.',
+  step_shopSellAh: 'Müzayede evinde sat: ücretler sonrası toplam ≈ {value} coin.',
   step_shopRate: 'Sonuç: 1 {cur} ≈ {n} coin.',
   shopUnknown: 'bilinmeyen dükkan',
 

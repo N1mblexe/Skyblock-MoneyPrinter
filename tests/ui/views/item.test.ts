@@ -7,6 +7,8 @@ import { setLang, t } from '../../../src/i18n/index.ts';
 import { defaultSettings, initialState } from '../../../src/state/appState.ts';
 import { createStore } from '../../../src/state/store.ts';
 import type {
+  AhSalesSnapshot,
+  AhSalesStat,
   AhSnapshot,
   AppState,
   MarketStat,
@@ -529,5 +531,73 @@ describe('item helpers', () => {
     expect(step % (5 * 60_000)).toBe(0);
     expect(ticks.every((t) => t >= start && t <= start + 3 * 3600_000)).toBe(true);
     expect(timeTicks(5, 5, 4)).toEqual([5]);
+  });
+});
+
+describe('item view: AH sales, conservatism and side-aware risk', () => {
+  const dd2 = (card: string, k: string) => root.querySelector(`[data-testid="${card}"] dd[data-k="${k}"]`)?.textContent ?? null;
+  const stat = (over: Partial<AhSalesStat> = {}): AhSalesStat => ({
+    n: 12,
+    items: 15,
+    median: 2_500_000,
+    perHour: 1.5,
+    coverageHours: 6,
+    last: Date.now() - 10 * 60_000,
+    ...over,
+  });
+  const sales = (byId: Record<string, AhSalesStat>, coverageHours = 6): AhSalesSnapshot => ({ v: 1, updatedAt: Date.now(), coverageHours, byId });
+
+  it('AH sales card: median sold, sales per hour, coverage and the last sale', async () => {
+    await mount('ENCHANTED_MELON');
+    expect(root.querySelector('[data-testid="item-ah-sales"]')).toBeNull();
+    store.set({ ahSales: sales({ ENCHANTED_MELON: stat() }) });
+    await flush();
+    expect(q('[data-testid="item-ah-sales"] h2').textContent).toBe('AH satışları');
+    expect(dd2('item-ah-sales', 'salesMedian')).toBe(fmtPrice(2_500_000));
+    expect(dd2('item-ah-sales', 'salesCount')).toBe('12 satış · 15 adet');
+    expect(dd2('item-ah-sales', 'salesPerHour')).toBe('saatte 1,50');
+    expect(dd2('item-ah-sales', 'salesCoverage')).toBe('satış akışının 6,0 saati');
+    expect(dd2('item-ah-sales', 'salesLast')).toContain('10 dk');
+    expect(q('[data-testid="item-ah-sales"]').textContent).not.toContain('satıştan az');
+  });
+
+  it('below the minimum coverage sales per hour reads "not enough coverage yet"; few sales and AH off are noted', async () => {
+    store.set({ settings: { ...store.get().settings, ahEnabled: false } });
+    await mount('ENCHANTED_MELON', { snapshot: SNAP, catalog: CATALOG, ahSales: sales({ ENCHANTED_MELON: stat({ n: 2, perHour: null, coverageHours: 0.5 }) }, 0.5) });
+    expect(dd2('item-ah-sales', 'salesPerHour')).toBe('henüz yeterli kapsama yok (0,5 sa / 2 sa)');
+    const txt = q('[data-testid="item-ah-sales"]').textContent!;
+    expect(txt).toContain('3 satıştan az');
+    expect(txt).toContain('müzayede kapalı');
+    setLang('en');
+    await flush();
+    expect(dd2('item-ah-sales', 'salesPerHour')).toBe('not enough coverage yet (0.5 h of 2 h)');
+  });
+
+  it('an AH item with no sales seen says so; a sales-only id still gets a page', async () => {
+    store.set({ ah: { fetchedAt: Date.now(), lastUpdated: 0, lowestBin: { HYPERION: { price: 9e8, count: 12 } } } });
+    await mount('HYPERION', { snapshot: SNAP, catalog: CATALOG, ahSales: sales({}, 3) });
+    expect(q('[data-testid="item-ah-sales"]').textContent).toContain('3,0 saatinde bu ürünün BIN satışı görülmedi');
+    view.unmount();
+    store.set({ ah: null });
+    await mount('SOME_PET;4', { snapshot: SNAP, catalog: CATALOG, ahSales: sales({ 'SOME_PET;4': stat() }) });
+    expect(q('.item-msg').hidden).toBe(true);
+    expect(q('[data-testid="item-ah-sales"]')).toBeTruthy();
+  });
+
+  it('the risk card says both sides are checked here', async () => {
+    await mount('ENCHANTED_MELON');
+    expect(q('[data-testid="item-risk"] .risk-scope').textContent).toMatch(/iki taraf da kontrol edilir/);
+  });
+
+  it('"your flip" lists the conservative adjustments of the Flips row', async () => {
+    // recent medians inside the 302 / 324.7 spread: buy at 305.1, sell at 319.9
+    history.stats = (id: string) => (id === 'ENCHANTED_MELON' ? { n: 30, medianAsk: 320, medianBid: 305, madAsk: 10, madBid: 10, change24h: 0.05 } : null);
+    await mount('ENCHANTED_MELON');
+    const row = ctx.derived.flips().find((r) => r.id === 'ENCHANTED_MELON');
+    expect(row?.cons).toBeDefined();
+    expect(q('[data-testid="item-cons"]').textContent).toContain('Temkinli ayarlar');
+    store.set({ settings: { ...store.get().settings, conservative: false } });
+    await flush();
+    expect(root.querySelector('[data-testid="item-cons"]')).toBeNull();
   });
 });
