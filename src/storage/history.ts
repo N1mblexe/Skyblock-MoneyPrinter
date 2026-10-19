@@ -22,6 +22,8 @@ import { openDb, reqP, txDone } from './db.ts';
 const DB_VERSION = 1;
 const FIELDS = 6;
 const LATEST_KEY = 'latest';
+/** the default Settings.taxRate (state/appState.ts) */
+export const DEFAULT_TAX = 0.0125;
 /** ids per block in statsAll (keeps the column buffers cache-sized) */
 const STATS_CHUNK = 256;
 
@@ -118,8 +120,11 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
   const pointsCache = new Map<string, { key: string; points: HistoryPoint[] }>();
   /** statsAll memo per taxRate */
   const statsMemo = new Map<number, { key: string; all: StatsAll }>();
-  /** taxRate of the latest statsAll call: stats(id) reads that sweep */
-  let lastTax = 0;
+  /**
+   * taxRate of the latest statsAll call: stats(id) reads that sweep. Starts at the default Settings.taxRate, so a
+   * stats(id) before the first statsAll(taxRate) sweeps once for both (not once at a made-up rate, then again).
+   */
+  let lastTax = DEFAULT_TAX;
 
   function addVersion(v: number, ids: string[]): void {
     versions.set(v, { ids, index: new Map(ids.map((id, i) => [id, i])) });
@@ -533,7 +538,8 @@ export function createHistoryRepo(dbName: string = HISTORY_DB_NAME, now: () => n
     recent: recentPoints,
 
     stats(id: string): PriceStats | null {
-      // PriceStats don't depend on the tax rate: the latest sweep's map, while it is current
+      // PriceStats don't depend on the tax rate: the latest sweep's map while it is current (every statsAll call sets
+      // lastTax, so no other sweep can be current when that one isn't); otherwise one sweep at that rate
       return statsAll(lastTax).price.get(id) ?? null;
     },
 

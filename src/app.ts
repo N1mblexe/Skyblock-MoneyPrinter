@@ -210,10 +210,8 @@ export async function bootstrap(root: HTMLElement): Promise<void> {
   void refresh();
 
   void ah.loadCached().then((c) => c && !store.get().ah && store.set({ ah: c }));
-  ahSales
-    .loadCached()
-    .then((c) => c && !store.get().ahSales && store.set({ ahSales: c }))
-    .catch((e: unknown) => console.warn('loading AH sales failed', e));
+  // loadCached() emits the stored summary through onUpdate
+  ahSales.loadCached().catch((e: unknown) => console.warn('loading AH sales failed', e));
   if (settings.ahEnabled) {
     ah.start();
     ahSales.start();

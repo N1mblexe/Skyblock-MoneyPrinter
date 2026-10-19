@@ -185,7 +185,16 @@ describe('AH sales poller', () => {
   });
 
   function mockSales(cached: AhSalesSnapshot | null) {
-    const m = { opts: null as AhSalesPollerOptions | null, start: vi.fn(), stop: vi.fn(), loadCached: vi.fn(async () => cached) };
+    const m = {
+      opts: null as AhSalesPollerOptions | null,
+      start: vi.fn(),
+      stop: vi.fn(),
+      // like the real poller: the stored summary is emitted through onUpdate
+      loadCached: vi.fn(async (): Promise<AhSalesSnapshot | null> => {
+        if (cached) m.opts!.onUpdate(cached);
+        return cached;
+      }),
+    };
     vi.doMock('../../src/api/ahSales.ts', () => ({
       createAhSalesPoller: (opts: AhSalesPollerOptions) => {
         m.opts = opts;
@@ -218,7 +227,7 @@ describe('AH sales poller', () => {
     expectNoConsoleErrors(b);
   });
 
-  it('a cached summary does not replace one that arrived first; not started while the AH is off', async () => {
+  it('the cached summary reaches the store only through onUpdate (the returned one is not written); not started while the AH is off', async () => {
     const m = mockSales(salesSnap(1));
     m.loadCached.mockImplementation(async () => {
       m.opts!.onUpdate(salesSnap(9));

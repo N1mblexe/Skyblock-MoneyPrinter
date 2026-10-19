@@ -3,7 +3,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HISTORY_Q15_BUCKET_MS } from '../../src/config.ts';
 import { marketStatFromPoints } from '../../src/domain/marketStats.ts';
 import { mad, median, pctChange } from '../../src/domain/stats.ts';
-import { createHistoryRepo } from '../../src/storage/history.ts';
+import { defaultSettings } from '../../src/state/appState.ts';
+import { createHistoryRepo, DEFAULT_TAX } from '../../src/storage/history.ts';
 import type { HistoryPoint, PriceStats, Product, Snapshot } from '../../src/types/contracts.ts';
 
 const MIN = 60_000;
@@ -149,6 +150,25 @@ describe('history statsAll', () => {
     const st = repo.stats('A');
     expect(repo.statsAll(TAX).price.get('A')).toBe(st);
     expect(st).toMatchObject({ n: 1, medianAsk: 110 });
+  });
+
+  it('stats() before and after statsAll(default tax) is one sweep; after a rate change it reads the new sweep', async () => {
+    expect(DEFAULT_TAX).toBe(defaultSettings.taxRate);
+    const c = clock();
+    const repo = createHistoryRepo(newName(), c.now);
+    await repo.record(snap(c.t, { A: [100, 110] }));
+    c.t += 20 * MIN;
+    await repo.record(snap(c.t, { A: [100, 120] }));
+    // the same PriceStats object = the same sweep
+    const before = repo.stats('A')!;
+    const all = repo.statsAll(TAX);
+    expect(all.price.get('A')).toBe(before);
+    expect(repo.stats('A')).toBe(before);
+    // a new minute with a sweep at another rate: stats() reads that one, no sweep of its own (nor at the old rate)
+    c.t += MIN;
+    const other = repo.statsAll(0.01);
+    expect(repo.stats('A')).toBe(other.price.get('A'));
+    expect(other.price.get('A')).not.toBe(before);
   });
 });
 

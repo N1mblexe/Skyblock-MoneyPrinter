@@ -236,6 +236,26 @@ describe('ingestPage / pruneState / summarize', () => {
     expect(pruneState(s, now)).toEqual({ put: new Set(), remove: new Set() });
   });
 
+  it('pruneState cuts at the hour: the hourly count straddling the cutoff goes whole, coverage is clipped to match', () => {
+    const s = emptySalesState();
+    // coverage T0 .. T0 + 2h; sales at T0 + 10 min (the hour that will straddle the cutoff) and T0 + 1h + 10 min
+    s.windows = [[T0, T0 + 2 * HOUR]];
+    ingestPage(s, page(T0 + 30 * 60_000, [sale({ id: 'X', t: T0 + 10 * 60_000, price: 1, count: 4 }), sale({ id: 'X', t: T0 + 20 * 60_000, price: 1 })]));
+    ingestPage(s, page(T0 + HOUR + 30 * 60_000, [sale({ id: 'X', t: T0 + HOUR + 10 * 60_000, price: 2 })]));
+    // cutoff now − windowMs = T0 + 15 min: within the first hour, between its two sales
+    pruneState(s, T0 + AH_SALES.windowMs + 15 * 60_000);
+    expect(s.windows).toEqual([[T0 + HOUR, T0 + 2 * HOUR]]);
+    const r = s.records.get('X')!;
+    expect(r.hours).toEqual([[T0 + HOUR, 1, 1]]);
+    expect(r.sales.map((x) => x.t)).toEqual([T0 + HOUR + 10 * 60_000]);
+    // counts and coverage span the same hour: 1 item over 1 h, not 6 items over 1 h 45 min
+    const sum = summarize(s, T0 + AH_SALES.windowMs + 15 * 60_000)!;
+    expect(sum.coverageHours).toBe(1);
+    expect(sum.byId.X).toMatchObject({ n: 1, items: 1 });
+    // on the hour: nothing more goes
+    expect(pruneState(s, T0 + AH_SALES.windowMs + HOUR)).toEqual({ put: new Set(), remove: new Set() });
+  });
+
   it('summarize: medians per item, perHour only once coverage reaches minCoverageHours', () => {
     expect(summarize(emptySalesState(), T0)).toBeNull();
     const s = emptySalesState();
